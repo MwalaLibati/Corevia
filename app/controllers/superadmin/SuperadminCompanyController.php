@@ -144,9 +144,9 @@ class SuperadminCompanyController extends Controller
         $tempPassword = $oneTimePassword !== '' ? $oneTimePassword : $this->generateTemporaryPassword();
 
         try {
-            $db->beginTransaction();
-
             $clientEntityId = $this->resolveClientEntityId($clientEntityId, $newClientEntityName, $name, $email, $phone);
+
+            $db->beginTransaction();
 
             $stmt = $db->prepare(
                 "INSERT INTO companies (client_entity_id, name, slug, email, phone, subscription_plan, is_active)
@@ -191,7 +191,9 @@ class SuperadminCompanyController extends Controller
                  VALUES (:cid, :uid, :rid, 1, 1)'
             )->execute(['cid' => $companyId, 'uid' => $userId, 'rid' => $roleId]);
 
-            $db->commit();
+            if ($db->inTransaction()) {
+                $db->commit();
+            }
             AuditLog::recordPlatform('created', 'Created company ' . $name, 'Company', $companyId);
         } catch (Throwable $e) {
             if ($db->inTransaction()) {
