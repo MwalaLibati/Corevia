@@ -1,0 +1,95 @@
+name: Production deployment checks
+
+on:
+  push:
+    branches:
+      - Production
+      - production
+  pull_request:
+    branches:
+      - Production
+      - production
+
+jobs:
+  validate-production-package:
+    name: Validate production branch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+
+      - name: Verify required app structure
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_paths=(
+            "app"
+            "config"
+            "core"
+            "helpers"
+            "public/index.php"
+            "public/.htaccess"
+          )
+
+          for path in "${required_paths[@]}"; do
+            if [ ! -e "$path" ]; then
+              echo "::error::Missing required production path: $path"
+              exit 1
+            fi
+          done
+
+      - name: Block runtime files and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tracked_files="$(git ls-files)"
+          blocked=0
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            case "$file" in
+              .env|.env.*|config/app_secret.key|debug_*.php|debug*.php)
+                echo "::error::Blocked secret/debug file is tracked: $file"
+                blocked=1
+                ;;
+              Docs/*_patch.zip|Docs/*.bak|Docs/*.backup)
+                echo "::error::Blocked local deployment artifact is tracked: $file"
+                blocked=1
+                ;;
+              uploads/.htaccess|uploads/.gitkeep|uploads/employee_docs/.gitkeep)
+                ;;
+              uploads/*)
+                echo "::error::Runtime upload is tracked and must stay out of Git: $file"
+                blocked=1
+                ;;
+              public/uploads/.htaccess|public/uploads/.gitkeep)
+                ;;
+              public/uploads/*)
+                echo "::error::Public runtime upload is tracked and must stay out of Git: $file"
+                blocked=1
+                ;;
+            esac
+          done <<< "$tracked_files"
+
+          if [ "$blocked" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          find app config core helpers public -type f -name "*.php" -print0 \
+            | xargs -0 -n 1 php -l
+
