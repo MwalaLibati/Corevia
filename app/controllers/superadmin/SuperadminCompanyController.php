@@ -219,6 +219,9 @@ class SuperadminCompanyController extends Controller
             $message .= ' Login instructions were emailed to ' . $adminEmail . '.';
         } else {
             $message .= ' The welcome email could not be sent, so share the password securely.';
+            if ($emailResult['error'] !== '') {
+                $message .= ' Mail error: ' . $emailResult['error'];
+            }
         }
         Session::flash('success', $message);
         redirect('superadmin/company/edit/' . $companyId);
@@ -645,6 +648,17 @@ class SuperadminCompanyController extends Controller
             'smtp_from_email' => 'emmanuel.libati@gmail.com',
             'smtp_from_name' => app_vendor_name(),
         ];
+
+        $serverConfigFile = BASE_PATH . '/config/server.php';
+        if (is_file($serverConfigFile)) {
+            $serverConfig = require $serverConfigFile;
+            $mailConfig = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
+            if (is_array($mailConfig)) {
+                foreach ($mailConfig as $key => $value) {
+                    $defaults[(string) $key] = (string) $value;
+                }
+            }
+        }
 
         try {
             $stmt = db()->query(

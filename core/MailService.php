@@ -202,13 +202,21 @@ class MailService
 
         if ($attachments === []) {
             $headers = "From: {$fromHeader}\r\nContent-Type: text/html; charset=UTF-8\r\nMIME-Version: 1.0\r\n";
-            return mail($toEmail, $encodedSubject, $htmlBody, $headers);
+            $sent = mail($toEmail, $encodedSubject, $htmlBody, $headers);
+            if (!$sent) {
+                $this->lastError = 'The server mail function failed. Configure SMTP settings for reliable delivery.';
+            }
+            return $sent;
         }
 
         $boundary = '=_Corevia_' . bin2hex(random_bytes(12));
         $headers = "From: {$fromHeader}\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=\"{$boundary}\"\r\n";
         $message = $this->buildMultipartBody($boundary, $htmlBody, $attachments);
-        return mail($toEmail, $encodedSubject, $message, $headers);
+        $sent = mail($toEmail, $encodedSubject, $message, $headers);
+        if (!$sent) {
+            $this->lastError = 'The server mail function failed. Configure SMTP settings for reliable delivery.';
+        }
+        return $sent;
     }
 
     public function hrEmail(): string

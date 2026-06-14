@@ -16,4 +16,16 @@ return [
         'pass' => 'database_password',
         'charset' => 'utf8mb4',
     ],
+
+    'mail' => [
+        'email_notifications_enabled' => '1',
+        'smtp_host' => 'smtp.example.com',
+        'smtp_port' => '587',
+        'smtp_encryption' => 'tls',
+        'smtp_username' => 'system@example.com',
+        'smtp_password' => 'smtp-app-password',
+        'smtp_from_email' => 'system@example.com',
+        'smtp_from_name' => 'Corevia',
+        'smtp_hr_email' => 'hr@example.com',
+    ],
 ];
