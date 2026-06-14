@@ -12,4 +12,11 @@ return [
         'pass' => 'FjC8TRDncb#n!3R',
         'charset' => 'utf8mb4',
     ],
+
+    'mail' => [
+        'email_notifications_enabled' => '1',
+        'smtp_from_email' => 'info@stonesoftzambia.com',
+        'smtp_from_name' => 'StoneSoft IT Solutions',
+        'smtp_hr_email' => 'info@stonesoftzambia.com',
+    ],
 ];

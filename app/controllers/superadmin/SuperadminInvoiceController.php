@@ -150,7 +150,7 @@ class SuperadminInvoiceController extends Controller
         $html = $this->invoiceEmailHtml($invoice, $model->lines($invoiceId));
         $mailer = new MailService([
             'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'emmanuel.libati@gmail.com',
+            'smtp_from_email' => 'info@stonesoftzambia.com',
             'smtp_from_name' => app_vendor_name(),
         ]);
 
@@ -632,7 +632,7 @@ class SuperadminInvoiceController extends Controller
         $html = $this->payoutStatementHtml($batch, $ops->payoutItems((int) $batch['id']));
         $mailer = new MailService([
             'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'emmanuel.libati@gmail.com',
+            'smtp_from_email' => 'info@stonesoftzambia.com',
             'smtp_from_name' => app_vendor_name(),
         ]);
         if ($mailer->send((string) $batch['affiliate_email'], (string) $batch['affiliate_name'], 'Corevia affiliate payout statement ' . (string) $batch['payout_reference'], $html)) {

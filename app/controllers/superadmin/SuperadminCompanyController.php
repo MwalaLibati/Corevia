@@ -645,20 +645,9 @@ class SuperadminCompanyController extends Controller
     {
         $defaults = [
             'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'emmanuel.libati@gmail.com',
+            'smtp_from_email' => 'info@stonesoftzambia.com',
             'smtp_from_name' => app_vendor_name(),
         ];
-
-        $serverConfigFile = BASE_PATH . '/config/server.php';
-        if (is_file($serverConfigFile)) {
-            $serverConfig = require $serverConfigFile;
-            $mailConfig = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
-            if (is_array($mailConfig)) {
-                foreach ($mailConfig as $key => $value) {
-                    $defaults[(string) $key] = (string) $value;
-                }
-            }
-        }
 
         try {
             $stmt = db()->query(
@@ -679,6 +668,17 @@ class SuperadminCompanyController extends Controller
 
         if (isset($defaults['smtp_password'])) {
             $defaults['smtp_password'] = SecretBox::decryptOrPlain((string) $defaults['smtp_password']);
+        }
+
+        $serverConfigFile = BASE_PATH . '/config/server.php';
+        if (is_file($serverConfigFile)) {
+            $serverConfig = require $serverConfigFile;
+            $mailConfig = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
+            if (is_array($mailConfig)) {
+                foreach ($mailConfig as $key => $value) {
+                    $defaults[(string) $key] = (string) $value;
+                }
+            }
         }
 
         return $defaults;
