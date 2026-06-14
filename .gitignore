@@ -1,0 +1,24 @@
+# Local environment and secrets
+.env
+.env.*
+config/app_secret.key
+
+# Runtime uploads and generated files
+uploads/*
+!uploads/.htaccess
+!uploads/**/.gitkeep
+public/uploads/*
+!public/uploads/.htaccess
+!public/uploads/**/.gitkeep
+
+# Local deployment bundles
+Docs/*_patch.zip
+Docs/*_migration.local.sql
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+

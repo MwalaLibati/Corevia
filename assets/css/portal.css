@@ -1,0 +1,54 @@
+/* ═══════════════════════════════════════════════════════════════
+   Employee Portal — supplemental styles only.
+   Layout, header, sidebar, fonts are handled by main.css +
+   enterprise.css (same as admin). This file adds portal-specific
+   card helpers and payslip / print styles.
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --portal-green:   #166534;
+  --portal-surface: #fff;
+  --portal-border:  #e5e7eb;
+  --portal-muted:   #6b7280;
+  --portal-radius:  8px;
+  --portal-shadow:  0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+
+/* ── Shared card helper (used in portal views) ────────────── */
+.portal-card {
+  background: var(--portal-surface);
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  box-shadow: var(--portal-shadow);
+  padding: 20px 22px;
+}
+
+/* ── Page header helper ───────────────────────────────────── */
+.portal-page-header { margin-bottom: 20px; }
+.portal-page-header h2 { font-size: 1.25rem; font-weight: 700; color: var(--ent-text, #1e293b); margin: 0; }
+.portal-page-header p  { font-size: .82rem; color: var(--portal-muted); margin: 2px 0 0; }
+
+/* ── Payslip card ─────────────────────────────────────────── */
+.portal-payslip {
+  background: #fff;
+  border: 1px solid var(--portal-border);
+  border-radius: var(--portal-radius);
+  box-shadow: var(--portal-shadow);
+  padding: 32px 36px;
+  max-width: 700px;
+  margin: 0 auto;
+}
+.portal-payslip-header { border-bottom: 2px solid var(--portal-green); padding-bottom: 14px; margin-bottom: 20px; text-align: center; }
+.portal-payslip-header h3 { font-size: 1.1rem; color: var(--portal-green); font-weight: 700; margin: 4px 0; }
+.portal-payslip-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .86rem; }
+.portal-payslip-table th { text-align: left; color: var(--portal-muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--portal-border); }
+.portal-payslip-table td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; }
+.portal-payslip-table tr:last-child td { border-bottom: 0; }
+.portal-payslip-total { font-weight: 700; background: #f0fdf4; }
+
+/* ── Print ────────────────────────────────────────────────── */
+@media print {
+  .kleon-vertical-nav, .header, .ent-mobile-bar, .no-print { display: none !important; }
+  .main-wrapper { margin-left: 0 !important; }
+  .portal-payslip { box-shadow: none !important; border: 1px solid #ccc !important; }
+}

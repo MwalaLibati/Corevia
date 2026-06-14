@@ -1,0 +1,13 @@
+{
+  "name": "libosec/school-payroll-system",
+  "description": "School Payroll Management System in pure PHP MVC",
+  "type": "project",
+  "require": {
+    "php": ">=8.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  }
+}

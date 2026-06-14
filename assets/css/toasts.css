@@ -1,0 +1,20 @@
+.toast {
+  background-color: #924AEF;
+}
+
+.toast-success {
+  background-color: #38E25D;
+}
+
+.toast-error {
+  background-color: #FF4A55;
+}
+
+.toast-info {
+  background-color: #5ECFFF;
+}
+
+.toast-warning {
+  background-color: #FF9325;
+}
+/*# sourceMappingURL=toasts.css.map */
