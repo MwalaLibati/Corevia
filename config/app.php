@@ -15,6 +15,15 @@ declare(strict_types=1);
  */
 function app_secret_value(): string
 {
+    $localConfig = __DIR__ . DIRECTORY_SEPARATOR . 'server.php';
+    if (is_file($localConfig)) {
+        $serverConfig = require $localConfig;
+        $configuredSecret = is_array($serverConfig) ? ($serverConfig['app_secret'] ?? '') : '';
+        if (is_string($configuredSecret) && trim($configuredSecret) !== '') {
+            return trim($configuredSecret);
+        }
+    }
+
     $envSecret = getenv('LIBOSEC_APP_SECRET');
     if (is_string($envSecret) && trim($envSecret) !== '') {
         return trim($envSecret);

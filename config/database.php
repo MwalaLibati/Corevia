@@ -12,11 +12,29 @@ function db_env(string $key, string $default = ''): string
     return is_string($value) && $value !== '' ? $value : $default;
 }
 
-define('DB_HOST', db_env('DB_HOST', '127.0.0.1'));
-define('DB_NAME', db_env('DB_NAME', 'school_payroll'));
-define('DB_USER', db_env('DB_USER', 'root'));
-define('DB_PASS', db_env('DB_PASS', ''));
-define('DB_CHARSET', db_env('DB_CHARSET', 'utf8mb4'));
+function db_server_config(): array
+{
+    $configFile = __DIR__ . DIRECTORY_SEPARATOR . 'server.php';
+    if (!is_file($configFile)) {
+        return [];
+    }
+
+    $config = require $configFile;
+    if (!is_array($config)) {
+        return [];
+    }
+
+    $database = $config['database'] ?? [];
+    return is_array($database) ? $database : [];
+}
+
+$serverDb = db_server_config();
+
+define('DB_HOST', db_env('DB_HOST', (string) ($serverDb['host'] ?? '127.0.0.1')));
+define('DB_NAME', db_env('DB_NAME', (string) ($serverDb['name'] ?? 'school_payroll')));
+define('DB_USER', db_env('DB_USER', (string) ($serverDb['user'] ?? 'root')));
+define('DB_PASS', db_env('DB_PASS', (string) ($serverDb['pass'] ?? '')));
+define('DB_CHARSET', db_env('DB_CHARSET', (string) ($serverDb['charset'] ?? 'utf8mb4')));
 
 function db(): PDO
 {
