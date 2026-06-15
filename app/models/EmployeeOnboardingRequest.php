@@ -7,6 +7,27 @@ class EmployeeOnboardingRequest extends Model
     protected string $table = 'employee_onboarding_requests';
     protected bool $tenantScoped = true;
 
+    public function __construct()
+    {
+        parent::__construct();
+        $this->ensureSchema();
+    }
+
+    public function ensureSchema(): void
+    {
+        $columns = [
+            'selected_employee_id' => 'BIGINT UNSIGNED NULL',
+            'required_fields_json' => 'TEXT NULL',
+            'opened_at' => 'DATETIME NULL',
+        ];
+
+        foreach ($columns as $column => $definition) {
+            if (!$this->columnExists('employee_onboarding_requests', $column)) {
+                $this->db->exec("ALTER TABLE employee_onboarding_requests ADD COLUMN {$column} {$definition}");
+            }
+        }
+    }
+
     public function listAll(string $status = ''): array
     {
         $cid = Tenant::id();
@@ -21,11 +42,15 @@ class EmployeeOnboardingRequest extends Model
         }
 
         $stmt = $this->db->prepare(
-            "SELECT eor.*, d.name AS department_name, u.full_name AS created_by_name, emp.employee_number AS created_employee_number
+            "SELECT eor.*, d.name AS department_name, u.full_name AS created_by_name,
+                    emp.employee_number AS created_employee_number,
+                    selected.employee_number AS selected_employee_number,
+                    selected.full_name AS selected_employee_name
              FROM employee_onboarding_requests eor
              LEFT JOIN departments d ON d.id = eor.department_id
              LEFT JOIN users u ON u.id = eor.created_by
              LEFT JOIN employees emp ON emp.id = eor.created_employee_id
+             LEFT JOIN employees selected ON selected.id = eor.selected_employee_id
              {$where}
              ORDER BY eor.created_at DESC, eor.id DESC"
         );
@@ -38,11 +63,15 @@ class EmployeeOnboardingRequest extends Model
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND eor.company_id = :cid' : '';
         $stmt = $this->db->prepare(
-            "SELECT eor.*, c.name AS company_name, d.name AS department_name, emp.employee_number AS created_employee_number
+            "SELECT eor.*, c.name AS company_name, d.name AS department_name,
+                    emp.employee_number AS created_employee_number,
+                    selected.employee_number AS selected_employee_number,
+                    selected.full_name AS selected_employee_name
              FROM employee_onboarding_requests eor
              JOIN companies c ON c.id = eor.company_id
              LEFT JOIN departments d ON d.id = eor.department_id
              LEFT JOIN employees emp ON emp.id = eor.created_employee_id
+             LEFT JOIN employees selected ON selected.id = eor.selected_employee_id
              WHERE eor.id = :id{$and}
              LIMIT 1"
         );
@@ -58,10 +87,22 @@ class EmployeeOnboardingRequest extends Model
     public function findByToken(string $token): ?array
     {
         $stmt = $this->db->prepare(
-            "SELECT eor.*, c.name AS company_name, d.name AS department_name
+            "SELECT eor.*, c.name AS company_name, d.name AS department_name,
+                    selected.employee_number AS selected_employee_number,
+                    selected.full_name AS selected_employee_name,
+                    selected.email AS selected_employee_email,
+                    selected.phone AS selected_employee_phone,
+                    selected.nrc_number AS selected_employee_nrc_number,
+                    selected.date_of_birth AS selected_employee_date_of_birth,
+                    selected.address AS selected_employee_address,
+                    selected.napsa_number AS selected_employee_napsa_number,
+                    selected.tpin AS selected_employee_tpin,
+                    selected.bank_name AS selected_employee_bank_name,
+                    selected.bank_account_number AS selected_employee_bank_account_number
              FROM employee_onboarding_requests eor
              JOIN companies c ON c.id = eor.company_id
              LEFT JOIN departments d ON d.id = eor.department_id
+             LEFT JOIN employees selected ON selected.id = eor.selected_employee_id
              WHERE eor.token = :token
              LIMIT 1"
         );
@@ -81,7 +122,7 @@ class EmployeeOnboardingRequest extends Model
     {
         $stmt = $this->db->prepare(
             "UPDATE employee_onboarding_requests
-             SET status = 'Opened'
+             SET status = 'Opened', opened_at = COALESCE(opened_at, NOW())
              WHERE id = :id AND status IN ('Sent','Draft')"
         );
         $stmt->execute(['id' => $id]);
@@ -135,5 +176,17 @@ class EmployeeOnboardingRequest extends Model
             'file_size' => (int) ($file['file_size'] ?? 0),
         ]);
         return (int) $this->db->lastInsertId();
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => $table, 'column' => $column]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 }

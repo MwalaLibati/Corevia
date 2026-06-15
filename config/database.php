@@ -14,6 +14,10 @@ function db_env(string $key, string $default = ''): string
 
 function db_server_config(): array
 {
+    if (!db_should_use_server_config()) {
+        return [];
+    }
+
     $configFile = __DIR__ . DIRECTORY_SEPARATOR . 'server.php';
     if (!is_file($configFile)) {
         return [];
@@ -26,6 +30,35 @@ function db_server_config(): array
 
     $database = $config['database'] ?? [];
     return is_array($database) ? $database : [];
+}
+
+function db_should_use_server_config(): bool
+{
+    $appEnv = strtolower((string) getenv('APP_ENV'));
+    if (in_array($appEnv, ['production', 'prod'], true)) {
+        return true;
+    }
+
+    if (in_array($appEnv, ['local', 'development', 'dev', 'testing', 'test'], true)) {
+        return false;
+    }
+
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    $host = preg_replace('/:\d+$/', '', $host) ?? $host;
+    if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
+        return false;
+    }
+
+    if ($host !== '') {
+        return true;
+    }
+
+    $configPath = str_replace('\\', '/', __DIR__);
+    if (PHP_OS_FAMILY === 'Windows' || stripos($configPath, 'C:/xampp/') === 0) {
+        return false;
+    }
+
+    return true;
 }
 
 $serverDb = db_server_config();

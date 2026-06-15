@@ -56,7 +56,13 @@ class SalaryChangeController extends Controller
                 if (!$this->userMatchesWorkflowRole($requiredRole)) {
                     throw new RuntimeException("This workflow step requires {$requiredRole} approval.");
                 }
-                (new EmployeeSalary())->assignAndActivate((int)$request['employee_id'], (int)$request['salary_structure_id'], (string)$request['effective_date']);
+                (new EmployeeSalary())->assignAndActivate((int)$request['employee_id'], (int)$request['salary_structure_id'], (string)$request['effective_date'], [
+                    'actual_basic_pay' => $request['actual_basic_pay'] !== null ? (float) $request['actual_basic_pay'] : null,
+                    'actual_housing_allowance' => $request['actual_housing_allowance'] !== null ? (float) $request['actual_housing_allowance'] : null,
+                    'actual_transport_allowance' => $request['actual_transport_allowance'] !== null ? (float) $request['actual_transport_allowance'] : null,
+                    'actual_other_allowances' => $request['actual_other_allowances'] !== null ? (float) $request['actual_other_allowances'] : null,
+                    'override_reason' => $request['override_reason'] ?? null,
+                ]);
                 $model->update($requestId, ['status' => 'Applied', 'admin_approved_by' => $userId]);
                 WorkflowEvent::record('salary_change', 'SalaryChangeRequest', $requestId, $current, 'Applied', 'salary_change_admin_apply', $workflow->actionLabelFor('salary_change', 2, 'Apply Salary Change'));
             } else {

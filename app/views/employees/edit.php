@@ -280,6 +280,10 @@ $oldInput = !empty($old) ? $old : $employee;
             <?php if (!empty($activeSalaryAssignment)): ?>
                 <span class="fw-semibold"><?= e((string) ($activeSalaryAssignment['structure_name'] ?? '')) ?></span>
                 <small class="text-gray d-block">Effective: <?= e((string) ($activeSalaryAssignment['effective_date'] ?? '')) ?></small>
+                <small class="text-gray d-block">
+                    Standard basic: ZMW <?= e(number_format((float) ($activeSalaryAssignment['structure_basic_pay'] ?? 0), 2)) ?>
+                    · Agreed basic: ZMW <?= e(number_format((float) ($activeSalaryAssignment['basic_pay'] ?? 0), 2)) ?>
+                </small>
             <?php else: ?>
                 <span class="text-gray">No active salary structure assigned.</span>
             <?php endif; ?>
@@ -305,11 +309,36 @@ $oldInput = !empty($old) ? $old : $employee;
                 <input type="date" name="effective_date" class="form-control" value="<?= e((string) ($salaryInput['effective_date'] ?? '')) ?>" required>
             </div>
 
+            <div class="col-md-4">
+                <label class="form-label">Agreed Basic Pay</label>
+                <input type="number" step="0.01" min="0" name="actual_basic_pay" class="form-control" value="<?= e((string) ($salaryInput['actual_basic_pay'] ?? '')) ?>" placeholder="Leave blank to use structure basic pay">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Agreed Housing Allowance</label>
+                <input type="number" step="0.01" min="0" name="actual_housing_allowance" class="form-control" value="<?= e((string) ($salaryInput['actual_housing_allowance'] ?? '')) ?>" placeholder="Leave blank to use structure allowance">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Agreed Transport Allowance</label>
+                <input type="number" step="0.01" min="0" name="actual_transport_allowance" class="form-control" value="<?= e((string) ($salaryInput['actual_transport_allowance'] ?? '')) ?>" placeholder="Leave blank to use structure allowance">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Agreed Other Allowances</label>
+                <input type="number" step="0.01" min="0" name="actual_other_allowances" class="form-control" value="<?= e((string) ($salaryInput['actual_other_allowances'] ?? '')) ?>" placeholder="Leave blank to use structure allowance">
+            </div>
+
+            <div class="col-md-8">
+                <label class="form-label">Reason for Employee-Specific Pay</label>
+                <input type="text" name="override_reason" class="form-control" value="<?= e((string) ($salaryInput['override_reason'] ?? '')) ?>" placeholder="Example: negotiated offer above standard teacher basic pay">
+            </div>
+
             <div class="col-md-2 d-flex align-items-end">
                 <button type="submit" class="btn btn-outline-primary w-100">Request</button>
             </div>
             <div class="col-12">
-                <small class="text-gray">Salary changes now go through Finance review and Admin/Director approval before they are applied.</small>
+                <small class="text-gray">Leave agreed pay fields blank when the employee should use the salary structure amounts. Salary changes go through Finance review and Admin/Director approval before they are applied.</small>
                 <a href="<?= e(base_url('salary-change/index')) ?>" class="ms-2">View approvals</a>
             </div>
         </form>
@@ -320,18 +349,31 @@ $oldInput = !empty($old) ? $old : $employee;
                     <tr>
                         <th>Structure</th>
                         <th>Grade</th>
+                        <th>Standard Basic</th>
+                        <th>Agreed Basic</th>
+                        <th>Variance</th>
                         <th>Effective Date</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php if (empty($salaryAssignmentHistory)): ?>
-                    <tr><td colspan="4" class="text-center text-gray">No salary assignment history.</td></tr>
+                    <tr><td colspan="7" class="text-center text-gray">No salary assignment history.</td></tr>
                 <?php else: ?>
                     <?php foreach ($salaryAssignmentHistory as $assignment): ?>
                         <tr>
                             <td><?= e((string) ($assignment['structure_name'] ?? '')) ?></td>
                             <td><?= e((string) ($assignment['grade_level'] ?? '-')) ?></td>
+                            <?php
+                            $standardBasic = (float) ($assignment['structure_basic_pay'] ?? 0);
+                            $agreedBasic = (float) ($assignment['basic_pay'] ?? $standardBasic);
+                            $variance = $agreedBasic - $standardBasic;
+                            ?>
+                            <td>ZMW <?= e(number_format($standardBasic, 2)) ?></td>
+                            <td>ZMW <?= e(number_format($agreedBasic, 2)) ?></td>
+                            <td class="<?= $variance === 0.0 ? 'text-gray' : ($variance > 0 ? 'text-success' : 'text-danger') ?>">
+                                <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . 'ZMW ' . number_format($variance, 2)) ?>
+                            </td>
                             <td><?= e((string) ($assignment['effective_date'] ?? '')) ?></td>
                             <td><?= (int) ($assignment['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive' ?></td>
                         </tr>

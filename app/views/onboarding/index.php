@@ -48,6 +48,9 @@
                         <td>
                             <strong><?= e((string)$row['invited_full_name']) ?></strong>
                             <div class="text-gray small"><?= e((string)($row['invited_email'] ?? $row['invited_phone'] ?? '')) ?></div>
+                            <?php if (!empty($row['selected_employee_number'])): ?>
+                                <div class="small text-primary">Linked: <?= e((string)$row['selected_employee_number']) ?></div>
+                            <?php endif; ?>
                         </td>
                         <td><?= e((string)($row['department_name'] ?? 'Unassigned')) ?></td>
                         <td><?= e((string)($row['expected_start_date'] ?? '-')) ?></td>

@@ -31,8 +31,10 @@ class OnboardingController extends Controller
         $this->render('onboarding/create', [
             'title' => 'Create Onboarding Link',
             'csrf' => Session::csrfToken(),
+            'employees' => $employeeModel->listWithDepartment(),
             'departments' => $employeeModel->departments(),
             'employmentTypes' => (new EmploymentType())->active(),
+            'requiredFieldOptions' => $this->availableRequiredFields(),
             'old' => $_SESSION['_old_onboarding_input'] ?? [],
             'flashError' => Session::flash('error'),
         ]);
@@ -62,7 +64,10 @@ class OnboardingController extends Controller
 
         try {
             $id = (new EmployeeOnboardingRequest())->createInvitation($data);
-            AuditLog::record('onboarding_invite_create', 'Created onboarding link for ' . $data['invited_full_name'], 'EmployeeOnboardingRequest', $id);
+            AuditLog::record('onboarding_invite_create', 'Created onboarding link for ' . $data['invited_full_name'], 'EmployeeOnboardingRequest', $id, 'admin', [
+                'selected_employee_id' => $data['selected_employee_id'] ?? null,
+                'required_fields' => $data['required_fields_json'] ?? null,
+            ]);
             unset($_SESSION['_old_onboarding_input']);
             Session::flash('success', 'Onboarding link created. Copy and send it to the employee.');
             redirect('onboarding/show/' . $id);
@@ -124,11 +129,11 @@ class OnboardingController extends Controller
         }
 
         try {
-            $employeeId = $this->createEmployeeFromRequest($request);
+            $employeeId = $this->applyEmployeeFromRequest($request);
             $model->approve($requestId, $employeeId, (int) (current_user()['id'] ?? 0));
-            WorkflowEvent::record('employee_onboarding', 'Employee', $employeeId, null, 'Approved', 'onboarding_link_approved', 'Created from onboarding data capture link.');
-            AuditLog::record('onboarding_approve', 'Approved onboarding request and created employee.', 'EmployeeOnboardingRequest', $requestId, 'admin', ['employee_id' => $employeeId]);
-            Session::flash('success', 'Onboarding approved and employee profile created.');
+            WorkflowEvent::record('employee_onboarding', 'Employee', $employeeId, null, 'Approved', 'onboarding_link_approved', 'Approved from onboarding data capture link.');
+            AuditLog::record('onboarding_approve', 'Approved onboarding request.', 'EmployeeOnboardingRequest', $requestId, 'admin', ['employee_id' => $employeeId]);
+            Session::flash('success', !empty($request['selected_employee_id']) ? 'Onboarding approved and employee profile updated.' : 'Onboarding approved and employee profile created.');
             redirect('employee/profile/' . $employeeId);
         } catch (Throwable $e) {
             Session::flash('error', 'Approval failed: ' . $e->getMessage());
@@ -166,6 +171,7 @@ class OnboardingController extends Controller
         $model->markOpened((int) $request['id']);
         $this->renderAuth('onboarding/public-form', [
             'request' => $request,
+            'requiredFields' => $this->requiredFieldsFromRequest($request),
             'csrf' => Session::csrfToken(),
             'flashError' => Session::flash('error'),
             'old' => $_SESSION['_old_public_onboarding'] ?? [],
@@ -192,7 +198,7 @@ class OnboardingController extends Controller
 
         $data = $this->collectPublicInput($request);
         $_SESSION['_old_public_onboarding'] = $data;
-        $error = $this->validatePublicInput($data);
+        $error = $this->validatePublicInput($data, $request);
         if ($error !== null) {
             Session::flash('error', $error);
             redirect('onboarding/form/' . $token);
@@ -212,20 +218,25 @@ class OnboardingController extends Controller
 
     private function collectInvitationInput(): array
     {
+        $selectedEmployeeId = (int) $this->input('selected_employee_id', 0);
+        $selectedEmployee = $selectedEmployeeId > 0 ? (new Employee())->find($selectedEmployeeId) : null;
         $departmentId = (int) $this->input('department_id', 0);
         $expiresDays = max(1, min(30, (int) $this->input('expires_days', 7)));
+        $requiredFields = $this->selectedRequiredFields();
         return [
             'company_id' => Tenant::id(),
-            'invited_full_name' => trim((string) $this->input('invited_full_name', '')),
-            'invited_email' => $this->nullable((string) $this->input('invited_email', '')),
-            'invited_phone' => $this->nullable((string) $this->input('invited_phone', '')),
-            'department_id' => $departmentId > 0 ? $departmentId : null,
-            'designation' => $this->nullable((string) $this->input('designation', '')),
-            'employment_type' => trim((string) $this->input('employment_type', 'Permanent')) ?: 'Permanent',
+            'selected_employee_id' => $selectedEmployeeId > 0 ? $selectedEmployeeId : null,
+            'invited_full_name' => trim((string) $this->input('invited_full_name', '')) ?: (string) ($selectedEmployee['full_name'] ?? ''),
+            'invited_email' => $this->nullable((string) $this->input('invited_email', '')) ?? $this->nullable((string) ($selectedEmployee['email'] ?? '')),
+            'invited_phone' => $this->nullable((string) $this->input('invited_phone', '')) ?? $this->nullable((string) ($selectedEmployee['phone'] ?? '')),
+            'department_id' => $departmentId > 0 ? $departmentId : (!empty($selectedEmployee['department_id']) ? (int) $selectedEmployee['department_id'] : null),
+            'designation' => $this->nullable((string) $this->input('designation', '')) ?? $this->nullable((string) ($selectedEmployee['designation'] ?? '')),
+            'employment_type' => trim((string) $this->input('employment_type', '')) ?: (string) ($selectedEmployee['employment_type'] ?? 'Permanent'),
             'expected_start_date' => $this->dateOrNull((string) $this->input('expected_start_date', '')),
             'expires_at' => date('Y-m-d H:i:s', strtotime('+' . $expiresDays . ' days')),
             'created_by' => (int) (current_user()['id'] ?? 0) ?: null,
             'hr_notes' => $this->nullable((string) $this->input('hr_notes', '')),
+            'required_fields_json' => json_encode($requiredFields, JSON_UNESCAPED_SLASHES),
         ];
     }
 
@@ -240,24 +251,27 @@ class OnboardingController extends Controller
         if (!empty($data['invited_email']) && !filter_var((string) $data['invited_email'], FILTER_VALIDATE_EMAIL)) {
             return 'Employee email format is invalid.';
         }
+        if (!empty($data['selected_employee_id']) && !(new Employee())->find((int) $data['selected_employee_id'])) {
+            return 'Selected employee was not found.';
+        }
         return null;
     }
 
     private function collectPublicInput(array $request): array
     {
         return [
-            'full_name' => trim((string) $this->input('full_name', $request['invited_full_name'] ?? '')),
-            'email' => $this->nullable((string) $this->input('email', $request['invited_email'] ?? '')),
-            'phone' => $this->nullable((string) $this->input('phone', $request['invited_phone'] ?? '')),
-            'nrc_number' => $this->nullable((string) $this->input('nrc_number', '')),
-            'date_of_birth' => $this->dateOrNull((string) $this->input('date_of_birth', '')),
+            'full_name' => trim((string) $this->input('full_name', $this->requestDefault($request, 'full_name'))),
+            'email' => $this->nullable((string) $this->input('email', $this->requestDefault($request, 'email'))),
+            'phone' => $this->nullable((string) $this->input('phone', $this->requestDefault($request, 'phone'))),
+            'nrc_number' => $this->nullable((string) $this->input('nrc_number', $this->requestDefault($request, 'nrc_number'))),
+            'date_of_birth' => $this->dateOrNull((string) $this->input('date_of_birth', $this->requestDefault($request, 'date_of_birth'))),
             'gender' => $this->nullable((string) $this->input('gender', '')),
-            'address' => $this->nullable((string) $this->input('address', '')),
-            'napsa_number' => $this->nullable((string) $this->input('napsa_number', '')),
-            'tpin' => $this->nullable((string) $this->input('tpin', '')),
+            'address' => $this->nullable((string) $this->input('address', $this->requestDefault($request, 'address'))),
+            'napsa_number' => $this->nullable((string) $this->input('napsa_number', $this->requestDefault($request, 'napsa_number'))),
+            'tpin' => $this->nullable((string) $this->input('tpin', $this->requestDefault($request, 'tpin'))),
             'nhima_number' => $this->nullable((string) $this->input('nhima_number', '')),
-            'bank_name' => $this->nullable((string) $this->input('bank_name', '')),
-            'bank_account_number' => $this->nullable((string) $this->input('bank_account_number', '')),
+            'bank_name' => $this->nullable((string) $this->input('bank_name', $this->requestDefault($request, 'bank_name'))),
+            'bank_account_number' => $this->nullable((string) $this->input('bank_account_number', $this->requestDefault($request, 'bank_account_number'))),
             'next_of_kin_name' => $this->nullable((string) $this->input('next_of_kin_name', '')),
             'next_of_kin_phone' => $this->nullable((string) $this->input('next_of_kin_phone', '')),
             'next_of_kin_relationship' => $this->nullable((string) $this->input('next_of_kin_relationship', '')),
@@ -265,29 +279,30 @@ class OnboardingController extends Controller
         ];
     }
 
-    private function validatePublicInput(array $data): ?string
+    private function validatePublicInput(array $data, array $request): ?string
     {
-        foreach (['full_name' => 'Full name', 'email' => 'Email', 'phone' => 'Phone', 'nrc_number' => 'NRC number', 'date_of_birth' => 'Date of birth'] as $key => $label) {
+        $required = $this->requiredFieldsFromRequest($request);
+        foreach ($required as $key => $label) {
             if (empty($data[$key])) {
                 return $label . ' is required.';
             }
         }
-        if (!filter_var((string) $data['email'], FILTER_VALIDATE_EMAIL)) {
+        if (!empty($data['email']) && !filter_var((string) $data['email'], FILTER_VALIDATE_EMAIL)) {
             return 'Email format is invalid.';
         }
         return null;
     }
 
-    private function createEmployeeFromRequest(array $request): int
+    private function applyEmployeeFromRequest(array $request): int
     {
         $employeeModel = new Employee();
         $email = $this->nullable((string) ($request['email'] ?? $request['invited_email'] ?? ''));
-        if ($email !== null && $employeeModel->emailExists($email)) {
+        $selectedEmployeeId = (int) ($request['selected_employee_id'] ?? 0);
+        if ($email !== null && $employeeModel->emailExists($email, $selectedEmployeeId > 0 ? $selectedEmployeeId : null)) {
             throw new RuntimeException('An employee with this email already exists.');
         }
 
-        return $employeeModel->insert([
-            'employee_number' => $employeeModel->generateNextEmployeeNumber(),
+        $data = [
             'full_name' => trim((string) ($request['full_name'] ?? $request['invited_full_name'] ?? '')),
             'email' => $email,
             'phone' => $this->nullable((string) ($request['phone'] ?? $request['invited_phone'] ?? '')),
@@ -303,9 +318,26 @@ class OnboardingController extends Controller
             'bank_account_number' => $this->nullable((string) ($request['bank_account_number'] ?? '')),
             'contract_status' => 'Active',
             'lifecycle_status' => 'Probation',
-            'hired_at' => $this->dateOrNull((string) ($request['expected_start_date'] ?? '')) ?? date('Y-m-d'),
+            'hired_at' => $this->dateOrNull((string) ($request['expected_start_date'] ?? '')),
             'probation_end_date' => null,
-        ]);
+        ];
+
+        if ($selectedEmployeeId > 0) {
+            $existing = $employeeModel->find($selectedEmployeeId);
+            if (!$existing) {
+                throw new RuntimeException('Selected employee could not be found.');
+            }
+
+            unset($data['contract_status'], $data['lifecycle_status'], $data['probation_end_date']);
+            $data = array_filter($data, static fn($value): bool => $value !== null && $value !== '');
+            $employeeModel->update($selectedEmployeeId, $data);
+            return $selectedEmployeeId;
+        }
+
+        $data['hired_at'] = $data['hired_at'] ?? date('Y-m-d');
+        $data['probation_end_date'] = null;
+        $data['employee_number'] = $employeeModel->generateNextEmployeeNumber();
+        return $employeeModel->insert($data);
     }
 
     private function saveUploadedDocuments(int $requestId, int $companyId): void
@@ -358,6 +390,64 @@ class OnboardingController extends Controller
             exit('Onboarding link not found.');
         }
         return $request;
+    }
+
+    private function selectedRequiredFields(): array
+    {
+        $labels = $this->availableRequiredFields();
+        $selected = $_POST['required_fields'] ?? [];
+        if (!is_array($selected) || $selected === []) {
+            return $this->defaultRequiredFields();
+        }
+
+        return array_values(array_intersect(array_keys($labels), array_map('strval', $selected)));
+    }
+
+    private function requiredFieldsFromRequest(array $request): array
+    {
+        $labels = $this->availableRequiredFields();
+        $decoded = json_decode((string) ($request['required_fields_json'] ?? ''), true);
+        if (!is_array($decoded) || $decoded === []) {
+            $decoded = $this->defaultRequiredFields();
+        }
+
+        $required = [];
+        foreach ($decoded as $field) {
+            if (isset($labels[$field])) {
+                $required[$field] = $labels[$field];
+            }
+        }
+
+        return $required;
+    }
+
+    private function availableRequiredFields(): array
+    {
+        return [
+            'full_name' => 'Full name',
+            'email' => 'Email',
+            'phone' => 'Phone',
+            'nrc_number' => 'NRC number',
+            'date_of_birth' => 'Date of birth',
+            'napsa_number' => 'NAPSA number',
+            'tpin' => 'TPIN',
+            'nhima_number' => 'NHIMA number',
+            'bank_name' => 'Bank name',
+            'bank_account_number' => 'Bank account number',
+            'next_of_kin_name' => 'Next of kin name',
+            'next_of_kin_phone' => 'Next of kin phone',
+        ];
+    }
+
+    private function defaultRequiredFields(): array
+    {
+        return ['full_name', 'email', 'phone', 'nrc_number', 'date_of_birth'];
+    }
+
+    private function requestDefault(array $request, string $field): string
+    {
+        $selectedKey = 'selected_employee_' . $field;
+        return (string) ($request[$field] ?? $request[$selectedKey] ?? $request['invited_' . $field] ?? '');
     }
 
     private function isExpired(array $request): bool

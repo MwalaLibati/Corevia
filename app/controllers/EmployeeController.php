@@ -498,10 +498,20 @@ class EmployeeController extends Controller
 
         $salaryStructureId = (int) $this->input('salary_structure_id', 0);
         $effectiveDate = $this->normalizeDate((string) $this->input('effective_date', ''));
+        $actualBasicPay = $this->normalizeNullableMoney((string) $this->input('actual_basic_pay', ''));
+        $actualHousingAllowance = $this->normalizeNullableMoney((string) $this->input('actual_housing_allowance', ''));
+        $actualTransportAllowance = $this->normalizeNullableMoney((string) $this->input('actual_transport_allowance', ''));
+        $actualOtherAllowances = $this->normalizeNullableMoney((string) $this->input('actual_other_allowances', ''));
+        $overrideReason = trim((string) $this->input('override_reason', ''));
 
         $_SESSION['_old_salary_assignment_input'] = [
             'salary_structure_id' => $salaryStructureId,
             'effective_date' => $effectiveDate,
+            'actual_basic_pay' => $actualBasicPay,
+            'actual_housing_allowance' => $actualHousingAllowance,
+            'actual_transport_allowance' => $actualTransportAllowance,
+            'actual_other_allowances' => $actualOtherAllowances,
+            'override_reason' => $overrideReason,
         ];
 
         if ($salaryStructureId <= 0 || $effectiveDate === null) {
@@ -526,6 +536,11 @@ class EmployeeController extends Controller
                 'employee_id' => $employeeId,
                 'salary_structure_id' => $salaryStructureId,
                 'effective_date' => $effectiveDate,
+                'actual_basic_pay' => $actualBasicPay,
+                'actual_housing_allowance' => $actualHousingAllowance,
+                'actual_transport_allowance' => $actualTransportAllowance,
+                'actual_other_allowances' => $actualOtherAllowances,
+                'override_reason' => $overrideReason !== '' ? $overrideReason : null,
                 'status' => 'Pending Finance Review',
                 'reason' => trim((string) $this->input('reason', '')),
                 'requested_by' => (int) (current_user()['id'] ?? 0) ?: null,
@@ -534,6 +549,11 @@ class EmployeeController extends Controller
             AuditLog::record('salary_change_requested', 'Requested salary structure #' . $salaryStructureId . ' for employee #' . $employeeId, 'SalaryChangeRequest', $requestId, 'admin', [
                 'salary_structure_id' => $salaryStructureId,
                 'effective_date' => $effectiveDate,
+                'actual_basic_pay' => $actualBasicPay,
+                'actual_housing_allowance' => $actualHousingAllowance,
+                'actual_transport_allowance' => $actualTransportAllowance,
+                'actual_other_allowances' => $actualOtherAllowances,
+                'override_reason' => $overrideReason !== '' ? $overrideReason : null,
             ]);
             unset($_SESSION['_old_salary_assignment_input']);
             Session::flash('success', 'Salary change submitted for Finance review.');
@@ -1013,6 +1033,20 @@ class EmployeeController extends Controller
         $normalized = str_replace([',', ' '], '', trim($value));
         if ($normalized === '' || !is_numeric($normalized)) {
             return 0.0;
+        }
+
+        return max(0.0, round((float) $normalized, 2));
+    }
+
+    private function normalizeNullableMoney(string $value): ?float
+    {
+        $normalized = str_replace([',', ' '], '', trim($value));
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (!is_numeric($normalized)) {
+            return null;
         }
 
         return max(0.0, round((float) $normalized, 2));

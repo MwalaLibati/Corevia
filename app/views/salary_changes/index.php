@@ -16,6 +16,7 @@
                 <tr>
                     <th>Employee</th>
                     <th>New Structure</th>
+                    <th>Basic Pay</th>
                     <th>Effective</th>
                     <th>Status</th>
                     <th class="text-end">Action</th>
@@ -23,15 +24,29 @@
             </thead>
             <tbody>
                 <?php if (empty($requests)): ?>
-                    <tr><td colspan="5" class="text-center text-gray">No salary change requests.</td></tr>
+                    <tr><td colspan="6" class="text-center text-gray">No salary change requests.</td></tr>
                 <?php else: ?>
                     <?php foreach ($requests as $request): ?>
+                        <?php
+                        $standardBasic = (float) ($request['structure_basic_pay'] ?? 0);
+                        $agreedBasic = $request['actual_basic_pay'] !== null ? (float) $request['actual_basic_pay'] : $standardBasic;
+                        $variance = $agreedBasic - $standardBasic;
+                        ?>
                         <tr>
                             <td>
                                 <div class="fw-semibold"><?= e((string)$request['employee_name']) ?></div>
                                 <div class="small text-gray"><?= e((string)$request['employee_number']) ?></div>
                             </td>
                             <td><?= e((string)$request['salary_structure_name']) ?></td>
+                            <td>
+                                <div class="fw-semibold">ZMW <?= e(number_format($agreedBasic, 2)) ?></div>
+                                <div class="small text-gray">Standard: ZMW <?= e(number_format($standardBasic, 2)) ?></div>
+                                <?php if ($variance !== 0.0): ?>
+                                    <div class="small <?= $variance > 0 ? 'text-success' : 'text-danger' ?>">
+                                        <?= e(($variance > 0 ? '+' : '') . 'ZMW ' . number_format($variance, 2)) ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?= e((string)$request['effective_date']) ?></td>
                             <td><span class="badge bg-warning text-dark"><?= e((string)$request['status']) ?></span></td>
                             <td class="text-end">

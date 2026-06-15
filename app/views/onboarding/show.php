@@ -25,11 +25,42 @@
                 <div class="small text-gray">Expires: <?= e((string)$request['expires_at']) ?></div>
                 <hr>
                 <dl class="row mb-0">
+                    <?php if (!empty($request['selected_employee_number'])): ?>
+                        <dt class="col-5">Linked Employee</dt><dd class="col-7"><?= e((string)$request['selected_employee_number']) ?> - <?= e((string)($request['selected_employee_name'] ?? '')) ?></dd>
+                    <?php endif; ?>
                     <dt class="col-5">Department</dt><dd class="col-7"><?= e((string)($request['department_name'] ?? 'Unassigned')) ?></dd>
                     <dt class="col-5">Designation</dt><dd class="col-7"><?= e((string)($request['designation'] ?? '-')) ?></dd>
                     <dt class="col-5">Employment Type</dt><dd class="col-7"><?= e((string)$request['employment_type']) ?></dd>
                     <dt class="col-5">Expected Start</dt><dd class="col-7"><?= e((string)($request['expected_start_date'] ?? '-')) ?></dd>
                 </dl>
+                <?php
+                $requiredFields = json_decode((string)($request['required_fields_json'] ?? ''), true);
+                $requiredLabels = [
+                    'full_name' => 'Full name',
+                    'email' => 'Email',
+                    'phone' => 'Phone',
+                    'nrc_number' => 'NRC number',
+                    'date_of_birth' => 'Date of birth',
+                    'napsa_number' => 'NAPSA number',
+                    'tpin' => 'TPIN',
+                    'nhima_number' => 'NHIMA number',
+                    'bank_name' => 'Bank name',
+                    'bank_account_number' => 'Bank account number',
+                    'next_of_kin_name' => 'Next of kin name',
+                    'next_of_kin_phone' => 'Next of kin phone',
+                ];
+                ?>
+                <?php if (is_array($requiredFields) && $requiredFields !== []): ?>
+                    <hr>
+                    <div class="small text-gray mb-1">Requested information</div>
+                    <div class="d-flex flex-wrap gap-1">
+                        <?php foreach ($requiredFields as $field): ?>
+                            <?php if (isset($requiredLabels[$field])): ?>
+                                <span class="badge bg-light text-dark border"><?= e($requiredLabels[$field]) ?></span>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
                 <?php if (in_array((string)$request['status'], ['Sent','Opened'], true)): ?>
                     <form method="post" action="<?= e(base_url('onboarding/cancel/' . (string)$request['id'])) ?>" class="mt-3">
                         <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
