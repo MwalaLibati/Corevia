@@ -1,6 +1,6 @@
 <div class="portal-page-header">
     <h2><i class="bi bi-key me-2"></i>Change Password</h2>
-    <p>Update your employee portal password.</p>
+    <p><?= !empty($forceChange) ? 'Choose a private password before continuing to the employee portal.' : 'Update your employee portal password.' ?></p>
 </div>
 
 <?php if (!empty($flashError)): ?>
@@ -8,13 +8,18 @@
 <?php endif; ?>
 
 <div class="portal-card" style="max-width:480px">
+    <?php if (!empty($forceChange)): ?>
+        <div class="alert alert-warning mb-3">Your account was created with a one-time password. Please create your own password to continue.</div>
+    <?php endif; ?>
     <form method="post" action="<?= e(base_url('portal/changePasswordStore')) ?>">
         <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
 
+        <?php if (empty($forceChange)): ?>
         <div class="mb-3">
             <label class="form-label fw-semibold">Current Password</label>
             <input type="password" name="current_password" class="form-control" required autocomplete="current-password">
         </div>
+        <?php endif; ?>
         <div class="mb-3">
             <label class="form-label fw-semibold">New Password <small class="text-muted fw-normal">(min 8 characters)</small></label>
             <input type="password" name="new_password" class="form-control" minlength="8" required autocomplete="new-password">
@@ -26,6 +31,8 @@
         <button type="submit" class="btn btn-success px-4">
             <i class="bi bi-check-circle me-1"></i> Update Password
         </button>
+        <?php if (empty($forceChange)): ?>
         <a href="<?= e(base_url('portal/dashboard')) ?>" class="btn btn-outline-secondary ms-2">Cancel</a>
+        <?php endif; ?>
     </form>
 </div>

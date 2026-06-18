@@ -103,6 +103,8 @@ class EmployeeController extends Controller
             'departments' => $employeeModel->departments(),
             'branches' => $employeeModel->branches(),
             'csrf' => Session::csrfToken(),
+            'flashSuccess' => Session::flash('success'),
+            'flashError' => Session::flash('error'),
         ]);
     }
 
@@ -140,6 +142,62 @@ class EmployeeController extends Controller
         }
 
         redirect('employee/profile/' . $empId);
+    }
+
+    public function portalAccess(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $employeeId = (int) $id;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('employee/profile/' . $employeeId);
+        }
+
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('employee/profile/' . $employeeId);
+        }
+
+        $employeeModel = new Employee();
+        $employee = $employeeModel->findDetailed($employeeId);
+        if (!$employee) {
+            Session::flash('error', 'Employee not found.');
+            redirect('employee/index');
+        }
+
+        $action = (string) $this->input('action', 'generate');
+
+        try {
+            if ($action === 'deactivate') {
+                $employeeModel->deactivatePortalAccess($employeeId);
+                AuditLog::record('employee_portal_deactivate', 'Deactivated employee portal access for ' . (string) $employee['full_name'], 'Employee', $employeeId);
+                Session::flash('success', 'Employee portal access deactivated.');
+                redirect('employee/profile/' . $employeeId);
+            }
+
+            $temporaryPassword = $this->generateEmployeeOneTimePassword();
+            $employeeModel->activatePortalAccess($employeeId, password_hash($temporaryPassword, PASSWORD_DEFAULT), 72);
+            $mailResult = $this->sendEmployeePortalInvite($employee, $temporaryPassword);
+
+            AuditLog::record('employee_portal_password_reset', 'Generated employee portal one-time password for ' . (string) $employee['full_name'], 'Employee', $employeeId, 'admin', [
+                'email_sent' => $mailResult['sent'],
+                'email_error' => $mailResult['error'] ?? null,
+            ]);
+
+            $message = 'One-time password generated. Temporary password: ' . $temporaryPassword . ' It expires in 72 hours and must be changed on first login.';
+            if ($mailResult['sent']) {
+                $message .= ' Login details were emailed to the employee.';
+            } elseif (!empty($mailResult['error'])) {
+                $message .= ' Email was not sent: ' . $mailResult['error'];
+            }
+
+            Session::flash('success', $message);
+        } catch (Throwable $e) {
+            Session::flash('error', 'Portal access update failed: ' . $e->getMessage());
+        }
+
+        redirect('employee/profile/' . $employeeId);
     }
 
     public function lifecycleEvent(string $id): void
@@ -1036,6 +1094,86 @@ class EmployeeController extends Controller
         }
 
         return max(0.0, round((float) $normalized, 2));
+    }
+
+    private function generateEmployeeOneTimePassword(): string
+    {
+        return 'Corevia@' . random_int(100000, 999999);
+    }
+
+    private function sendEmployeePortalInvite(array $employee, string $temporaryPassword): array
+    {
+        $email = trim((string) ($employee['email'] ?? ''));
+        if ($email === '') {
+            return ['sent' => false, 'error' => 'Employee has no email address.'];
+        }
+
+        $company = current_company() ?? [];
+        $companyName = (string) ($company['name'] ?? app_product_name());
+        $employeeName = (string) ($employee['full_name'] ?? 'Employee');
+        $employeeNumber = (string) ($employee['employee_number'] ?? '');
+        $loginUrl = public_url('portal/login');
+
+        $html = '<p>Hello ' . e($employeeName) . ',</p>'
+            . '<p>Your employee self-service portal account for <strong>' . e($companyName) . '</strong> has been created.</p>'
+            . '<p><strong>Portal URL:</strong> <a href="' . e($loginUrl) . '">' . e($loginUrl) . '</a><br>'
+            . '<strong>Employee Number:</strong> ' . e($employeeNumber) . '<br>'
+            . '<strong>One-time Password:</strong> ' . e($temporaryPassword) . '</p>'
+            . '<p>This password expires in 72 hours and must be changed when you first sign in.</p>'
+            . '<p>Regards,<br>' . e($companyName) . '</p>';
+
+        $mailer = new MailService($this->employeePortalEmailSettings());
+        $sent = $mailer->send($email, $employeeName, 'Your Corevia Employee Portal Access', $html);
+
+        return ['sent' => $sent, 'error' => $sent ? '' : $mailer->lastError()];
+    }
+
+    private function employeePortalEmailSettings(): array
+    {
+        $keys = [
+            'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
+            'smtp_password', 'smtp_from_email', 'smtp_from_name',
+            'smtp_hr_email', 'email_notifications_enabled',
+        ];
+
+        $placeholders = implode(',', array_fill(0, count($keys), '?'));
+        $cid = Tenant::id();
+        $sql = "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ({$placeholders})";
+        $params = $keys;
+        if ($cid > 0) {
+            $sql .= ' AND company_id = ?';
+            $params[] = $cid;
+        }
+
+        $stmt = db()->prepare($sql);
+        $stmt->execute($params);
+        $settings = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
+        }
+
+        if (isset($settings['smtp_password'])) {
+            $settings['smtp_password'] = SecretBox::decryptOrPlain((string) $settings['smtp_password']);
+        }
+
+        $serverFile = BASE_PATH . '/config/server.php';
+        if (is_file($serverFile)) {
+            $serverConfig = require $serverFile;
+            $serverMail = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
+            if (is_array($serverMail)) {
+                foreach ($serverMail as $key => $value) {
+                    if ($value !== null && (string) $value !== '') {
+                        $settings[$key] = (string) $value;
+                    }
+                }
+            }
+        }
+
+        $settings['smtp_from_email'] = $settings['smtp_from_email'] ?? 'info@stonesoftzambia.com';
+        $settings['smtp_from_name'] = $settings['smtp_from_name'] ?? app_product_name();
+        $settings['email_notifications_enabled'] = $settings['email_notifications_enabled'] ?? '1';
+
+        return $settings;
     }
 
     private function normalizeNullableMoney(string $value): ?float

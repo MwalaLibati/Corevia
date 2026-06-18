@@ -61,6 +61,14 @@ class PortalController extends Controller
             redirect('portal/login');
         }
 
+        if (!empty($employee['portal_must_change_password'])
+            && !empty($employee['portal_password_expires_at'])
+            && strtotime((string) $employee['portal_password_expires_at']) < time()) {
+            $limiter->record('employee_portal', $employeeNumber, false, $ipAddress);
+            Session::flash('error', 'Your one-time password has expired. Please contact HR for a new portal password.');
+            redirect('portal/login');
+        }
+
         $limiter->record('employee_portal', $employeeNumber, true, $ipAddress);
         $limiter->clearFailures('employee_portal', $employeeNumber, $ipAddress);
         Session::regenerate();
@@ -72,7 +80,11 @@ class PortalController extends Controller
             'designation'     => (string) ($employee['designation'] ?? ''),
             'department_id'   => (int) ($employee['department_id'] ?? 0),
             'company_id'      => (int) ($employee['company_id'] ?? 0),
+            'portal_must_change_password' => (int) ($employee['portal_must_change_password'] ?? 0),
         ];
+
+        db()->prepare('UPDATE employees SET portal_last_login_at = NOW() WHERE id = :id')
+            ->execute(['id' => (int) $employee['id']]);
 
         // Set active tenant
         $cid = (int) ($employee['company_id'] ?? 0);
@@ -517,6 +529,7 @@ class PortalController extends Controller
         require_employee_auth();
         $this->renderPortal('portal/change-password', [
             'emp'        => current_employee(),
+            'forceChange' => !empty(current_employee()['portal_must_change_password']),
             'csrf'       => Session::csrfToken(),
             'flashError' => Session::flash('error'),
         ]);
@@ -534,15 +547,21 @@ class PortalController extends Controller
         }
 
         $empId   = (int) (current_employee()['id']);
+        $forceChange = !empty(current_employee()['portal_must_change_password']);
         $current = (string) $this->input('current_password', '');
         $new     = (string) $this->input('new_password', '');
         $confirm = (string) $this->input('confirm_password', '');
 
-        $stmt = db()->prepare("SELECT portal_password_hash FROM employees WHERE id = :id LIMIT 1");
+        $stmt = db()->prepare("SELECT portal_password_hash, portal_must_change_password FROM employees WHERE id = :id LIMIT 1");
         $stmt->execute(['id' => $empId]);
         $row = $stmt->fetch();
 
-        if (!$row || !password_verify($current, (string) ($row['portal_password_hash'] ?? ''))) {
+        if (!$row) {
+            Session::flash('error', 'Employee account not found.');
+            redirect('portal/changePassword');
+        }
+
+        if (!$forceChange && !password_verify($current, (string) ($row['portal_password_hash'] ?? ''))) {
             Session::flash('error', 'Current password is incorrect.');
             redirect('portal/changePassword');
         }
@@ -558,9 +577,15 @@ class PortalController extends Controller
             redirect('portal/changePassword');
         }
 
-        db()->prepare("UPDATE employees SET portal_password_hash = :h WHERE id = :id")
+        db()->prepare("UPDATE employees
+                       SET portal_password_hash = :h,
+                           portal_must_change_password = 0,
+                           portal_password_set_at = NOW(),
+                           portal_password_expires_at = NULL
+                       WHERE id = :id")
            ->execute(['h' => password_hash($new, PASSWORD_DEFAULT), 'id' => $empId]);
 
+        $_SESSION['emp_user']['portal_must_change_password'] = 0;
         Session::flash('success', 'Password updated successfully.');
         redirect('portal/dashboard');
     }

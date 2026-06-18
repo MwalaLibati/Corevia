@@ -184,6 +184,13 @@ $profileField = static function (string $label, mixed $value): void {
     </div>
 </div>
 
+<?php if (!empty($flashSuccess)): ?>
+    <div class="alert alert-success"><?= e((string) $flashSuccess) ?></div>
+<?php endif; ?>
+<?php if (!empty($flashError)): ?>
+    <div class="alert alert-danger"><?= e((string) $flashError) ?></div>
+<?php endif; ?>
+
 <div class="employee-profile-hero mb-4">
     <div class="d-flex align-items-center gap-3 flex-wrap">
         <div class="employee-avatar">
@@ -207,6 +214,51 @@ $profileField = static function (string $label, mixed $value): void {
         <span class="badge bg-<?= e($statusClass) ?> px-3 py-2"><?= e($status) ?></span>
     </div>
 </div>
+
+<?php if ($canEditEmployee): ?>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between gap-3 flex-wrap">
+        <div>
+            <h5 class="mb-1">Employee Portal Access</h5>
+            <p class="text-gray mb-2" style="font-size:.86rem">
+                Manage the employee's self-service login, one-time password, and portal access status.
+            </p>
+            <div class="d-flex flex-wrap gap-2">
+                <?php if ((int)($emp['portal_active'] ?? 0) === 1): ?>
+                    <span class="badge bg-success">Portal Enabled</span>
+                <?php else: ?>
+                    <span class="badge bg-secondary">Portal Disabled</span>
+                <?php endif; ?>
+                <?php if (!empty($emp['portal_must_change_password'])): ?>
+                    <span class="badge bg-warning text-dark">Must Change Password</span>
+                <?php endif; ?>
+                <?php if (!empty($emp['portal_password_expires_at'])): ?>
+                    <span class="badge bg-light text-dark border">OTP expires: <?= e((string)$emp['portal_password_expires_at']) ?></span>
+                <?php endif; ?>
+                <?php if (!empty($emp['portal_last_login_at'])): ?>
+                    <span class="badge bg-light text-dark border">Last login: <?= e((string)$emp['portal_last_login_at']) ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <form method="post" action="<?= e(base_url('employee/portalAccess/' . (string)$emp['id'])) ?>">
+                <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                <input type="hidden" name="action" value="generate">
+                <button type="submit" class="btn btn-outline-primary" onclick="return confirm('Generate a new one-time password for this employee? The employee must change it on first login.');">
+                    <?= (int)($emp['portal_active'] ?? 0) === 1 ? 'Reset One-Time Password' : 'Enable Portal Access' ?>
+                </button>
+            </form>
+            <?php if ((int)($emp['portal_active'] ?? 0) === 1): ?>
+                <form method="post" action="<?= e(base_url('employee/portalAccess/' . (string)$emp['id'])) ?>">
+                    <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                    <input type="hidden" name="action" value="deactivate">
+                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Deactivate this employee portal account?');">Deactivate Portal</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <div class="row g-3 mb-4">
     <div class="col-md-6 col-xl-3">

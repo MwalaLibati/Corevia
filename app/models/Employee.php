@@ -16,6 +16,25 @@ class Employee extends Model
         parent::__construct();
         (new ClientEntity())->ensureSchema();
         (new Branch())->ensureSchema();
+        $this->ensurePortalAccessSchema();
+    }
+
+    public function ensurePortalAccessSchema(): void
+    {
+        $columns = [
+            'portal_must_change_password' => 'TINYINT(1) NOT NULL DEFAULT 0',
+            'portal_password_set_at' => 'DATETIME NULL',
+            'portal_password_expires_at' => 'DATETIME NULL',
+            'portal_invite_sent_at' => 'DATETIME NULL',
+            'portal_password_reset_at' => 'DATETIME NULL',
+            'portal_last_login_at' => 'DATETIME NULL',
+        ];
+
+        foreach ($columns as $column => $definition) {
+            if (!$this->columnExists('employees', $column)) {
+                $this->db->exec("ALTER TABLE employees ADD COLUMN {$column} {$definition}");
+            }
+        }
     }
 
     public function generateNextEmployeeNumber(): string
@@ -153,6 +172,47 @@ class Employee extends Model
         return (bool) $stmt->fetchColumn();
     }
 
+    public function activatePortalAccess(int $employeeId, string $passwordHash, int $expiresHours = 72): void
+    {
+        $cid = Tenant::id();
+        $and = $cid > 0 ? ' AND company_id = :cid' : '';
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+' . max(1, $expiresHours) . ' hours'));
+        $stmt = $this->db->prepare(
+            "UPDATE employees
+             SET portal_active = 1,
+                 portal_password_hash = :hash,
+                 portal_must_change_password = 1,
+                 portal_password_set_at = NOW(),
+                 portal_password_reset_at = NOW(),
+                 portal_password_expires_at = :expires_at,
+                 portal_invite_sent_at = NOW()
+             WHERE id = :id{$and}"
+        );
+        $params = ['id' => $employeeId, 'hash' => $passwordHash, 'expires_at' => $expiresAt];
+        if ($cid > 0) {
+            $params['cid'] = $cid;
+        }
+        $stmt->execute($params);
+    }
+
+    public function deactivatePortalAccess(int $employeeId): void
+    {
+        $cid = Tenant::id();
+        $and = $cid > 0 ? ' AND company_id = :cid' : '';
+        $stmt = $this->db->prepare(
+            "UPDATE employees
+             SET portal_active = 0,
+                 portal_must_change_password = 0,
+                 portal_password_expires_at = NULL
+             WHERE id = :id{$and}"
+        );
+        $params = ['id' => $employeeId];
+        if ($cid > 0) {
+            $params['cid'] = $cid;
+        }
+        $stmt->execute($params);
+    }
+
     public function departments(): array
     {
         $cid = Tenant::id();
@@ -163,6 +223,18 @@ class Employee extends Model
             $stmt = $this->db->query('SELECT id, name FROM departments ORDER BY name ASC');
         }
         return $stmt->fetchAll();
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => $table, 'column' => $column]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     public function branches(): array

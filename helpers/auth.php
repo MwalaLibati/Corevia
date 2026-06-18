@@ -292,6 +292,14 @@ function require_employee_auth(): void
             } catch (Throwable) {}
         }
     }
+
+    if (!empty($_SESSION['emp_user']['portal_must_change_password'])) {
+        $path = trim((string) ($_GET['url'] ?? ''), '/');
+        $allowed = ['portal/changePassword', 'portal/changePasswordStore', 'portal/logout'];
+        if (!in_array($path, $allowed, true)) {
+            redirect('portal/changePassword');
+        }
+    }
 }
 
 /* ---------------------------------------------------------------

@@ -81,6 +81,9 @@
                                 <td class="text-center">
                                     <?php if ((int)($employee['portal_active'] ?? 1) === 1): ?>
                                         <span class="badge bg-success" title="Portal access enabled"><i class="bi bi-check"></i></span>
+                                        <?php if (!empty($employee['portal_must_change_password'])): ?>
+                                            <span class="badge bg-warning text-dark ms-1" title="One-time password pending">OTP</span>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <span class="badge bg-secondary" title="Portal access disabled"><i class="bi bi-dash"></i></span>
                                     <?php endif; ?>
