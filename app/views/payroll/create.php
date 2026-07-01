@@ -61,6 +61,16 @@
                 </select>
             </div>
 
+            <div class="col-md-4">
+                <label class="form-label">Partial-Month Pay</label>
+                <?php $prorationMode = (string)($old['proration_mode'] ?? 'Full Month'); ?>
+                <select name="proration_mode" class="form-select">
+                    <option value="Full Month" <?= $prorationMode === 'Full Month' ? 'selected' : '' ?>>Pay full month</option>
+                    <option value="Calendar Days" <?= $prorationMode === 'Calendar Days' ? 'selected' : '' ?>>Prorate by calendar days</option>
+                </select>
+                <div class="form-text">Applies when an employee starts or leaves during the selected month.</div>
+            </div>
+
             <div class="col-12">
                 <div class="alert alert-info mb-0">
                     Status, totals, and creator are set automatically when you save the run.

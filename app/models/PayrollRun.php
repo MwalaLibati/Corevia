@@ -11,6 +11,24 @@ class PayrollRun extends Model
     protected string $table = 'payroll_runs';
     protected bool $tenantScoped = true;
 
+    public function __construct()
+    {
+        parent::__construct();
+        $this->ensureHistoricalPayrollSchema();
+    }
+
+    private function ensureHistoricalPayrollSchema(): void
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => 'payroll_runs', 'column' => 'proration_mode']);
+        if ((int) $stmt->fetchColumn() === 0) {
+            $this->db->exec("ALTER TABLE payroll_runs ADD COLUMN proration_mode VARCHAR(30) NOT NULL DEFAULT 'Full Month'");
+        }
+    }
+
     public function listWithDetails(): array
     {
         $cid = Tenant::id();
@@ -396,14 +414,31 @@ class PayrollRun extends Model
 
     private function calculatePayrollItems(array $run): array
     {
-        $runDate = (string) $run['run_date'];
+        $period = substr((string) ($run['pay_period'] ?? ''), 0, 7);
+        if (!preg_match('/^20\d{2}-(0[1-9]|1[0-2])$/', $period)) {
+            throw new RuntimeException('Payroll period is invalid. Expected YYYY-MM.');
+        }
+
+        $periodStart = $period . '-01';
+        $periodEnd = date('Y-m-t', strtotime($periodStart));
+        $salaryAsOfDate = $periodEnd;
+        $prorationMode = (string) ($run['proration_mode'] ?? 'Full Month');
         $employeeSalaryModel = new EmployeeSalary();
         $employeeDeductionModel = new EmployeeDeduction();
 
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
-        $employeeStmt = $this->db->prepare("SELECT id, full_name, employee_number FROM employees WHERE contract_status = 'Active'$cidFilter ORDER BY full_name ASC");
-        $employeeStmt->execute($cid > 0 ? ['cid' => $cid] : []);
+        $employeeStmt = $this->db->prepare(
+            "SELECT id, full_name, employee_number, hired_at, termination_date
+             FROM employees
+             WHERE (hired_at IS NULL OR hired_at <= :period_end)
+               AND (termination_date IS NULL OR termination_date >= :period_start)
+               {$cidFilter}
+             ORDER BY full_name ASC"
+        );
+        $employeeParams = ['period_start' => $periodStart, 'period_end' => $periodEnd];
+        if ($cid > 0) { $employeeParams['cid'] = $cid; }
+        $employeeStmt->execute($employeeParams);
         $employees = $employeeStmt->fetchAll();
 
         $bonusTenantFilter = $cid > 0 ? ' AND e.company_id = :cid' : '';
@@ -437,16 +472,18 @@ class PayrollRun extends Model
 
         foreach ($employees as $employee) {
             $employeeId = (int) $employee['id'];
-            $salary = $employeeSalaryModel->activeWithStructureForDate($employeeId, $runDate);
+            $salary = $employeeSalaryModel->activeWithStructureForDate($employeeId, $salaryAsOfDate);
 
             if (!$salary) {
                 continue;
             }
 
-            $basicPay = (float) ($salary['basic_pay'] ?? 0);
-            $housingAllowance = (float) ($salary['housing_allowance'] ?? 0);
-            $transportAllowance = (float) ($salary['transport_allowance'] ?? 0);
-            $otherAllowances = (float) ($salary['other_allowances'] ?? 0);
+            $proration = $this->employmentProration($employee, $periodStart, $periodEnd, $prorationMode);
+            $factor = (float) $proration['factor'];
+            $basicPay = round((float) ($salary['basic_pay'] ?? 0) * $factor, 2);
+            $housingAllowance = round((float) ($salary['housing_allowance'] ?? 0) * $factor, 2);
+            $transportAllowance = round((float) ($salary['transport_allowance'] ?? 0) * $factor, 2);
+            $otherAllowances = round((float) ($salary['other_allowances'] ?? 0) * $factor, 2);
             $bonusAmount = 0.0;
             $bonusIds = [];
 
@@ -459,7 +496,7 @@ class PayrollRun extends Model
             $deductionLines = [];
             $employeeSpecificTotal = 0.0;
 
-            foreach ($employeeDeductionModel->applicableForEmployeeAtDate($employeeId, $runDate) as $deduction) {
+            foreach ($employeeDeductionModel->applicableForEmployeeAtDate($employeeId, $periodEnd) as $deduction) {
                 if (EmployeeDeduction::isManagedStatutoryCode($deduction['deduction_code'] ?? null)) {
                     continue;
                 }
@@ -532,6 +569,12 @@ class PayrollRun extends Model
                 'net_pay' => $netPay,
                 'deduction_lines' => $deductionLines,
                 'bonus_ids' => $bonusIds,
+                'employment_period_start' => $periodStart,
+                'employment_period_end' => $periodEnd,
+                'eligible_days' => $proration['eligible_days'],
+                'period_days' => $proration['period_days'],
+                'proration_factor' => $factor,
+                'proration_mode' => $prorationMode,
             ];
 
             $totals['gross'] += $grossPay;
@@ -547,6 +590,29 @@ class PayrollRun extends Model
         $totals['items'] = $items;
 
         return $totals;
+    }
+
+    private function employmentProration(array $employee, string $periodStart, string $periodEnd, string $mode): array
+    {
+        $periodStartTs = strtotime($periodStart);
+        $periodEndTs = strtotime($periodEnd);
+        $employmentStartTs = !empty($employee['hired_at']) ? max($periodStartTs, strtotime((string) $employee['hired_at'])) : $periodStartTs;
+        $employmentEndTs = !empty($employee['termination_date']) ? min($periodEndTs, strtotime((string) $employee['termination_date'])) : $periodEndTs;
+
+        $periodDays = (int) date('t', $periodStartTs);
+        $eligibleDays = $employmentEndTs >= $employmentStartTs
+            ? (int) floor(($employmentEndTs - $employmentStartTs) / 86400) + 1
+            : 0;
+
+        $factor = $mode === 'Calendar Days'
+            ? round($eligibleDays / max(1, $periodDays), 8)
+            : ($eligibleDays > 0 ? 1.0 : 0.0);
+
+        return [
+            'eligible_days' => $eligibleDays,
+            'period_days' => $periodDays,
+            'factor' => min(1.0, max(0.0, $factor)),
+        ];
     }
 
     private function calculateAdvanceDeduction(int $employeeId): float
@@ -793,9 +859,9 @@ class PayrollRun extends Model
 
             $insertCorrection = $this->db->prepare(
                 'INSERT INTO payroll_runs
-                    (company_id, pay_period, run_date, status, total_gross, total_deductions, total_net, created_by, correction_of_run_id, tax_year_id)
+                    (company_id, pay_period, run_date, status, total_gross, total_deductions, total_net, created_by, correction_of_run_id, tax_year_id, proration_mode)
                  VALUES
-                    (:company_id, :pay_period, :run_date, "Draft", 0, 0, 0, :created_by, :correction_of_run_id, :tax_year_id)'
+                    (:company_id, :pay_period, :run_date, "Draft", 0, 0, 0, :created_by, :correction_of_run_id, :tax_year_id, :proration_mode)'
             );
             $insertCorrection->execute([
                 'company_id' => (int) ($run['company_id'] ?? $cid),
@@ -804,6 +870,7 @@ class PayrollRun extends Model
                 'created_by' => $userId,
                 'correction_of_run_id' => $runId,
                 'tax_year_id' => $run['tax_year_id'] ?? null,
+                'proration_mode' => $run['proration_mode'] ?? 'Full Month',
             ]);
             $correctionId = (int) $this->db->lastInsertId();
 

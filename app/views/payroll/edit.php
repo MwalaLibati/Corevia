@@ -305,6 +305,17 @@
             </div>
 
             <div class="col-md-4">
+                <label class="form-label">Partial-Month Pay</label>
+                <?php $prorationMode = (string)($oldInput['proration_mode'] ?? 'Full Month'); ?>
+                <select name="proration_mode" class="form-select" <?= $isLocked ? 'disabled' : '' ?>>
+                    <option value="Full Month" <?= $prorationMode === 'Full Month' ? 'selected' : '' ?>>Pay full month</option>
+                    <option value="Calendar Days" <?= $prorationMode === 'Calendar Days' ? 'selected' : '' ?>>Prorate by calendar days</option>
+                </select>
+                <?php if ($isLocked): ?><input type="hidden" name="proration_mode" value="<?= e($prorationMode) ?>"><?php endif; ?>
+                <div class="form-text">Uses hire and termination dates within the selected month.</div>
+            </div>
+
+            <div class="col-md-4">
                 <label class="form-label">Total Gross</label>
                 <input type="number" step="0.01" min="0" name="total_gross" class="form-control" value="<?= e((string) ($oldInput['total_gross'] ?? '0')) ?>">
             </div>

@@ -80,7 +80,6 @@ class EmployeeSalary extends Model
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
                 WHERE es.employee_id = :employee_id
-                  AND es.is_active = 1
                   AND es.effective_date <= :as_of_date' . $and . '
                 ORDER BY es.effective_date DESC, es.id DESC
                 LIMIT 1';

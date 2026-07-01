@@ -647,6 +647,7 @@ class PayrollController extends Controller
             'total_net' => 0.0,
             'created_by' => (int) ($user['id'] ?? 0) ?: null,
             'tax_year_id' => (int) $this->input('tax_year_id', 0) ?: null,
+            'proration_mode' => (string) $this->input('proration_mode', 'Full Month'),
         ];
     }
 
@@ -662,6 +663,10 @@ class PayrollController extends Controller
 
         if (!in_array($data['status'], $this->statusOptions(), true)) {
             return 'Invalid payroll status selected.';
+        }
+
+        if (!in_array((string) ($data['proration_mode'] ?? ''), ['Full Month', 'Calendar Days'], true)) {
+            return 'Invalid payroll proration method selected.';
         }
 
         return null;

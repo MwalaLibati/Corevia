@@ -38,6 +38,7 @@
                 <thead>
                     <tr>
                         <th>Employee</th>
+                        <th>Employment Coverage</th>
                         <th>Gross</th>
                         <th>Employee Deductions</th>
                         <th>Net</th>
@@ -46,13 +47,17 @@
                 </thead>
                 <tbody>
                     <?php if (empty($items)): ?>
-                        <tr><td colspan="5" class="text-center text-gray">No employees with active salary structures were found.</td></tr>
+                        <tr><td colspan="6" class="text-center text-gray">No employees employed during this period with an effective salary assignment were found.</td></tr>
                     <?php else: ?>
                         <?php foreach ($items as $item): ?>
                             <tr>
                                 <td>
                                     <div class="fw-semibold"><?= e((string) ($item['employee_name'] ?? '')) ?></div>
                                     <div class="text-gray small"><?= e((string) ($item['employee_number'] ?? '')) ?></div>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold"><?= e((string)($item['eligible_days'] ?? 0)) ?> / <?= e((string)($item['period_days'] ?? 0)) ?> days</div>
+                                    <div class="text-gray small"><?= e((string)($item['proration_mode'] ?? 'Full Month')) ?> · <?= e(number_format((float)($item['proration_factor'] ?? 1) * 100, 2)) ?>%</div>
                                 </td>
                                 <td><?= e(format_currency((float) ($item['gross_pay'] ?? 0))) ?></td>
                                 <td><?= e(format_currency((float) ($item['total_deductions'] ?? 0))) ?></td>
