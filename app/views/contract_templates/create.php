@@ -43,7 +43,7 @@ $versions = $versions ?? [];
                                    placeholder="e.g. Employee Contract" required>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">Salary Structure</label>
                             <select name="salary_structure_id" class="form-select">
                                 <option value="">Any structure</option>
@@ -57,7 +57,7 @@ $versions = $versions ?? [];
                             <small class="text-gray">Leave blank to match any structure.</small>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label fw-semibold">Contract Type</label>
                             <select name="contract_type" class="form-select">
                                 <option value="">Any type</option>
@@ -69,6 +69,19 @@ $versions = $versions ?? [];
                                 <?php endforeach; ?>
                             </select>
                             <small class="text-gray">Leave blank to match any contract type.</small>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Branch</label>
+                            <select name="branch_id" class="form-select">
+                                <option value="">Any branch</option>
+                                <?php foreach (($branches ?? []) as $branch): ?>
+                                    <option value="<?= e((string)$branch['id']) ?>" <?= ((string)($formData['branch_id'] ?? '') === (string)$branch['id']) ? 'selected' : '' ?>>
+                                        <?= e((string)$branch['name']) ?><?= !empty($branch['code']) ? ' (' . e((string)$branch['code']) . ')' : '' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="text-gray">Leave blank for a company-wide template.</small>
                         </div>
 
                         <div class="col-12">

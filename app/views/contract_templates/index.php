@@ -58,6 +58,7 @@ $typeColors = [
                         <th>Template Name</th>
                         <th>Salary Structure</th>
                         <th>Contract Type</th>
+                        <th>Branch</th>
                         <th class="text-center">Default</th>
                         <th class="text-center">Last Updated</th>
                         <th class="text-end">Actions</th>
@@ -93,6 +94,7 @@ $typeColors = [
                                     <span class="text-gray small">Any type</span>
                                 <?php endif; ?>
                             </td>
+                            <td><?= !empty($tpl['branch_name']) ? e((string)$tpl['branch_name']) : '<span class="text-gray small">Any branch</span>' ?></td>
                             <td class="text-center">
                                 <?php if ((int) ($tpl['is_default'] ?? 0) === 1): ?>
                                     <i class="bi bi-check-circle-fill text-success"></i>

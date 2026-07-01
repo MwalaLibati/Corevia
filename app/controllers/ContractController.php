@@ -99,10 +99,11 @@ class ContractController extends Controller
         // Auto-resolve template based on employee salary structure + contract type
         $empSalary  = (new EmployeeSalary())->activeWithStructureForDate(
             (int) $data['employee_id'],
-            date('Y-m-d')
+            (string) $data['start_date']
         );
         $ssId       = $empSalary ? (int) ($empSalary['salary_structure_id'] ?? 0) : null;
-        $matched    = $tmplModel->resolve($ssId ?: null, (string) $data['contract_type']);
+        $contractEmployee = (new Employee())->findDetailed((int) $data['employee_id']) ?? [];
+        $matched    = $tmplModel->resolve($ssId ?: null, (string) $data['contract_type'], !empty($contractEmployee['branch_id']) ? (int)$contractEmployee['branch_id'] : null);
         $templateId = $matched ? (int) $matched['id'] : null;
 
         try {
@@ -311,12 +312,14 @@ class ContractController extends Controller
             // Fall back to auto-resolve by structure + type
             $empSalary  = (new EmployeeSalary())->activeWithStructureForDate(
                 (int) $contract['employee_id'],
-                date('Y-m-d')
+                (string) ($contract['start_date'] ?? date('Y-m-d'))
             );
             $ssId     = $empSalary ? (int) ($empSalary['salary_structure_id'] ?? 0) : null;
-            $template = $tmplModel->resolve($ssId ?: null, (string) ($contract['contract_type'] ?? ''));
+            $template = $tmplModel->resolve($ssId ?: null, (string) ($contract['contract_type'] ?? ''), !empty($employee['branch_id']) ? (int)$employee['branch_id'] : null);
             if ($template && $empSalary) {
                 $employee['salary_structure_name'] = (string) ($empSalary['structure_name'] ?? '');
+                $employee['grade_level']            = (string) ($empSalary['grade_level'] ?? '');
+                $employee['structure_basic_pay']    = (float) ($empSalary['structure_basic_pay'] ?? $empSalary['basic_pay'] ?? 0);
                 $employee['basic_pay']             = (float)  ($empSalary['basic_pay']      ?? 0);
                 $employee['housing_allowance']     = (float)  ($empSalary['housing_allowance'] ?? 0);
                 $employee['transport_allowance']   = (float)  ($empSalary['transport_allowance'] ?? 0);
@@ -325,9 +328,11 @@ class ContractController extends Controller
         } else {
             $empSalary = (new EmployeeSalary())->activeWithStructureForDate(
                 (int) $contract['employee_id'],
-                date('Y-m-d')
+                (string) ($contract['start_date'] ?? date('Y-m-d'))
             );
             $employee['salary_structure_name'] = (string) ($empSalary['structure_name'] ?? '');
+            $employee['grade_level']            = (string) ($empSalary['grade_level'] ?? '');
+            $employee['structure_basic_pay']    = (float) ($empSalary['structure_basic_pay'] ?? $empSalary['basic_pay'] ?? 0);
             $employee['basic_pay']             = (float)  ($empSalary['basic_pay']      ?? 0);
             $employee['housing_allowance']     = (float)  ($empSalary['housing_allowance'] ?? 0);
             $employee['transport_allowance']   = (float)  ($empSalary['transport_allowance'] ?? 0);
@@ -502,10 +507,11 @@ class ContractController extends Controller
         $empSalaryForTmpl = $originalForTmpl
             ? (new EmployeeSalary())->activeWithStructureForDate(
                 (int) $originalForTmpl['employee_id'],
-                date('Y-m-d')
+                $startDate ?? date('Y-m-d')
             ) : null;
         $ssIdForTmpl  = $empSalaryForTmpl ? (int) ($empSalaryForTmpl['salary_structure_id'] ?? 0) : null;
-        $matchedTmpl  = $tmplModel->resolve($ssIdForTmpl ?: null, $contractType);
+        $renewEmployee = $originalForTmpl ? (new Employee())->findDetailed((int)$originalForTmpl['employee_id']) : null;
+        $matchedTmpl  = $tmplModel->resolve($ssIdForTmpl ?: null, $contractType, !empty($renewEmployee['branch_id']) ? (int)$renewEmployee['branch_id'] : null);
         $renewTplId   = $matchedTmpl ? (int) $matchedTmpl['id'] : null;
 
         try {
@@ -598,16 +604,18 @@ class ContractController extends Controller
 
         $empSalary = (new EmployeeSalary())->activeWithStructureForDate(
             (int) $contract['employee_id'],
-            date('Y-m-d')
+            (string) ($contract['start_date'] ?? date('Y-m-d'))
         );
 
         if (!$template) {
             $ssId = $empSalary ? (int) ($empSalary['salary_structure_id'] ?? 0) : null;
-            $template = $tmplModel->resolve($ssId ?: null, (string) ($contract['contract_type'] ?? ''));
+            $template = $tmplModel->resolve($ssId ?: null, (string) ($contract['contract_type'] ?? ''), !empty($employee['branch_id']) ? (int)$employee['branch_id'] : null);
         }
 
         if ($empSalary) {
             $employee['salary_structure_name'] = (string) ($empSalary['structure_name'] ?? '');
+            $employee['grade_level'] = (string) ($empSalary['grade_level'] ?? '');
+            $employee['structure_basic_pay'] = (float) ($empSalary['structure_basic_pay'] ?? $empSalary['basic_pay'] ?? 0);
             $employee['basic_pay'] = (float) ($empSalary['basic_pay'] ?? 0);
             $employee['housing_allowance'] = (float) ($empSalary['housing_allowance'] ?? 0);
             $employee['transport_allowance'] = (float) ($empSalary['transport_allowance'] ?? 0);

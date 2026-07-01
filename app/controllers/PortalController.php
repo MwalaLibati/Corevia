@@ -385,8 +385,23 @@ class PortalController extends Controller
             $template = $tmplModel->findDetailed($templateId);
         }
         if (!$template) {
-            $empSalary = (new EmployeeSalary())->activeWithStructureForDate($empId, date('Y-m-d'));
-            $template = $tmplModel->resolve($empSalary ? (int) ($empSalary['salary_structure_id'] ?? 0) : null, (string) ($contract['contract_type'] ?? ''));
+            $empSalary = (new EmployeeSalary())->activeWithStructureForDate($empId, (string)($contract['start_date'] ?? date('Y-m-d')));
+            $template = $tmplModel->resolve(
+                $empSalary ? (int) ($empSalary['salary_structure_id'] ?? 0) : null,
+                (string) ($contract['contract_type'] ?? ''),
+                !empty($employee['branch_id']) ? (int) $employee['branch_id'] : null
+            );
+        } else {
+            $empSalary = (new EmployeeSalary())->activeWithStructureForDate($empId, (string)($contract['start_date'] ?? date('Y-m-d')));
+        }
+        if (!empty($empSalary)) {
+            $employee['salary_structure_name'] = (string) ($empSalary['structure_name'] ?? '');
+            $employee['grade_level'] = (string) ($empSalary['grade_level'] ?? '');
+            $employee['structure_basic_pay'] = (float) ($empSalary['structure_basic_pay'] ?? $empSalary['basic_pay'] ?? 0);
+            $employee['basic_pay'] = (float) ($empSalary['basic_pay'] ?? 0);
+            $employee['housing_allowance'] = (float) ($empSalary['housing_allowance'] ?? 0);
+            $employee['transport_allowance'] = (float) ($empSalary['transport_allowance'] ?? 0);
+            $employee['other_allowances'] = (float) ($empSalary['other_allowances'] ?? 0);
         }
         if ($template) {
             $tokenValues = $tmplModel->buildTokenValues($contract, $employee);

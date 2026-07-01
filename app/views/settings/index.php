@@ -54,6 +54,10 @@
                 <input type="text" name="statutory_registered_employer_name" class="form-control" value="<?= e((string)($stat['statutory_registered_employer_name'] ?? '')) ?>">
             </div>
             <div class="col-md-3">
+                <label class="form-label">Company Registration Number</label>
+                <input type="text" name="company_registration_number" class="form-control" value="<?= e((string)($stat['company_registration_number'] ?? '')) ?>">
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">NAPSA Account Number</label>
                 <input type="text" name="statutory_napsa_account_number" class="form-control" value="<?= e((string)($stat['statutory_napsa_account_number'] ?? '')) ?>">
             </div>

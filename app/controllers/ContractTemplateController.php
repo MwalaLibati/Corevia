@@ -34,13 +34,14 @@ class ContractTemplateController extends Controller
             'title'         => 'New Contract Template',
             'contractTypes' => (new EmploymentType())->names(),
             'structures'    => $model->salaryStructures(),
+            'branches'      => $model->branches(),
             'tokens'        => ContractTemplate::TOKENS,
             'fieldGroups'   => $model->fieldGroups(),
             'template'      => null,
             'versions'      => [],
             'csrf'          => Session::csrfToken(),
             'flashError'    => Session::flash('error'),
-            'old'           => $_SESSION['_old_ct_input'] ?? [],
+            'old'           => $_SESSION['_old_ct_input'] ?? ['body' => $model->professionalDefaultBody()],
         ]);
 
         unset($_SESSION['_old_ct_input']);
@@ -79,6 +80,7 @@ class ContractTemplateController extends Controller
 
             $model->insert([
                 'company_id'          => \Tenant::id(),
+                'branch_id'           => $data['branch_id'],
                 'name'                => $data['name'],
                 'salary_structure_id' => $data['salary_structure_id'],
                 'contract_type'       => $data['contract_type'],
@@ -122,6 +124,7 @@ class ContractTemplateController extends Controller
             'title'         => 'Edit Contract Template',
             'contractTypes' => (new EmploymentType())->names(),
             'structures'    => $model->salaryStructures(),
+            'branches'      => $model->branches(),
             'tokens'        => ContractTemplate::TOKENS,
             'fieldGroups'   => $model->fieldGroups(),
             'template'      => $template,
@@ -183,6 +186,7 @@ class ContractTemplateController extends Controller
             $updateData = [
                 'name'                => $data['name'],
                 'salary_structure_id' => $data['salary_structure_id'],
+                'branch_id'           => $data['branch_id'],
                 'contract_type'       => $data['contract_type'],
                 'body'                => $data['body'],
                 'is_default'          => (int) ($data['is_default'] ?? 0),
@@ -263,7 +267,20 @@ class ContractTemplateController extends Controller
             'employee_number'       => 'EMP001',
             'designation'           => 'Operations Officer',
             'department_name'       => 'Operations',
+            'department_code'       => 'OPS',
+            'employment_type'       => 'Contract',
+            'hired_at'              => date('Y-m-d'),
+            'probation_end_date'    => date('Y-m-d', strtotime('+3 months')),
+            'branch_name'           => $template['branch_name'] ?? 'Lusaka Branch',
+            'branch_code'           => 'LSK',
+            'branch_address'        => 'Lusaka, Zambia',
+            'branch_phone'          => '+260 211 000000',
+            'branch_email'          => 'lusaka@example.com',
+            'client_entity_name'    => 'Sample Group',
+            'client_entity_code'    => 'SG',
             'salary_structure_name' => $template['structure_name'] ?? 'Monthly Staff',
+            'grade_level'           => 'Grade 4',
+            'structure_basic_pay'   => 3800.00,
             'basic_pay'             => 4000.00,
             'housing_allowance'      => 0.00,
             'transport_allowance'    => 0.00,
@@ -294,11 +311,13 @@ class ContractTemplateController extends Controller
     private function collectInput(): array
     {
         $ssId = (int) $this->input('salary_structure_id', 0);
+        $branchId = (int) $this->input('branch_id', 0);
         $type = trim((string) $this->input('contract_type', ''));
 
         return [
             'name'                => trim((string) $this->input('name', '')),
             'salary_structure_id' => $ssId > 0 ? $ssId : null,
+            'branch_id'           => $branchId > 0 ? $branchId : null,
             'contract_type'       => $type !== '' ? $type : null,
             'body'                => trim((string) $this->input('body', '')),
             'is_default'          => (int) $this->input('is_default', 0),
@@ -317,6 +336,14 @@ class ContractTemplateController extends Controller
 
         if ($data['contract_type'] !== null && !in_array($data['contract_type'], (new EmploymentType())->names(), true)) {
             return 'Invalid contract type.';
+        }
+
+        if ($data['branch_id'] !== null) {
+            $stmt = db()->prepare('SELECT COUNT(*) FROM branches WHERE id = :id AND company_id = :cid');
+            $stmt->execute(['id' => $data['branch_id'], 'cid' => Tenant::id()]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                return 'Selected branch does not belong to this company.';
+            }
         }
 
         return null;

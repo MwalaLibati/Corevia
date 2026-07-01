@@ -28,6 +28,7 @@ class SettingsController extends Controller
         ];
         $statutorySettings = [
             'statutory_registered_employer_name' => $model->value('statutory_registered_employer_name', (string) (current_company()['name'] ?? '')),
+            'company_registration_number' => $model->value('company_registration_number', ''),
             'statutory_napsa_account_number' => $model->value('statutory_napsa_account_number', ''),
             'statutory_tpin' => $model->value('statutory_tpin', ''),
             'statutory_paye_account_number' => $model->value('statutory_paye_account_number', ''),
@@ -394,6 +395,7 @@ class SettingsController extends Controller
         $settings = new Setting();
         foreach ([
             'statutory_registered_employer_name',
+            'company_registration_number',
             'statutory_napsa_account_number',
             'statutory_tpin',
             'statutory_paye_account_number',

@@ -111,13 +111,17 @@ class Employee extends Model
     {
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND e.company_id = :cid' : '';
-        $sql = 'SELECT e.*, d.name AS department_name, b.name AS branch_name, b.code AS branch_code,
-                       c.name AS company_name, ce.name AS client_entity_name
+        $sql = 'SELECT e.*, d.name AS department_name, d.code AS department_code,
+                       b.name AS branch_name, b.code AS branch_code, b.address AS branch_address,
+                       b.phone AS branch_phone, b.email AS branch_email,
+                       c.name AS company_name, ce.name AS client_entity_name, ce.code AS client_entity_code,
+                       g.name AS gender_name
                 FROM employees e
                 LEFT JOIN departments d ON d.id = e.department_id
                 LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN companies c ON c.id = e.company_id
                 LEFT JOIN client_entities ce ON ce.id = c.client_entity_id
+                LEFT JOIN genders g ON g.id = e.gender_id
                 WHERE e.id = :id' . $and . '
                 LIMIT 1';
 
