@@ -1,6 +1,9 @@
 <?php
 $template     = $template ?? [];
 $renderedBody = $renderedBody ?? '';
+$renderedCover = $renderedCover ?? '';
+$renderedSignature = $renderedSignature ?? '';
+$renderedFooter = $renderedFooter ?? '';
 $missingFields = $missingFields ?? [];
 $tokenValues = $tokenValues ?? [];
 ?>
@@ -16,6 +19,7 @@ body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.72;c
 .page{width:210mm;min-height:297mm;margin:70px auto 30px;background:#fff;padding:20mm 22mm 24mm;box-shadow:0 2px 20px rgba(0,0,0,.18);position:relative}
 .cover-page{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
 .cover-logo{max-height:110px;max-width:260px;object-fit:contain;margin-bottom:28px}.cover-company{font-size:20pt;font-weight:700;text-transform:uppercase;color:#153e2b}.cover-rule{width:70mm;border-top:3px solid #153e2b;margin:24px auto}.cover-title{font-size:25pt;font-weight:700;text-transform:uppercase}.cover-employee{font-size:15pt;font-weight:700;margin-top:30px;text-transform:uppercase}.cover-meta{font-size:11pt;color:#4b5563;margin-top:10px;line-height:1.7}.print-footer{display:none}
+.cover-content{width:100%;text-align:center}.cover-content img{max-height:110px!important;max-width:260px!important;margin-bottom:28px}
 .action-bar{position:fixed;top:0;left:0;right:0;background:#312e81;color:#fff;display:flex;align-items:center;gap:10px;padding:9px 20px;z-index:999;font-family:Arial,sans-serif;font-size:13px}
 .action-bar strong{flex:1}
 .action-bar button,.action-bar a{padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-decoration:none;display:inline-block}
@@ -73,17 +77,22 @@ body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.72;c
 <?php endif; ?>
 
 <div class="page cover-page">
+    <?php if ($renderedCover !== ''): ?>
+        <?= $renderedCover ?>
+    <?php else: ?>
     <?php if (!empty($tokenValues['company_logo_url'])): ?><img src="<?= e((string)$tokenValues['company_logo_url']) ?>" class="cover-logo" alt="Company logo"><?php endif; ?>
     <div class="cover-company"><?= e((string)($tokenValues['company_name'] ?? 'Company Name')) ?></div><div class="cover-rule"></div>
     <div class="cover-title">Employment Contract</div><div class="cover-employee"><?= e((string)($tokenValues['employee_name'] ?? 'Employee Name')) ?></div>
     <div class="cover-meta">Employee No: <?= e((string)($tokenValues['employee_number'] ?? '-')) ?><br>Position: <?= e((string)($tokenValues['designation'] ?? '-')) ?><br>Contract Reference: <?= e((string)($tokenValues['contract_number'] ?? '-')) ?><br>Effective Date: <?= e((string)($tokenValues['start_date'] ?? '-')) ?></div>
+    <?php endif; ?>
 </div>
 
 <div class="page">
     <?= $renderedBody ?>
+    <?php if ($renderedSignature !== ''): ?><div class="signature-section"><?= $renderedSignature ?></div><?php endif; ?>
 </div>
 
-<div class="print-footer"><span><?= e((string)($tokenValues['company_name'] ?? 'Company')) ?> | <?= e((string)($tokenValues['company_address'] ?? '')) ?> | <?= e((string)($tokenValues['company_phone'] ?? '')) ?> | <?= e((string)($tokenValues['company_email'] ?? '')) ?></span><span class="page-number"></span></div>
+<div class="print-footer"><span><?= $renderedFooter !== '' ? $renderedFooter : e((string)($tokenValues['company_name'] ?? 'Company')) ?></span><span class="page-number"></span></div>
 
 </body>
 </html>

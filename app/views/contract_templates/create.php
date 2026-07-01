@@ -33,7 +33,10 @@ $versions = $versions ?? [];
             <div class="card-body">
                 <form method="post" action="<?= e($postUrl) ?>" id="templateForm">
                     <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                    <input type="hidden" name="cover_body" id="coverBodyInput">
                     <input type="hidden" name="body" id="bodyInput">
+                    <input type="hidden" name="signature_body" id="signatureBodyInput">
+                    <input type="hidden" name="footer_body" id="footerBodyInput">
 
                     <div class="row g-3 mb-3">
                         <div class="col-12">
@@ -96,10 +99,17 @@ $versions = $versions ?? [];
                         </div>
                     </div>
 
-                    <label class="form-label fw-semibold">Contract Wording <span class="text-danger">*</span></label>
+                    <label class="form-label fw-semibold">Document Section</label>
                     <p class="text-gray small mb-2">
-                        Write normally. Use the auto-filled detail buttons on the right when the system should fill in a value.
+                        Choose a section, write normally, and use the auto-filled details on the right.
                     </p>
+
+                    <div class="btn-group mb-3 flex-wrap" role="group" id="documentSectionTabs">
+                        <button type="button" class="btn btn-outline-primary section-tab" data-section="cover_body">Cover Page</button>
+                        <button type="button" class="btn btn-primary section-tab" data-section="body">Contract Content</button>
+                        <button type="button" class="btn btn-outline-primary section-tab" data-section="signature_body">Signatory Section</button>
+                        <button type="button" class="btn btn-outline-primary section-tab" data-section="footer_body">Footer</button>
+                    </div>
 
                     <div id="quillToolbar">
                         <span class="ql-formats">
@@ -210,18 +220,32 @@ $versions = $versions ?? [];
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    var sectionContent = {
+        cover_body: <?= json_encode((string)($formData['cover_body'] ?? '')) ?>,
+        body: <?= json_encode((string)($formData['body'] ?? '')) ?>,
+        signature_body: <?= json_encode((string)($formData['signature_body'] ?? '')) ?>,
+        footer_body: <?= json_encode((string)($formData['footer_body'] ?? '')) ?>
+    };
+    var activeSection = 'body';
     var quill = new Quill('#quillEditor', {
         modules: { toolbar: '#quillToolbar' },
         theme: 'snow',
         placeholder: 'Write your contract wording here. Use auto-filled details like Employee Name or Monthly Salary from the right...'
     });
 
-    <?php
-    $existingBody = (string) ($formData['body'] ?? '');
-    if ($existingBody !== ''):
-    ?>
-    quill.root.innerHTML = <?= json_encode($existingBody) ?>;
-    <?php endif; ?>
+    quill.root.innerHTML = sectionContent[activeSection] || '';
+
+    document.querySelectorAll('.section-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            sectionContent[activeSection] = quill.root.innerHTML;
+            activeSection = this.getAttribute('data-section');
+            quill.root.innerHTML = sectionContent[activeSection] || '';
+            document.querySelectorAll('.section-tab').forEach(function (item) {
+                item.classList.toggle('btn-primary', item === tab);
+                item.classList.toggle('btn-outline-primary', item !== tab);
+            });
+        });
+    });
 
     document.querySelectorAll('.token-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -235,7 +259,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('templateForm').addEventListener('submit', function () {
-        document.getElementById('bodyInput').value = quill.root.innerHTML;
+        sectionContent[activeSection] = quill.root.innerHTML;
+        document.getElementById('coverBodyInput').value = sectionContent.cover_body || '';
+        document.getElementById('bodyInput').value = sectionContent.body || '';
+        document.getElementById('signatureBodyInput').value = sectionContent.signature_body || '';
+        document.getElementById('footerBodyInput').value = sectionContent.footer_body || '';
     });
 });
 </script>

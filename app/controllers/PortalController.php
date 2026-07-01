@@ -378,6 +378,9 @@ class PortalController extends Controller
         $employee = (new Employee())->findDetailed($empId) ?? [];
         $template = null;
         $renderedBody = null;
+        $renderedCover = null;
+        $renderedSignature = null;
+        $renderedFooter = null;
         $missingFields = [];
         $tmplModel = new ContractTemplate();
         $templateId = (int) ($contract['template_id'] ?? 0);
@@ -407,6 +410,13 @@ class PortalController extends Controller
             $tokenValues = $tmplModel->buildTokenValues($contract, $employee);
             $missingFields = $tmplModel->missingFields((string) $template['body'], $tokenValues);
             $renderedBody = $tmplModel->renderBody((string) $template['body'], $tokenValues);
+            $coverBody = trim((string)($template['cover_body'] ?? '')) ?: $tmplModel->professionalDefaultCover();
+            $signatureBody = trim((string)($template['signature_body'] ?? '')) ?: $tmplModel->professionalDefaultSignature();
+            $footerBody = trim((string)($template['footer_body'] ?? '')) ?: $tmplModel->professionalDefaultFooter();
+            $missingFields += $tmplModel->missingFields($coverBody . $signatureBody . $footerBody, $tokenValues);
+            $renderedCover = $tmplModel->renderBody($coverBody, $tokenValues);
+            $renderedSignature = $tmplModel->renderBody($signatureBody, $tokenValues);
+            $renderedFooter = $tmplModel->renderBody($footerBody, $tokenValues);
         }
 
         $this->renderAuth('contracts/download', [
@@ -414,6 +424,9 @@ class PortalController extends Controller
             'employee' => $employee,
             'downloadName' => 'contract-' . (string) ($contract['contract_number'] ?? $contractId),
             'renderedBody' => $renderedBody,
+            'renderedCover' => $renderedCover,
+            'renderedSignature' => $renderedSignature,
+            'renderedFooter' => $renderedFooter,
             'missingFields' => $missingFields,
         ]);
     }

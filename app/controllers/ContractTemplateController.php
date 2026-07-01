@@ -41,7 +41,12 @@ class ContractTemplateController extends Controller
             'versions'      => [],
             'csrf'          => Session::csrfToken(),
             'flashError'    => Session::flash('error'),
-            'old'           => $_SESSION['_old_ct_input'] ?? ['body' => $model->professionalDefaultBody()],
+            'old'           => $_SESSION['_old_ct_input'] ?? [
+                'cover_body' => $model->professionalDefaultCover(),
+                'body' => $model->professionalDefaultBody(),
+                'signature_body' => $model->professionalDefaultSignature(),
+                'footer_body' => $model->professionalDefaultFooter(),
+            ],
         ]);
 
         unset($_SESSION['_old_ct_input']);
@@ -84,7 +89,10 @@ class ContractTemplateController extends Controller
                 'name'                => $data['name'],
                 'salary_structure_id' => $data['salary_structure_id'],
                 'contract_type'       => $data['contract_type'],
+                'cover_body'          => $data['cover_body'],
                 'body'                => $data['body'],
+                'signature_body'      => $data['signature_body'],
+                'footer_body'         => $data['footer_body'],
                 'is_default'          => (int) ($data['is_default'] ?? 0),
                 'created_by'          => $userId > 0 ? $userId : null,
             ]);
@@ -119,6 +127,15 @@ class ContractTemplateController extends Controller
 
         $old      = $_SESSION['_old_ct_input'] ?? [];
         $formData = !empty($old) ? $old : $template;
+        if (trim((string)($formData['cover_body'] ?? '')) === '') {
+            $formData['cover_body'] = $model->professionalDefaultCover();
+        }
+        if (trim((string)($formData['signature_body'] ?? '')) === '') {
+            $formData['signature_body'] = $model->professionalDefaultSignature();
+        }
+        if (trim((string)($formData['footer_body'] ?? '')) === '') {
+            $formData['footer_body'] = $model->professionalDefaultFooter();
+        }
 
         $this->render('contract_templates/create', [
             'title'         => 'Edit Contract Template',
@@ -188,7 +205,10 @@ class ContractTemplateController extends Controller
                 'salary_structure_id' => $data['salary_structure_id'],
                 'branch_id'           => $data['branch_id'],
                 'contract_type'       => $data['contract_type'],
+                'cover_body'          => $data['cover_body'],
                 'body'                => $data['body'],
+                'signature_body'      => $data['signature_body'],
+                'footer_body'         => $data['footer_body'],
                 'is_default'          => (int) ($data['is_default'] ?? 0),
             ];
 
@@ -297,11 +317,18 @@ class ContractTemplateController extends Controller
 
         $tokenValues  = $model->buildTokenValues($dummyContract, $dummyEmployee);
         $missingFields = $model->missingFields((string) $template['body'], $tokenValues);
+        $coverBody = trim((string)($template['cover_body'] ?? '')) ?: $model->professionalDefaultCover();
+        $signatureBody = trim((string)($template['signature_body'] ?? '')) ?: $model->professionalDefaultSignature();
+        $footerBody = trim((string)($template['footer_body'] ?? '')) ?: $model->professionalDefaultFooter();
+        $missingFields += $model->missingFields($coverBody . $signatureBody . $footerBody, $tokenValues);
         $renderedBody = $model->renderBody((string) $template['body'], $tokenValues, true);
 
         $this->renderAuth('contract_templates/preview', [
             'template'     => $template,
             'renderedBody' => $renderedBody,
+            'renderedCover' => $model->renderBody($coverBody, $tokenValues, true),
+            'renderedSignature' => $model->renderBody($signatureBody, $tokenValues, true),
+            'renderedFooter' => $model->renderBody($footerBody, $tokenValues, true),
             'missingFields'=> $missingFields,
             'tokenValues'  => $tokenValues,
         ]);
@@ -320,7 +347,10 @@ class ContractTemplateController extends Controller
             'salary_structure_id' => $ssId > 0 ? $ssId : null,
             'branch_id'           => $branchId > 0 ? $branchId : null,
             'contract_type'       => $type !== '' ? $type : null,
+            'cover_body'          => trim((string) $this->input('cover_body', '')),
             'body'                => trim((string) $this->input('body', '')),
+            'signature_body'      => trim((string) $this->input('signature_body', '')),
+            'footer_body'         => trim((string) $this->input('footer_body', '')),
             'is_default'          => (int) $this->input('is_default', 0),
         ];
     }

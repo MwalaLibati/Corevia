@@ -3,6 +3,9 @@ $contract     = $contract ?? [];
 $employee     = $employee ?? [];
 $downloadName = $downloadName ?? 'contract';
 $renderedBody = $renderedBody ?? null;
+$renderedCover = $renderedCover ?? null;
+$renderedSignature = $renderedSignature ?? null;
+$renderedFooter = $renderedFooter ?? null;
 $missingFields = $missingFields ?? [];
 
 function contractOrdinal(int $n): string {
@@ -66,6 +69,7 @@ body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.75;c
 .cover-title{font-size:25pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;line-height:1.25}
 .cover-employee{font-size:15pt;font-weight:700;margin-top:30px;text-transform:uppercase}
 .cover-meta{font-size:11pt;color:#4b5563;margin-top:10px;line-height:1.7}
+.cover-content{width:100%;text-align:center}.cover-content img{max-height:110px!important;max-width:260px!important;margin-bottom:28px}
 .print-footer{display:none}
 .action-bar{position:fixed;top:0;left:0;right:0;background:#1a3a2a;color:#fff;display:flex;align-items:center;gap:10px;padding:9px 20px;z-index:999;font-family:Arial,sans-serif;font-size:13px}
 .action-bar strong{flex:1}
@@ -142,6 +146,9 @@ ol li{margin-bottom:4px}
 <?php endif; ?>
 
 <div class="page cover-page">
+    <?php if ($renderedCover !== null): ?>
+        <?= $renderedCover ?>
+    <?php else: ?>
     <?php if ($companyLogo !== ''): ?><img src="<?= e($companyLogo) ?>" alt="<?= e($companyName) ?> logo" class="cover-logo"><?php endif; ?>
     <div class="cover-company"><?= e($companyName) ?></div>
     <div class="cover-rule"></div>
@@ -153,6 +160,7 @@ ol li{margin-bottom:4px}
         Contract Reference: <?= e($contractNo !== '' ? $contractNo : '-') ?><br>
         Effective Date: <?= e(contractShortDate($startDate ?: null)) ?>
     </div>
+    <?php endif; ?>
 </div>
 
 <div class="page">
@@ -160,6 +168,9 @@ ol li{margin-bottom:4px}
 <?php if ($renderedBody !== null): ?>
     <!-- ── Dynamic template body ── -->
     <?= $renderedBody ?>
+    <?php if ($renderedSignature !== null): ?>
+        <div class="signature-section"><?= $renderedSignature ?></div>
+    <?php endif; ?>
 <?php else: ?>
     <!-- ── Legacy hardcoded template ── -->
 
@@ -431,7 +442,7 @@ ol li{margin-bottom:4px}
 </div><!-- /.page -->
 
 <div class="print-footer">
-    <span><?= e($companyName) ?><?= $companyAddress !== '' ? ' | ' . e($companyAddress) : '' ?><?= $companyPhone !== '' ? ' | ' . e($companyPhone) : '' ?><?= $companyEmail !== '' ? ' | ' . e($companyEmail) : '' ?></span>
+    <span><?= $renderedFooter !== null ? $renderedFooter : e($companyName) . ($companyAddress !== '' ? ' | ' . e($companyAddress) : '') . ($companyPhone !== '' ? ' | ' . e($companyPhone) : '') . ($companyEmail !== '' ? ' | ' . e($companyEmail) : '') ?></span>
     <span class="page-number"></span>
 </div>
 

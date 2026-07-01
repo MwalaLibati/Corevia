@@ -455,8 +455,8 @@ class ContractTemplate extends Model
         $version = (int) ($template['version'] ?? 1);
         $stmt = $this->db->prepare(
             "INSERT INTO contract_template_versions
-             (template_id, company_id, branch_id, version, name, salary_structure_id, contract_type, body, is_default, changed_by)
-             VALUES (:template_id, :company_id, :branch_id, :version, :name, :salary_structure_id, :contract_type, :body, :is_default, :changed_by)"
+             (template_id, company_id, branch_id, version, name, salary_structure_id, contract_type, cover_body, body, signature_body, footer_body, is_default, changed_by)
+             VALUES (:template_id, :company_id, :branch_id, :version, :name, :salary_structure_id, :contract_type, :cover_body, :body, :signature_body, :footer_body, :is_default, :changed_by)"
         );
         $stmt->execute([
             'template_id' => (int) $template['id'],
@@ -466,7 +466,10 @@ class ContractTemplate extends Model
             'name' => (string) $template['name'],
             'salary_structure_id' => $template['salary_structure_id'] !== null ? (int) $template['salary_structure_id'] : null,
             'contract_type' => $template['contract_type'] ?? null,
+            'cover_body' => $template['cover_body'] ?? null,
             'body' => (string) $template['body'],
+            'signature_body' => $template['signature_body'] ?? null,
+            'footer_body' => $template['footer_body'] ?? null,
             'is_default' => (int) ($template['is_default'] ?? 0),
             'changed_by' => $userId ?: null,
         ]);
@@ -549,11 +552,27 @@ class ContractTemplate extends Model
 
     private function ensureExpandedTemplateSchema(): void
     {
-        if (!$this->columnExists('contract_templates', 'branch_id')) {
-            $this->db->exec('ALTER TABLE contract_templates ADD COLUMN branch_id BIGINT UNSIGNED NULL AFTER company_id');
+        foreach ([
+            'branch_id' => 'BIGINT UNSIGNED NULL',
+            'cover_body' => 'LONGTEXT NULL',
+            'signature_body' => 'LONGTEXT NULL',
+            'footer_body' => 'LONGTEXT NULL',
+        ] as $column => $definition) {
+            if (!$this->columnExists('contract_templates', $column)) {
+                $this->db->exec("ALTER TABLE contract_templates ADD COLUMN {$column} {$definition}");
+            }
         }
-        if ($this->tableExists('contract_template_versions') && !$this->columnExists('contract_template_versions', 'branch_id')) {
-            $this->db->exec('ALTER TABLE contract_template_versions ADD COLUMN branch_id BIGINT UNSIGNED NULL AFTER company_id');
+        if ($this->tableExists('contract_template_versions')) {
+            foreach ([
+                'branch_id' => 'BIGINT UNSIGNED NULL',
+                'cover_body' => 'LONGTEXT NULL',
+                'signature_body' => 'LONGTEXT NULL',
+                'footer_body' => 'LONGTEXT NULL',
+            ] as $column => $definition) {
+                if (!$this->columnExists('contract_template_versions', $column)) {
+                    $this->db->exec("ALTER TABLE contract_template_versions ADD COLUMN {$column} {$definition}");
+                }
+            }
         }
     }
 
@@ -603,10 +622,26 @@ class ContractTemplate extends Model
             . '<h3>4. Working Hours and Leave</h3><p>Normal working hours are {{working_hours}}. Leave entitlement is {{leave_days}}, administered under company policy and applicable labour law.</p>'
             . '<h3>5. Statutory Registration</h3><p>Employee NAPSA: {{napsa_number}} | NHIMA: {{nhima_number}} | TPIN: {{tpin}}.</p>'
             . '<h3>6. Gratuity and Termination</h3><p>Gratuity: {{gratuity_rate}}. Notice period: {{notice_period}}. Termination remains subject to applicable law, disciplinary procedure, and approved company policy.</p>'
-            . '<h3>7. Acceptance</h3><p>By signing below, both parties confirm that they understand and accept the terms of this contract.</p>'
-            . '<table class="signature-table" style="margin-top:48px;"><tr><th>Employee Acceptance</th><th>For the Employer</th></tr><tr>'
+            . '<h3>7. Acceptance</h3><p>By signing below, both parties confirm that they understand and accept the terms of this contract.</p>';
+    }
+
+    public function professionalDefaultCover(): string
+    {
+        return '<div class="cover-content"><div>{{company_logo_url}}</div><div class="cover-company">{{company_name}}</div><div class="cover-rule"></div>'
+            . '<div class="cover-title">Employment Contract</div><div class="cover-employee">{{employee_name}}</div>'
+            . '<div class="cover-meta">Employee No: {{employee_number}}<br>Position: {{designation}}<br>Contract Reference: {{contract_number}}<br>Effective Date: {{start_date}}</div></div>';
+    }
+
+    public function professionalDefaultSignature(): string
+    {
+        return '<table class="signature-table"><tr><th>Employee Acceptance</th><th>For the Employer</th></tr><tr>'
             . '<td>Signature: ____________________<br><br>Name: {{employee_name}}<br><br>Date: ____________________</td>'
             . '<td>Signature: ____________________<br><br>Name: {{authorized_representative_name}}<br>Title: {{authorized_representative_title}}<br><br>Date: ____________________</td></tr></table>';
+    }
+
+    public function professionalDefaultFooter(): string
+    {
+        return '{{company_name}} | {{company_address}} | {{company_phone}} | {{company_email}}';
     }
 }
 
