@@ -37,6 +37,7 @@ class ContractTemplateController extends Controller
             'branches'      => $model->branches(),
             'tokens'        => ContractTemplate::TOKENS,
             'fieldGroups'   => $model->fieldGroups(),
+            'sectionDefaults' => $this->sectionDefaults($model),
             'template'      => null,
             'versions'      => [],
             'csrf'          => Session::csrfToken(),
@@ -144,6 +145,7 @@ class ContractTemplateController extends Controller
             'branches'      => $model->branches(),
             'tokens'        => ContractTemplate::TOKENS,
             'fieldGroups'   => $model->fieldGroups(),
+            'sectionDefaults' => $this->sectionDefaults($model),
             'template'      => $template,
             'versions'      => $model->versions($templateId),
             'csrf'          => Session::csrfToken(),
@@ -396,5 +398,15 @@ class ContractTemplateController extends Controller
             );
             $stmt->execute(['cid' => $cid]);
         }
+    }
+
+    private function sectionDefaults(ContractTemplate $model): array
+    {
+        return [
+            'cover_body' => $model->professionalDefaultCover(),
+            'body' => $model->professionalDefaultBody(),
+            'signature_body' => $model->professionalDefaultSignature(),
+            'footer_body' => $model->professionalDefaultFooter(),
+        ];
     }
 }

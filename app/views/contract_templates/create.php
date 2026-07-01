@@ -110,6 +110,9 @@ $versions = $versions ?? [];
                         <button type="button" class="btn btn-outline-primary section-tab" data-section="signature_body">Signatory Section</button>
                         <button type="button" class="btn btn-outline-primary section-tab" data-section="footer_body">Footer</button>
                     </div>
+                    <button type="button" class="btn btn-outline-success mb-3 ms-2" id="loadSectionTemplate">
+                        <i class="bi bi-file-earmark-check me-1"></i>Use Professional Template
+                    </button>
 
                     <div id="quillToolbar">
                         <span class="ql-formats">
@@ -226,6 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
         signature_body: <?= json_encode((string)($formData['signature_body'] ?? '')) ?>,
         footer_body: <?= json_encode((string)($formData['footer_body'] ?? '')) ?>
     };
+    var sectionDefaults = <?= json_encode($sectionDefaults ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     var activeSection = 'body';
     var quill = new Quill('#quillEditor', {
         modules: { toolbar: '#quillToolbar' },
@@ -245,6 +249,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 item.classList.toggle('btn-outline-primary', item !== tab);
             });
         });
+    });
+
+    document.getElementById('loadSectionTemplate').addEventListener('click', function () {
+        var sectionNames = {
+            cover_body: 'Cover Page',
+            body: 'Contract Content',
+            signature_body: 'Signatory Section',
+            footer_body: 'Footer'
+        };
+        var currentText = quill.getText().trim();
+        if (currentText !== '' && !window.confirm('Replace the current ' + sectionNames[activeSection] + ' with the professional template?')) {
+            return;
+        }
+        quill.root.innerHTML = sectionDefaults[activeSection] || '';
+        sectionContent[activeSection] = quill.root.innerHTML;
     });
 
     document.querySelectorAll('.token-btn').forEach(function (btn) {
