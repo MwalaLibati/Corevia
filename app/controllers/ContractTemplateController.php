@@ -303,6 +303,7 @@ class ContractTemplateController extends Controller
             'template'     => $template,
             'renderedBody' => $renderedBody,
             'missingFields'=> $missingFields,
+            'tokenValues'  => $tokenValues,
         ]);
     }
 

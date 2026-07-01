@@ -595,13 +595,18 @@ class ContractTemplate extends Model
             . '<h3>1. Appointment</h3><p>The Employee is appointed as <strong>{{designation}}</strong> in the {{department}} department under {{employment_type}} employment, effective {{start_date}}.</p>'
             . '<p>The primary place of work is {{place_of_work}} ({{branch_name}}). The Employee may be reasonably assigned to another company location in accordance with operational requirements and applicable law.</p>'
             . '<h3>2. Contract Term</h3><p>This contract runs from {{start_date}} to {{end_date}} for {{contract_period}}, subject to the probation period of {{probation_period}}.</p>'
-            . '<h3>3. Remuneration</h3><p>The Employee will receive an agreed monthly basic salary of <strong>{{agreed_basic_salary}}</strong> plus housing allowance {{housing_allowance}}, transport allowance {{transport_allowance}}, and other allowances {{other_allowances}}. Estimated monthly gross remuneration is <strong>{{gross_salary}}</strong>, before statutory and authorised deductions.</p>'
+            . '<h3>3. Remuneration</h3><p>The Employee will receive the following monthly remuneration before statutory and authorised deductions:</p>'
+            . '<table><thead><tr><th>Remuneration Component</th><th>Monthly Amount</th></tr></thead><tbody>'
+            . '<tr><td>Agreed Basic Salary</td><td>{{agreed_basic_salary}}</td></tr><tr><td>Housing Allowance</td><td>{{housing_allowance}}</td></tr>'
+            . '<tr><td>Transport Allowance</td><td>{{transport_allowance}}</td></tr><tr><td>Other Allowances</td><td>{{other_allowances}}</td></tr>'
+            . '<tr><th>Gross Monthly Remuneration</th><th>{{gross_salary}}</th></tr></tbody></table>'
             . '<h3>4. Working Hours and Leave</h3><p>Normal working hours are {{working_hours}}. Leave entitlement is {{leave_days}}, administered under company policy and applicable labour law.</p>'
             . '<h3>5. Statutory Registration</h3><p>Employee NAPSA: {{napsa_number}} | NHIMA: {{nhima_number}} | TPIN: {{tpin}}.</p>'
             . '<h3>6. Gratuity and Termination</h3><p>Gratuity: {{gratuity_rate}}. Notice period: {{notice_period}}. Termination remains subject to applicable law, disciplinary procedure, and approved company policy.</p>'
             . '<h3>7. Acceptance</h3><p>By signing below, both parties confirm that they understand and accept the terms of this contract.</p>'
-            . '<table style="width:100%;margin-top:48px;"><tr><td style="width:48%;vertical-align:top;">Employee Signature: ____________________<br>Name: {{employee_name}}<br>Date: ____________________</td>'
-            . '<td style="width:48%;vertical-align:top;">For {{company_name}}: ____________________<br>Name: {{authorized_representative_name}}<br>Title: {{authorized_representative_title}}<br>Date: ____________________</td></tr></table>';
+            . '<table class="signature-table" style="margin-top:48px;"><tr><th>Employee Acceptance</th><th>For the Employer</th></tr><tr>'
+            . '<td>Signature: ____________________<br><br>Name: {{employee_name}}<br><br>Date: ____________________</td>'
+            . '<td>Signature: ____________________<br><br>Name: {{authorized_representative_name}}<br>Title: {{authorized_representative_title}}<br><br>Date: ____________________</td></tr></table>';
     }
 }
 

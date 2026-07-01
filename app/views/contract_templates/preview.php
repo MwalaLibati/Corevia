@@ -2,6 +2,7 @@
 $template     = $template ?? [];
 $renderedBody = $renderedBody ?? '';
 $missingFields = $missingFields ?? [];
+$tokenValues = $tokenValues ?? [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,7 +13,9 @@ $missingFields = $missingFields ?? [];
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.72;color:#111;background:#e8e8e8}
-.page{width:210mm;min-height:297mm;margin:70px auto 30px;background:#fff;padding:20mm 22mm 18mm;box-shadow:0 2px 20px rgba(0,0,0,.18)}
+.page{width:210mm;min-height:297mm;margin:70px auto 30px;background:#fff;padding:20mm 22mm 24mm;box-shadow:0 2px 20px rgba(0,0,0,.18);position:relative}
+.cover-page{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}
+.cover-logo{max-height:110px;max-width:260px;object-fit:contain;margin-bottom:28px}.cover-company{font-size:20pt;font-weight:700;text-transform:uppercase;color:#153e2b}.cover-rule{width:70mm;border-top:3px solid #153e2b;margin:24px auto}.cover-title{font-size:25pt;font-weight:700;text-transform:uppercase}.cover-employee{font-size:15pt;font-weight:700;margin-top:30px;text-transform:uppercase}.cover-meta{font-size:11pt;color:#4b5563;margin-top:10px;line-height:1.7}.print-footer{display:none}
 .action-bar{position:fixed;top:0;left:0;right:0;background:#312e81;color:#fff;display:flex;align-items:center;gap:10px;padding:9px 20px;z-index:999;font-family:Arial,sans-serif;font-size:13px}
 .action-bar strong{flex:1}
 .action-bar button,.action-bar a{padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-decoration:none;display:inline-block}
@@ -38,11 +41,14 @@ body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.72;c
 .page ol li{margin-bottom:4px}
 .page strong{font-weight:bold}
 .page em{font-style:italic}
+.page table{width:100%;border-collapse:collapse;margin:14px 0 20px;page-break-inside:avoid}.page table th,.page table td{border:1px solid #64748b;padding:8px 10px;vertical-align:top;text-align:left}.page table th{background:#f1f5f9;font-weight:700}.page table.signature-table td{height:135px;padding:14px}
 @media print{
+    @page{size:A4;margin:15mm 18mm 22mm}
     body{background:#fff}
     .action-bar{display:none}
     .warning-bar{display:none}
-    .page{margin:0;box-shadow:none;padding:15mm 18mm 15mm}
+    .page{width:auto;min-height:auto;margin:0;box-shadow:none;padding:0}.cover-page{min-height:245mm}
+    .print-footer{display:flex;position:fixed;left:18mm;right:18mm;bottom:7mm;border-top:1px solid #94a3b8;padding-top:4px;justify-content:space-between;font-size:8.5pt;color:#475569}.print-footer .page-number::after{content:'Page ' counter(page) ' of ' counter(pages)}
 }
 </style>
 </head>
@@ -66,9 +72,18 @@ body{font-family:'Times New Roman',Times,serif;font-size:12pt;line-height:1.72;c
     </div>
 <?php endif; ?>
 
+<div class="page cover-page">
+    <?php if (!empty($tokenValues['company_logo_url'])): ?><img src="<?= e((string)$tokenValues['company_logo_url']) ?>" class="cover-logo" alt="Company logo"><?php endif; ?>
+    <div class="cover-company"><?= e((string)($tokenValues['company_name'] ?? 'Company Name')) ?></div><div class="cover-rule"></div>
+    <div class="cover-title">Employment Contract</div><div class="cover-employee"><?= e((string)($tokenValues['employee_name'] ?? 'Employee Name')) ?></div>
+    <div class="cover-meta">Employee No: <?= e((string)($tokenValues['employee_number'] ?? '-')) ?><br>Position: <?= e((string)($tokenValues['designation'] ?? '-')) ?><br>Contract Reference: <?= e((string)($tokenValues['contract_number'] ?? '-')) ?><br>Effective Date: <?= e((string)($tokenValues['start_date'] ?? '-')) ?></div>
+</div>
+
 <div class="page">
     <?= $renderedBody ?>
 </div>
+
+<div class="print-footer"><span><?= e((string)($tokenValues['company_name'] ?? 'Company')) ?> | <?= e((string)($tokenValues['company_address'] ?? '')) ?> | <?= e((string)($tokenValues['company_phone'] ?? '')) ?> | <?= e((string)($tokenValues['company_email'] ?? '')) ?></span><span class="page-number"></span></div>
 
 </body>
 </html>
