@@ -166,6 +166,25 @@ class PayrollRun extends Model
         ], $stmt->fetchAll());
     }
 
+    public function earningLinesForItem(int $payrollItemId): array
+    {
+        (new Allowance())->ensureSchema();
+        $cid = Tenant::id();
+        $and = $cid > 0 ? ' AND company_id = :cid' : '';
+        $stmt = $this->db->prepare(
+            "SELECT * FROM payroll_item_earnings WHERE payroll_item_id = :item_id$and ORDER BY id ASC"
+        );
+        $params = ['item_id' => $payrollItemId];
+        if ($cid > 0) { $params['cid'] = $cid; }
+        $stmt->execute($params);
+
+        return array_map(static fn(array $row): array => [
+            'label' => (string) ($row['earning_name'] ?? 'Earning'),
+            'amount' => (float) ($row['amount'] ?? 0),
+            'category' => (string) ($row['earning_category'] ?? ''),
+        ], $stmt->fetchAll());
+    }
+
     public function adjustmentsForRun(int $runId): array
     {
         $this->ensureAdjustmentSchema();
@@ -307,10 +326,12 @@ class PayrollRun extends Model
         $calculation = $this->calculatePayrollItems($run);
         $cid = Tenant::id();
         $userId = (int) (current_user()['id'] ?? 0) ?: null;
+        (new Allowance())->ensureSchema();
 
         $this->db->beginTransaction();
 
         try {
+            $this->db->prepare('DELETE FROM payroll_item_earnings WHERE payroll_run_id = :run_id')->execute(['run_id' => $runId]);
             $this->db->prepare('DELETE FROM payroll_item_deductions WHERE payroll_run_id = :run_id')->execute(['run_id' => $runId]);
             $this->db->prepare('DELETE FROM payroll_items WHERE payroll_run_id = :run_id')->execute(['run_id' => $runId]);
 
@@ -334,6 +355,12 @@ class PayrollRun extends Model
                  VALUES
                     (:company_id, :payroll_run_id, :payroll_item_id, :employee_id, :deduction_code, :deduction_name, :deduction_category, :calculation_type, :calculation_base, :rate_percent, :amount, :meta_json)'
             );
+            $earningInsert = $this->db->prepare(
+                'INSERT INTO payroll_item_earnings
+                    (company_id, payroll_run_id, payroll_item_id, employee_id, earning_code, earning_name, earning_category, calculation_type, calculation_base, rate_percent, amount, meta_json)
+                 VALUES
+                    (:company_id, :payroll_run_id, :payroll_item_id, :employee_id, :earning_code, :earning_name, :earning_category, :calculation_type, :calculation_base, :rate_percent, :amount, :meta_json)'
+            );
             $bonusLink = $this->db->prepare('UPDATE bonuses_overtime SET payroll_run_id = :run_id WHERE id = :id');
 
             foreach ($calculation['items'] as $row) {
@@ -345,6 +372,23 @@ class PayrollRun extends Model
                     'net_pay' => (float) $row['net_pay'],
                 ]);
                 $itemId = (int) $this->db->lastInsertId();
+
+                foreach ($row['earning_lines'] as $line) {
+                    $earningInsert->execute([
+                        'company_id' => $cid,
+                        'payroll_run_id' => $runId,
+                        'payroll_item_id' => $itemId,
+                        'employee_id' => (int) $row['employee_id'],
+                        'earning_code' => (string) $line['code'],
+                        'earning_name' => (string) $line['name'],
+                        'earning_category' => (string) $line['category'],
+                        'calculation_type' => $line['calculation_type'] ?? null,
+                        'calculation_base' => (float) ($line['base'] ?? 0),
+                        'rate_percent' => $line['rate_percent'] ?? null,
+                        'amount' => (float) $line['amount'],
+                        'meta_json' => json_encode($line['meta'] ?? [], JSON_UNESCAPED_SLASHES),
+                    ]);
+                }
 
                 foreach ($row['deduction_lines'] as $line) {
                     $deductionInsert->execute([
@@ -425,6 +469,7 @@ class PayrollRun extends Model
         $prorationMode = (string) ($run['proration_mode'] ?? 'Full Month');
         $employeeSalaryModel = new EmployeeSalary();
         $employeeDeductionModel = new EmployeeDeduction();
+        $allowanceModel = new Allowance();
 
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
@@ -480,10 +525,24 @@ class PayrollRun extends Model
 
             $proration = $this->employmentProration($employee, $periodStart, $periodEnd, $prorationMode);
             $factor = (float) $proration['factor'];
-            $basicPay = round((float) ($salary['basic_pay'] ?? 0) * $factor, 2);
-            $housingAllowance = round((float) ($salary['housing_allowance'] ?? 0) * $factor, 2);
-            $transportAllowance = round((float) ($salary['transport_allowance'] ?? 0) * $factor, 2);
-            $otherAllowances = round((float) ($salary['other_allowances'] ?? 0) * $factor, 2);
+            $fullBasicPay = (float) ($salary['basic_pay'] ?? 0);
+            $basicPay = round($fullBasicPay * $factor, 2);
+            $allowanceLines = $allowanceModel->calculateForEmployee(
+                $employeeId,
+                (int) ($salary['salary_structure_id'] ?? 0),
+                $fullBasicPay,
+                $periodEnd,
+                $factor
+            );
+            $legacyOverrides = ['HOUSE' => 'actual_housing_allowance', 'TRANS' => 'actual_transport_allowance', 'OTHER' => 'actual_other_allowances'];
+            foreach ($allowanceLines as &$allowanceLine) {
+                $overrideColumn = $legacyOverrides[(string) $allowanceLine['code']] ?? null;
+                if ($overrideColumn !== null && ($salary[$overrideColumn] ?? null) !== null) {
+                    $allowanceLine['amount'] = round((float) $salary[$overrideColumn] * $factor, 2);
+                    $allowanceLine['base'] = (float) $salary[$overrideColumn];
+                }
+            }
+            unset($allowanceLine);
             $bonusAmount = 0.0;
             $bonusIds = [];
 
@@ -492,7 +551,24 @@ class PayrollRun extends Model
                 $bonusIds[] = (int) $bonus['id'];
             }
 
-            $grossPay = $basicPay + $housingAllowance + $transportAllowance + $otherAllowances + $bonusAmount;
+            $grossAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_gross'] === 1), 'amount'));
+            $taxableAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['is_taxable'] === 1), 'amount'));
+            $napsaAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_napsa'] === 1), 'amount'));
+            $nhimaAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_nhima'] === 1), 'amount'));
+            $grossPay = round($basicPay + $grossAllowances + $bonusAmount, 2);
+            $taxablePay = round($basicPay + $taxableAllowances + $bonusAmount, 2);
+            $napsaBase = round($basicPay + $napsaAllowances, 2);
+            $nhimaBase = round($basicPay + $nhimaAllowances + $bonusAmount, 2);
+            $earningLines = [[
+                'code' => 'BASIC', 'name' => 'Basic Salary', 'category' => 'basic',
+                'calculation_type' => 'Fixed', 'base' => $fullBasicPay, 'rate_percent' => null, 'amount' => $basicPay,
+            ]];
+            foreach ($allowanceLines as $line) {
+                if ((int) $line['included_in_gross'] === 1) { $earningLines[] = $line; }
+            }
+            if ($bonusAmount > 0) {
+                $earningLines[] = ['code' => 'BONUS', 'name' => 'Bonuses / Overtime', 'category' => 'bonus', 'calculation_type' => 'Actual', 'base' => $bonusAmount, 'rate_percent' => null, 'amount' => $bonusAmount];
+            }
             $deductionLines = [];
             $employeeSpecificTotal = 0.0;
 
@@ -517,7 +593,7 @@ class PayrollRun extends Model
             }
 
             $statutoryTotal = 0.0;
-            foreach (TaxCalculator::compute($grossPay, $basicPay) as $statutory) {
+            foreach (TaxCalculator::computeForBases($taxablePay, $napsaBase, $nhimaBase) as $statutory) {
                 $amount = round((float) $statutory['amount'], 2);
                 $statutoryTotal += $amount;
                 $deductionLines[] = [
@@ -525,7 +601,7 @@ class PayrollRun extends Model
                     'name' => (string) $statutory['label'],
                     'category' => 'statutory_employee',
                     'calculation_type' => 'Calculated',
-                    'base' => (string) $statutory['code'] === 'NAPSA' ? $basicPay : $grossPay,
+                    'base' => match ((string) $statutory['code']) { 'NAPSA' => $napsaBase, 'NHIMA' => $nhimaBase, default => $taxablePay },
                     'rate_percent' => null,
                     'amount' => $amount,
                 ];
@@ -544,7 +620,7 @@ class PayrollRun extends Model
                 ];
             }
 
-            foreach (TaxCalculator::employerContributions($grossPay, $basicPay) as $employer) {
+            foreach (TaxCalculator::employerContributionsForBases($napsaBase, $nhimaBase) as $employer) {
                 $totals['employer_contributions'] += (float) $employer['amount'];
                 $deductionLines[] = [
                     'code' => (string) $employer['code'],
@@ -568,6 +644,7 @@ class PayrollRun extends Model
                 'total_deductions' => $deductions,
                 'net_pay' => $netPay,
                 'deduction_lines' => $deductionLines,
+                'earning_lines' => $earningLines,
                 'bonus_ids' => $bonusIds,
                 'employment_period_start' => $periodStart,
                 'employment_period_end' => $periodEnd,
