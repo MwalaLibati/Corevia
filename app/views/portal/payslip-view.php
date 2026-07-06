@@ -8,10 +8,7 @@ $empName    = (string)($slip['full_name'] ?? ($emp['full_name'] ?? ''));
 $empNo      = (string)($slip['employee_number'] ?? ($emp['employee_number'] ?? ''));
 $dept       = (string)($slip['department_name'] ?? '');
 $desig      = (string)($slip['designation'] ?? ($emp['designation'] ?? ''));
-$basicSal   = 0.0;
-foreach (($earnings ?? []) as $earningLine) {
-    if (($earningLine['category'] ?? '') === 'basic') { $basicSal = (float) $earningLine['amount']; break; }
-}
+$basicSal   = (float)($slip['basic_salary'] ?? 0);
 $company    = current_company() ?? [];
 $companyName = (string)($company['name'] ?? app_product_name());
 $companyLogo = company_logo_url($company);
@@ -70,10 +67,20 @@ $companyLogo = company_logo_url($company);
             </tr>
         </thead>
         <tbody>
-            <?php if (!empty($earnings)): foreach ($earnings as $earning): ?>
-            <tr><td colspan="2"><?= e((string)$earning['label']) ?></td><td class="text-end"><?= number_format((float)$earning['amount'], 2) ?></td></tr>
-            <?php endforeach; else: ?>
-            <tr><td colspan="2">Earnings</td><td class="text-end"><?= number_format($grossPay, 2) ?></td></tr>
+            <?php if ($basicSal > 0): ?>
+            <tr>
+                <td colspan="2">Basic Salary</td>
+                <td class="text-end"><?= number_format($basicSal, 2) ?></td>
+            </tr>
+            <?php endif; ?>
+            <?php
+                $allowances = $grossPay - $basicSal;
+                if ($allowances > 0.005):
+            ?>
+            <tr>
+                <td colspan="2">Allowances / Additions</td>
+                <td class="text-end"><?= number_format($allowances, 2) ?></td>
+            </tr>
             <?php endif; ?>
             <tr class="portal-payslip-total">
                 <td colspan="2"><strong>Total Gross Pay</strong></td>
@@ -96,8 +103,14 @@ $companyLogo = company_logo_url($company);
         <?php else: ?>
             <?php foreach ($deductions as $d): ?>
             <tr>
-                <td><?= e((string)($d['label'] ?? 'Deduction')) ?></td>
-                <td class="text-end"><?= number_format((float)$d['amount'], 2) ?></td>
+                <td><?= e((string)$d['deduction_name']) ?> <?= (int)($d['is_statutory'] ?? 0) ? '<span class="badge bg-warning text-dark" style="font-size:.65rem">Statutory</span>' : '' ?></td>
+                <td class="text-end">
+                    <?php if ((string)($d['calculation_type'] ?? '') === 'Percent'): ?>
+                        <?= number_format((float)$d['amount'] / 100 * $grossPay, 2) ?>
+                    <?php else: ?>
+                        <?= number_format((float)$d['amount'], 2) ?>
+                    <?php endif; ?>
+                </td>
             </tr>
             <?php endforeach; ?>
         <?php endif; ?>

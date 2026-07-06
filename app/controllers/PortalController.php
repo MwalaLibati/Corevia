@@ -276,15 +276,19 @@ class PortalController extends Controller
             redirect('portal/payslips');
         }
 
-        $payrollModel = new PayrollRun();
-        $deductions = $payrollModel->deductionLinesForItem($payslipId);
-        $earnings = $payrollModel->earningLinesForItem($payslipId);
+        $deductStmt = db()->prepare(
+            "SELECT ed.amount, dt.name AS deduction_name, dt.calculation_type, dt.is_statutory
+             FROM employee_deductions ed
+             JOIN deduction_types dt ON dt.id = ed.deduction_type_id
+             WHERE ed.employee_id = :eid AND ed.is_active = 1"
+        );
+        $deductStmt->execute(['eid' => $empId]);
+        $deductions = $deductStmt->fetchAll();
 
         $this->renderPortal('portal/payslip-view', [
             'emp'        => current_employee(),
             'slip'       => $slip,
             'deductions' => $deductions,
-            'earnings'   => $earnings,
         ]);
     }
 

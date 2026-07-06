@@ -16,16 +16,10 @@ class SalaryController extends Controller
         $model = new SalaryStructure();
         $search = trim((string) $this->input('search', ''));
         $structures = $search === '' ? $model->findAll() : $model->search($search);
-        $allowanceModel = new Allowance();
-        $allowancesByStructure = [];
-        foreach ($structures as $structure) {
-            $allowancesByStructure[(int) $structure['id']] = $allowanceModel->structureAssignments((int) $structure['id']);
-        }
 
         $this->render('salary/index', [
             'title' => 'Salary Management',
             'structures' => $structures,
-            'allowancesByStructure' => $allowancesByStructure,
             'search' => $search,
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
@@ -43,12 +37,9 @@ class SalaryController extends Controller
             'csrf' => Session::csrfToken(),
             'flashError' => Session::flash('error'),
             'old' => $_SESSION['_old_salary_input'] ?? [],
-            'allowanceTypes' => (new Allowance())->active(),
-            'selectedAllowances' => $_SESSION['_old_salary_allowances'] ?? [],
         ]);
 
         unset($_SESSION['_old_salary_input']);
-        unset($_SESSION['_old_salary_allowances']);
     }
 
     public function store(): void
@@ -66,9 +57,7 @@ class SalaryController extends Controller
         }
 
         $data = $this->collectInput();
-        $assignments = $this->collectAllowanceAssignments();
         $_SESSION['_old_salary_input'] = $data;
-        $_SESSION['_old_salary_allowances'] = $assignments;
 
         $error = $this->validateInput($data);
         if ($error !== null) {
@@ -83,10 +72,8 @@ class SalaryController extends Controller
         }
 
         try {
-            $structureId = $model->insert($data);
-            (new Allowance())->syncStructure($structureId, array_keys($assignments), $assignments);
+            $model->insert($data);
             unset($_SESSION['_old_salary_input']);
-            unset($_SESSION['_old_salary_allowances']);
             Session::flash('success', 'Salary structure created successfully.');
             redirect('salary/index');
         } catch (PDOException) {
@@ -120,12 +107,9 @@ class SalaryController extends Controller
             'csrf' => Session::csrfToken(),
             'flashError' => Session::flash('error'),
             'old' => $_SESSION['_old_salary_input'] ?? [],
-            'allowanceTypes' => (new Allowance())->active(),
-            'selectedAllowances' => $_SESSION['_old_salary_allowances'] ?? $this->assignmentMap((new Allowance())->structureAssignments($structureId)),
         ]);
 
         unset($_SESSION['_old_salary_input']);
-        unset($_SESSION['_old_salary_allowances']);
     }
 
     public function update(string $id): void
@@ -156,9 +140,7 @@ class SalaryController extends Controller
         }
 
         $data = $this->collectInput();
-        $assignments = $this->collectAllowanceAssignments();
         $_SESSION['_old_salary_input'] = $data;
-        $_SESSION['_old_salary_allowances'] = $assignments;
 
         $error = $this->validateInput($data);
         if ($error !== null) {
@@ -173,9 +155,7 @@ class SalaryController extends Controller
 
         try {
             $model->update($structureId, $data);
-            (new Allowance())->syncStructure($structureId, array_keys($assignments), $assignments);
             unset($_SESSION['_old_salary_input']);
-            unset($_SESSION['_old_salary_allowances']);
             Session::flash('success', 'Salary structure updated successfully.');
             redirect('salary/index');
         } catch (PDOException) {
@@ -222,39 +202,10 @@ class SalaryController extends Controller
             'name' => trim((string) $this->input('name', '')),
             'grade_level' => $this->normalizeNullableString((string) $this->input('grade_level', '')),
             'basic_pay' => $this->normalizeMoney((string) $this->input('basic_pay', '0')),
-            // Retained for compatibility with historical reports. New allowances live in the assignment table.
-            'housing_allowance' => 0.0,
-            'transport_allowance' => 0.0,
-            'other_allowances' => 0.0,
+            'housing_allowance' => $this->normalizeMoney((string) $this->input('housing_allowance', '0')),
+            'transport_allowance' => $this->normalizeMoney((string) $this->input('transport_allowance', '0')),
+            'other_allowances' => $this->normalizeMoney((string) $this->input('other_allowances', '0')),
         ];
-    }
-
-    private function collectAllowanceAssignments(): array
-    {
-        $selected = $_POST['allowance_ids'] ?? [];
-        $amounts = $_POST['allowance_amount'] ?? [];
-        if (!is_array($selected) || !is_array($amounts)) {
-            return [];
-        }
-
-        $assignments = [];
-        foreach ($selected as $rawId) {
-            $id = (int) $rawId;
-            if ($id > 0) {
-                $assignments[$id] = max(0, $this->normalizeMoney((string) ($amounts[$id] ?? '0')));
-            }
-        }
-
-        return $assignments;
-    }
-
-    private function assignmentMap(array $rows): array
-    {
-        $result = [];
-        foreach ($rows as $row) {
-            $result[(int) $row['allowance_type_id']] = (float) $row['amount'];
-        }
-        return $result;
     }
 
     private function validateInput(array $data): ?string

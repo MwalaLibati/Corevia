@@ -834,10 +834,7 @@ class PayrollController extends Controller
             redirect('payroll/edit/' . $runIdInt);
         }
 
-        $payPeriod = substr((string) ($item['pay_period'] ?? ''), 0, 7);
-        $runDate = preg_match('/^20\d{2}-(0[1-9]|1[0-2])$/', $payPeriod)
-            ? date('Y-m-t', strtotime($payPeriod . '-01'))
-            : (string) ($item['run_date'] ?? date('Y-m-d'));
+        $runDate = (string) ($item['run_date'] ?? date('Y-m-d'));
         $salaryModel = new EmployeeSalary();
         $bonusModel = new BonusOvertime();
 
@@ -854,20 +851,17 @@ class PayrollController extends Controller
             $bonusTotal += (float) ($bonus['amount'] ?? 0);
         }
 
-        $earningsLines = $model->earningLinesForItem((int) $item['id']);
-        if ($earningsLines === []) {
-            $earningsLines = [
-                ['label' => 'Basic Salary', 'amount' => $basicPay],
-                ['label' => 'Housing Allowance', 'amount' => $housingAllowance],
-                ['label' => 'Transport Allowance', 'amount' => $transportAllowance],
-                ['label' => 'Other Allowances', 'amount' => $otherAllowances],
-                ['label' => 'Bonuses / Overtime', 'amount' => $bonusTotal],
-            ];
-        }
+        $earningsLines = [
+            ['label' => 'Basic Salary', 'amount' => $basicPay],
+            ['label' => 'Housing Allowance', 'amount' => $housingAllowance],
+            ['label' => 'Transport Allowance', 'amount' => $transportAllowance],
+            ['label' => 'Other Allowances', 'amount' => $otherAllowances],
+            ['label' => 'Bonuses / Overtime', 'amount' => $bonusTotal],
+        ];
 
         $deductionLines = $model->deductionLinesForItem((int) $item['id']);
         $calculatedDeductions = (float) ($item['total_deductions'] ?? 0);
-        $grossForDeduction = (float) ($item['gross_pay'] ?? array_sum(array_column($earningsLines, 'amount')));
+        $grossForDeduction = $basicPay + $housingAllowance + $transportAllowance + $otherAllowances + $bonusTotal;
 
         $downloadName = strtolower(preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($item['employee_number'] ?? 'employee')) . '-' . preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($item['pay_period'] ?? 'pay-period')));
         $downloadName = trim($downloadName, '-');

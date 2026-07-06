@@ -173,15 +173,10 @@ class TaxCalculator
      */
     public static function compute(float $grossPay, float $basicPay): array
     {
-        return self::computeForBases($grossPay, $basicPay, $grossPay);
-    }
-
-    public static function computeForBases(float $taxablePay, float $napsaBase, float $nhimaBase): array
-    {
         $result = [];
-        $paye   = self::paye($taxablePay);
-        $napsa  = self::napsa($napsaBase);
-        $nhima  = self::nhima($nhimaBase);
+        $paye   = self::paye($grossPay);
+        $napsa  = self::napsa($basicPay);
+        $nhima  = self::nhima($grossPay);
 
         if ($paye  > 0) $result[] = ['label' => 'PAYE',  'code' => 'PAYE',  'amount' => $paye,  'statutory' => true];
         if ($napsa > 0) $result[] = ['label' => 'NAPSA', 'code' => 'NAPSA', 'amount' => $napsa, 'statutory' => true];
@@ -191,11 +186,6 @@ class TaxCalculator
     }
 
     public static function employerContributions(float $grossPay, float $basicPay): array
-    {
-        return self::employerContributionsForBases($basicPay, $grossPay);
-    }
-
-    public static function employerContributionsForBases(float $napsaBase, float $nhimaBase): array
     {
         $result = [];
 
@@ -210,8 +200,8 @@ class TaxCalculator
             }
 
             $base = $code === 'NAPSA'
-                ? min($napsaBase, self::NAPSA_MAX_PENSIONABLE)
-                : $nhimaBase;
+                ? min($basicPay, self::NAPSA_MAX_PENSIONABLE)
+                : $grossPay;
 
             $result[] = [
                 'label' => $code . ' Employer',
