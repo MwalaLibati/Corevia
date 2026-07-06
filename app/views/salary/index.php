@@ -3,7 +3,7 @@
         <h2 class="text-dark">Salary Management</h2>
         <p class="text-gray mb-0">Configure salary structures, allowances, and increments.</p>
     </div>
-    <a href="<?= e(base_url('salary/create')) ?>" class="btn btn-primary">Add Structure</a>
+    <div class="d-flex gap-2"><a href="<?= e(base_url('allowance/index')) ?>" class="btn btn-outline-primary">Manage Allowances</a><a href="<?= e(base_url('salary/create')) ?>" class="btn btn-primary">Add Structure</a></div>
 </div>
 
 <?php if (!empty($flashSuccess)): ?><div class="alert alert-success"><?= e((string) $flashSuccess) ?></div><?php endif; ?>
@@ -32,24 +32,20 @@
                     <th>Name</th>
                     <th>Grade</th>
                     <th>Basic</th>
-                    <th>Housing</th>
-                    <th>Transport</th>
-                    <th>Other</th>
+                    <th>Allowances</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
             <?php if (empty($structures)): ?>
-                <tr><td colspan="7" class="text-center text-gray">No salary structures found.</td></tr>
+                <tr><td colspan="5" class="text-center text-gray">No salary structures found.</td></tr>
             <?php else: ?>
                 <?php foreach ($structures as $row): ?>
                     <tr>
                         <td><?= e((string) ($row['name'] ?? '')) ?></td>
                         <td><?= e((string) ($row['grade_level'] ?? '-')) ?></td>
                         <td><?= e(format_currency((float) ($row['basic_pay'] ?? 0))) ?></td>
-                        <td><?= e(format_currency((float) ($row['housing_allowance'] ?? 0))) ?></td>
-                        <td><?= e(format_currency((float) ($row['transport_allowance'] ?? 0))) ?></td>
-                        <td><?= e(format_currency((float) ($row['other_allowances'] ?? 0))) ?></td>
+                        <td><?php $assigned=$allowancesByStructure[(int)$row['id']]??[]; ?><?php if(!$assigned): ?><span class="text-gray">None</span><?php else: ?><?php foreach($assigned as $a): ?><span class="badge bg-light text-dark border me-1 mb-1"><?= e((string)$a['name']) ?>: <?= $a['calculation_type']==='Percent'?e((string)$a['amount']).'%':e(format_currency((float)$a['amount'])) ?></span><?php endforeach; ?><?php endif; ?></td>
                         <td class="text-end">
                             <a href="<?= e(base_url('salary/edit/' . (string) $row['id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
                             <form method="post" action="<?= e(base_url('salary/delete/' . (string) $row['id'])) ?>" class="d-inline">

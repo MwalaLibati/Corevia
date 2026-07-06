@@ -102,6 +102,7 @@ function module_catalog(): array
         'leave' => ['label' => 'Leave Management', 'icon' => 'bi-calendar-heart', 'url' => 'leave/index', 'section' => 'Leave & Attendance', 'routes' => ['leave']],
         'leave_types' => ['label' => 'Leave Types', 'icon' => 'bi-calendar2-week', 'url' => 'leave-type/index', 'section' => 'Leave & Attendance', 'routes' => ['leave-type']],
         'salary' => ['label' => 'Salary Structures', 'icon' => 'bi-cash-stack', 'url' => 'salary/index', 'section' => 'Payroll', 'routes' => ['salary', 'salary-change']],
+        'allowances' => ['label' => 'Allowance Types', 'icon' => 'bi-wallet2', 'url' => 'allowance/index', 'section' => 'Payroll', 'routes' => ['allowance']],
         'payroll' => ['label' => 'Payroll Runs', 'icon' => 'bi-receipt', 'url' => 'payroll/index', 'section' => 'Payroll', 'routes' => ['payroll']],
         'bonuses' => ['label' => 'Bonuses & Overtime', 'icon' => 'bi-graph-up-arrow', 'url' => 'bonus/index', 'section' => 'Payroll', 'routes' => ['bonus']],
         'deductions' => ['label' => 'Deductions & Tax', 'icon' => 'bi-percent', 'url' => 'deduction/index', 'section' => 'Payroll', 'routes' => ['deduction', 'tax-year']],
@@ -189,6 +190,9 @@ function user_allowed_modules(?array $user = null): array
             $roleModules = $rows !== []
                 ? array_values(array_unique(array_map(static fn ($key) => normalize_module_key((string) $key), $rows)))
                 : $catalogKeys;
+            if (in_array('salary', $roleModules, true) && !in_array('allowances', $roleModules, true)) {
+                $roleModules[] = 'allowances';
+            }
         } catch (Throwable) {
             $roleModules = $catalogKeys;
         }
@@ -220,9 +224,14 @@ function company_subscription_modules(): array
         $stmt->execute(['cid' => $companyId]);
         $rows = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        return $rows !== []
-            ? array_values(array_intersect(array_unique(array_map(static fn ($key) => normalize_module_key((string) $key), $rows)), $catalogKeys))
-            : $catalogKeys;
+        if ($rows === []) {
+            return $catalogKeys;
+        }
+        $modules = array_values(array_intersect(array_unique(array_map(static fn ($key) => normalize_module_key((string) $key), $rows)), $catalogKeys));
+        if (in_array('salary', $modules, true) && !in_array('allowances', $modules, true)) {
+            $modules[] = 'allowances';
+        }
+        return $modules;
     } catch (Throwable) {
         return $catalogKeys;
     }
