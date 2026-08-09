@@ -57,14 +57,18 @@ $settings = [
     'smtp_hr_email' => 'corevia@stonesoftzambia.com',
 ];
 
-$stmt = db()->prepare(
-    'INSERT INTO settings (company_id, setting_key, setting_value)
-     VALUES (0, :setting_key, :setting_value)
-     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)'
-);
-
 foreach ($settings as $key => $value) {
-    $stmt->execute(['setting_key' => $key, 'setting_value' => $value]);
+    $find = db()->prepare('SELECT id FROM settings WHERE company_id IS NULL AND setting_key = :setting_key LIMIT 1');
+    $find->execute(['setting_key' => $key]);
+    $existingId = (int) ($find->fetchColumn() ?: 0);
+
+    if ($existingId > 0) {
+        db()->prepare('UPDATE settings SET setting_value = :setting_value WHERE id = :id')
+            ->execute(['setting_value' => $value, 'id' => $existingId]);
+    } else {
+        db()->prepare('INSERT INTO settings (company_id, setting_key, setting_value) VALUES (NULL, :setting_key, :setting_value)')
+            ->execute(['setting_key' => $key, 'setting_value' => $value]);
+    }
 }
 
 $recipients = [
