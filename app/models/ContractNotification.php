@@ -46,13 +46,27 @@ class ContractNotification extends Model
              )$and"
         );
         $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
-        $map = [];
+        $map = corevia_default_mail_settings();
         foreach ($stmt->fetchAll() as $row) {
             $map[$row['setting_key']] = $row['setting_value'];
         }
         if (isset($map['smtp_password'])) {
             $map['smtp_password'] = SecretBox::decryptOrPlain((string) $map['smtp_password']);
         }
+
+        $serverFile = BASE_PATH . '/config/server.php';
+        if (is_file($serverFile)) {
+            $serverConfig = require $serverFile;
+            $serverMail = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
+            if (is_array($serverMail)) {
+                foreach ($serverMail as $key => $value) {
+                    if ($value !== null && (string) $value !== '') {
+                        $map[$key] = (string) $value;
+                    }
+                }
+            }
+        }
+
         return $map;
     }
 
