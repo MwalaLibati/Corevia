@@ -921,22 +921,12 @@ class PayrollController extends Controller
         $subject = $emailTemplates->renderSubject('payslip', $tokens);
         $attachments = [];
 
-        if ($emailTemplates->template('payslip')['attach_document']) {
-            $safePeriod = preg_replace('/[^A-Za-z0-9_-]+/', '-', $period) ?: 'period';
-            $safeEmployee = preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($item['employee_number'] ?? $employeeName)) ?: 'employee';
-            $attachments[] = [
-                'filename' => "payslip-{$safeEmployee}-{$safePeriod}.html",
-                'mime' => 'text/html; charset=UTF-8',
-                'content' => $this->buildPayslipAttachmentHtml($item, $companyName),
-            ];
-        }
-
         $mailer = (new ContractNotification())->buildMailer();
         $ok = $mailer->send($email, $employeeName, $subject, $html, $attachments);
 
         if ($ok) {
-            AuditLog::record('payslip_email', "Payslip emailed to {$email} for {$employeeName} ({$period}).", 'PayrollRun', $runId);
-            return ['ok' => true, 'message' => "Payslip emailed to {$employeeName} ({$email})."];
+            AuditLog::record('payslip_email', "Payslip portal notification emailed to {$email} for {$employeeName} ({$period}).", 'PayrollRun', $runId);
+            return ['ok' => true, 'message' => "Payslip portal notification emailed to {$employeeName} ({$email})."];
         }
 
         return [
@@ -960,6 +950,8 @@ class PayrollController extends Controller
             'gross_pay' => format_currency((float) ($item['gross_pay'] ?? 0)),
             'total_deductions' => format_currency((float) ($item['total_deductions'] ?? 0)),
             'net_pay' => format_currency((float) ($item['net_pay'] ?? 0)),
+            'portal_url' => public_url('portal/login'),
+            'payslip_url' => public_url('portal/payslipView/' . (string) ($item['id'] ?? '')),
             'today' => date('d M Y'),
         ];
     }

@@ -126,7 +126,7 @@ $payslipTemplate = $emailTemplates['payslip'] ?? [];
         <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
             <div>
                 <h5 class="mb-1">Email Templates & Signature</h5>
-                <p class="text-gray mb-0 small">Edit the messages employees receive for contracts and payslips. Documents are attached automatically when enabled.</p>
+                <p class="text-gray mb-0 small">Edit the secure portal notifications employees receive for contracts and payslips. Documents stay inside the employee portal.</p>
             </div>
             <span class="badge bg-light text-dark border">Company controlled</span>
         </div>
@@ -136,13 +136,7 @@ $payslipTemplate = $emailTemplates['payslip'] ?? [];
 
             <div class="col-lg-8">
                 <div class="border rounded-3 p-3 mb-3">
-                    <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
-                        <h6 class="mb-0">Contract Email</h6>
-                        <label class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" name="contract_attach_document" value="1" <?= !empty($contractTemplate['attach_document']) ? 'checked' : '' ?>>
-                            <span class="form-check-label small">Attach contract document</span>
-                        </label>
-                    </div>
+                    <h6 class="mb-3">Contract Portal Notification</h6>
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
                         <input type="text" name="contract_subject" class="form-control" value="<?= e((string) ($contractTemplate['subject'] ?? '')) ?>">
@@ -154,13 +148,7 @@ $payslipTemplate = $emailTemplates['payslip'] ?? [];
                 </div>
 
                 <div class="border rounded-3 p-3 mb-3">
-                    <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
-                        <h6 class="mb-0">Payslip Email</h6>
-                        <label class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" name="payslip_attach_document" value="1" <?= !empty($payslipTemplate['attach_document']) ? 'checked' : '' ?>>
-                            <span class="form-check-label small">Attach payslip document</span>
-                        </label>
-                    </div>
+                    <h6 class="mb-3">Payslip Portal Notification</h6>
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
                         <input type="text" name="payslip_subject" class="form-control" value="<?= e((string) ($payslipTemplate['subject'] ?? '')) ?>">

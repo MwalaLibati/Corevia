@@ -657,21 +657,12 @@ class ContractController extends Controller
         $html = $emailTemplates->renderBody('contract', $tokens);
         $attachments = [];
 
-        if ($emailTemplates->template('contract')['attach_document']) {
-            $filename = strtolower(preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) ($contract['contract_number'] ?? 'contract'))) ?: 'contract';
-            $attachments[] = [
-                'filename' => $filename . '.html',
-                'mime' => 'text/html; charset=UTF-8',
-                'content' => $this->buildContractAttachmentHtml($renderedBody, $contract, $employee, $companyName),
-            ];
-        }
-
         $mailer = (new ContractNotification())->buildMailer();
         $ok = $mailer->send($email, $employeeName, $subject, $html, $attachments);
 
         if ($ok) {
-            AuditLog::record('contract_email', "Contract #{$contractId} emailed to {$email}.", 'EmployeeContract', $contractId);
-            return ['ok' => true, 'message' => "Contract emailed to {$employeeName} ({$email})."];
+            AuditLog::record('contract_email', "Contract portal notification for #{$contractId} emailed to {$email}.", 'EmployeeContract', $contractId);
+            return ['ok' => true, 'message' => "Contract portal notification emailed to {$employeeName} ({$email})."];
         }
 
         $detail = $mailer->lastError() !== '' ? ' ' . $mailer->lastError() : ' Check SMTP settings.';
@@ -692,6 +683,8 @@ class ContractController extends Controller
             'contract_type' => (string) ($contract['contract_type'] ?? ''),
             'contract_start_date' => (string) ($contract['start_date'] ?? ''),
             'contract_end_date' => (string) ($contract['end_date'] ?? 'Open-ended'),
+            'portal_url' => public_url('portal/login'),
+            'contract_url' => public_url('portal/contract'),
             'today' => date('d M Y'),
         ];
     }

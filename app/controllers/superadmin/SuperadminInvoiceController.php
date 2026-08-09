@@ -987,24 +987,23 @@ class SuperadminInvoiceController extends Controller
 
     private function payoutStatementHtml(array $batch, array $items): string
     {
-        $rows = '';
-        foreach ($items as $item) {
-            $rows .= '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb">' . e((string)($item['earned_at'] ?? '')) . '</td>'
-                . '<td style="padding:8px;border-bottom:1px solid #e5e7eb">' . e((string)($item['company_name'] ?? '')) . '</td>'
-                . '<td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">ZMW ' . number_format((float)($item['gross_amount'] ?? 0), 2) . '</td>'
-                . '<td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">ZMW ' . number_format((float)($item['tax_amount'] ?? 0), 2) . '</td>'
-                . '<td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">ZMW ' . number_format((float)($item['net_amount'] ?? 0), 2) . '</td></tr>';
-        }
+        $reference = e((string) ($batch['payout_reference'] ?? ''));
+        $affiliate = e((string) ($batch['affiliate_name'] ?? 'Affiliate'));
+        $status = e((string) ($batch['status'] ?? ''));
+        $net = number_format((float) ($batch['net_amount'] ?? 0), 2);
+        $statementUrl = e(public_url('affiliate/dashboard/statement'));
+        $loginUrl = e(public_url('affiliate/auth/login'));
 
         return '<div style="font-family:Arial,sans-serif;color:#111827;line-height:1.6">'
-            . '<h2>Affiliate Payout Statement</h2>'
-            . '<p><strong>Reference:</strong> ' . e((string)$batch['payout_reference']) . '<br>'
-            . '<strong>Affiliate:</strong> ' . e((string)$batch['affiliate_name']) . '<br>'
-            . '<strong>Status:</strong> ' . e((string)$batch['status']) . '</p>'
-            . '<table style="border-collapse:collapse;width:100%;max-width:760px"><thead><tr><th>Date</th><th>Company</th><th>Gross</th><th>Tax</th><th>Net</th></tr></thead><tbody>' . $rows . '</tbody></table>'
-            . '<p><strong>Gross:</strong> ZMW ' . number_format((float)$batch['gross_amount'], 2)
-            . '<br><strong>Tax:</strong> ZMW ' . number_format((float)$batch['tax_amount'], 2)
-            . '<br><strong>Net:</strong> ZMW ' . number_format((float)$batch['net_amount'], 2) . '</p>'
+            . '<h2>Affiliate Payout Statement Available</h2>'
+            . '<p>Dear ' . $affiliate . ',</p>'
+            . '<p>Your affiliate payout statement is now available in the Corevia Affiliate Portal.</p>'
+            . '<p>For confidentiality and security, payout statements are not sent by email. Please log in to your portal to view the full statement, commission lines, tax withheld, and payout status.</p>'
+            . '<p><strong>Reference:</strong> ' . $reference . '<br>'
+            . '<strong>Status:</strong> ' . $status . '<br>'
+            . '<strong>Net payout:</strong> ZMW ' . $net . '</p>'
+            . '<p><a href="' . $statementUrl . '" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:bold">Open Affiliate Statement</a></p>'
+            . '<p style="font-size:13px;color:#64748b">If the button does not open, sign in here:<br>' . $loginUrl . '</p>'
             . '<p>Regards,<br>' . e(app_vendor_name()) . '</p></div>';
     }
 

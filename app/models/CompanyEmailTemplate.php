@@ -22,10 +22,13 @@ class CompanyEmailTemplate
 
     public function template(string $type): array
     {
+        $subject = $this->settings->value("email_template_{$type}_subject", $this->defaultSubject($type));
+        $body = $this->settings->value("email_template_{$type}_body", $this->defaultBody($type));
+
         return [
-            'subject' => $this->settings->value("email_template_{$type}_subject", $this->defaultSubject($type)),
-            'body' => $this->settings->value("email_template_{$type}_body", $this->defaultBody($type)),
-            'attach_document' => $this->settings->value("email_template_{$type}_attach_document", '1') === '1',
+            'subject' => $this->portalOnlySubject($type, $subject),
+            'body' => $this->portalOnlyBody($type, $body),
+            'attach_document' => false,
         ];
     }
 
@@ -37,7 +40,7 @@ class CompanyEmailTemplate
 
             $this->settings->upsert("email_template_{$type}_subject", $subject !== '' ? $subject : $this->defaultSubject($type));
             $this->settings->upsert("email_template_{$type}_body", $body !== '' ? $body : $this->defaultBody($type));
-            $this->settings->upsert("email_template_{$type}_attach_document", !empty($data[$type . '_attach_document']) ? '1' : '0');
+            $this->settings->upsert("email_template_{$type}_attach_document", '0');
         }
 
         $signature = trim((string) ($data['signature'] ?? ''));
@@ -97,18 +100,21 @@ class CompanyEmailTemplate
                 '{{employee_number}}' => 'Employee number',
                 '{{employee_email}}' => 'Employee email',
                 '{{today}}' => 'Today',
+                '{{portal_url}}' => 'Employee portal login link',
             ],
             'Contract' => [
                 '{{contract_number}}' => 'Contract number',
                 '{{contract_type}}' => 'Contract type',
                 '{{contract_start_date}}' => 'Start date',
                 '{{contract_end_date}}' => 'End date',
+                '{{contract_url}}' => 'Employee portal contract page',
             ],
             'Payslip' => [
                 '{{pay_period}}' => 'Pay period',
                 '{{gross_pay}}' => 'Gross pay',
                 '{{total_deductions}}' => 'Total deductions',
                 '{{net_pay}}' => 'Net pay',
+                '{{payslip_url}}' => 'Employee portal payslip page',
             ],
         ];
     }
@@ -121,17 +127,44 @@ class CompanyEmailTemplate
     private function defaultSubject(string $type): string
     {
         return $type === 'payslip'
-            ? 'Payslip for {{pay_period}} - {{employee_name}}'
-            : 'Employment Contract - {{employee_name}}';
+            ? 'Payslip available in your employee portal - {{pay_period}}'
+            : 'Employment contract available in your employee portal';
     }
 
     private function defaultBody(string $type): string
     {
         if ($type === 'payslip') {
-            return "Dear {{employee_name}},\n\nYour payslip for {{pay_period}} is ready. Please find the attached payslip document for your records.\n\nNet pay: {{net_pay}}.";
+            return "Dear {{employee_name}},\n\nYour payslip for {{pay_period}} is now available in your employee self-service portal.\n\nFor confidentiality and security, payslip documents are not sent by email. Please log in to your portal to view or download your payslip.\n\nPortal link: {{payslip_url}}\n\nNet pay: {{net_pay}}.";
         }
 
-        return "Dear {{employee_name}},\n\nPlease find your employment contract attached for your review and records.\n\nContract number: {{contract_number}}\nContract type: {{contract_type}}";
+        return "Dear {{employee_name}},\n\nYour employment contract is now available in your employee self-service portal for review.\n\nFor confidentiality and security, contract documents are not sent by email. Please log in to your portal to view the contract details and any related actions.\n\nPortal link: {{contract_url}}\n\nContract number: {{contract_number}}\nContract type: {{contract_type}}";
+    }
+
+    private function portalOnlySubject(string $type, string $subject): string
+    {
+        if (!in_array($type, ['contract', 'payslip'], true)) {
+            return $subject;
+        }
+
+        return $this->mentionsEmailAttachment($subject) ? $this->defaultSubject($type) : $subject;
+    }
+
+    private function portalOnlyBody(string $type, string $body): string
+    {
+        if (!in_array($type, ['contract', 'payslip'], true)) {
+            return $body;
+        }
+
+        return $this->mentionsEmailAttachment($body) ? $this->defaultBody($type) : $body;
+    }
+
+    private function mentionsEmailAttachment(string $text): bool
+    {
+        $normalized = strtolower($text);
+        return str_contains($normalized, 'attached')
+            || str_contains($normalized, 'attachment')
+            || str_contains($normalized, 'find your')
+            || str_contains($normalized, 'please find');
     }
 
     private function paragraphHtml(string $text): string
