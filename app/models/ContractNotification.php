@@ -35,39 +35,7 @@ class ContractNotification extends Model
 
     public function emailSettings(): array
     {
-        $cid = class_exists('Tenant') ? Tenant::id() : 0;
-        $and = $cid > 0 ? ' AND company_id = :cid' : '';
-        $stmt = $this->db->prepare(
-            "SELECT setting_key, setting_value FROM settings
-             WHERE setting_key IN (
-               'smtp_host','smtp_port','smtp_encryption','smtp_username',
-               'smtp_password','smtp_from_email','smtp_from_name',
-               'smtp_hr_email','email_notifications_enabled'
-             )$and"
-        );
-        $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
-        $map = corevia_default_mail_settings();
-        foreach ($stmt->fetchAll() as $row) {
-            $map[$row['setting_key']] = $row['setting_value'];
-        }
-        if (isset($map['smtp_password'])) {
-            $map['smtp_password'] = SecretBox::decryptOrPlain((string) $map['smtp_password']);
-        }
-
-        $serverFile = BASE_PATH . '/config/server.php';
-        if (is_file($serverFile)) {
-            $serverConfig = require $serverFile;
-            $serverMail = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
-            if (is_array($serverMail)) {
-                foreach ($serverMail as $key => $value) {
-                    if ($value !== null && (string) $value !== '') {
-                        $map[$key] = (string) $value;
-                    }
-                }
-            }
-        }
-
-        return $map;
+        return corevia_mail_settings(class_exists('Tenant') ? Tenant::id() : 0);
     }
 
     public function buildMailer(): MailService

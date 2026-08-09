@@ -1135,48 +1135,7 @@ class EmployeeController extends Controller
 
     private function employeePortalEmailSettings(): array
     {
-        $keys = [
-            'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username',
-            'smtp_password', 'smtp_from_email', 'smtp_from_name',
-            'smtp_hr_email', 'email_notifications_enabled',
-        ];
-
-        $placeholders = implode(',', array_fill(0, count($keys), '?'));
-        $cid = Tenant::id();
-        $sql = "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ({$placeholders})";
-        $params = $keys;
-        if ($cid > 0) {
-            $sql .= ' AND company_id = ?';
-            $params[] = $cid;
-        }
-
-        $stmt = db()->prepare($sql);
-        $stmt->execute($params);
-        $settings = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
-        }
-
-        if (isset($settings['smtp_password'])) {
-            $settings['smtp_password'] = SecretBox::decryptOrPlain((string) $settings['smtp_password']);
-        }
-
-        $serverFile = BASE_PATH . '/config/server.php';
-        if (is_file($serverFile)) {
-            $serverConfig = require $serverFile;
-            $serverMail = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
-            if (is_array($serverMail)) {
-                foreach ($serverMail as $key => $value) {
-                    if ($value !== null && (string) $value !== '') {
-                        $settings[$key] = (string) $value;
-                    }
-                }
-            }
-        }
-
-        $settings = array_merge(corevia_default_mail_settings(), $settings);
-
-        return $settings;
+        return corevia_mail_settings(Tenant::id());
     }
 
     private function normalizeNullableMoney(string $value): ?float

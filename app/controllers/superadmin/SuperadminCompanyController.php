@@ -634,43 +634,7 @@ class SuperadminCompanyController extends Controller
 
     private function platformEmailSettings(): array
     {
-        $defaults = [
-            ...corevia_default_mail_settings(),
-        ];
-
-        try {
-            $stmt = db()->query(
-                "SELECT setting_key, setting_value FROM settings
-                 WHERE (company_id IS NULL OR company_id = 0)
-                   AND setting_key IN (
-                       'email_notifications_enabled','smtp_host','smtp_port','smtp_encryption',
-                       'smtp_username','smtp_password','smtp_from_email','smtp_from_name','smtp_hr_email'
-                   )"
-            );
-
-            foreach ($stmt->fetchAll() as $row) {
-                $defaults[(string) $row['setting_key']] = (string) $row['setting_value'];
-            }
-        } catch (Throwable) {
-            return $defaults;
-        }
-
-        if (isset($defaults['smtp_password'])) {
-            $defaults['smtp_password'] = SecretBox::decryptOrPlain((string) $defaults['smtp_password']);
-        }
-
-        $serverConfigFile = BASE_PATH . '/config/server.php';
-        if (is_file($serverConfigFile)) {
-            $serverConfig = require $serverConfigFile;
-            $mailConfig = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
-            if (is_array($mailConfig)) {
-                foreach ($mailConfig as $key => $value) {
-                    $defaults[(string) $key] = (string) $value;
-                }
-            }
-        }
-
-        return $defaults;
+        return corevia_mail_settings(0);
     }
 
     private function consumeNewAdminPassword(int $companyId): ?array

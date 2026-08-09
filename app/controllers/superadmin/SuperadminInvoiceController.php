@@ -148,7 +148,7 @@ class SuperadminInvoiceController extends Controller
         $to = trim((string) ($invoice['company_email'] ?? ''));
         $subject = 'Invoice ' . (string) $invoice['invoice_number'] . ' - ' . app_vendor_name();
         $html = $this->invoiceEmailHtml($invoice, $model->lines($invoiceId));
-        $mailer = new MailService(corevia_default_mail_settings());
+        $mailer = new MailService(corevia_mail_settings(0));
 
         if ($mailer->send($to, (string) $invoice['company_name'], $subject, $html)) {
             $model->markSent($invoiceId, true);
@@ -644,7 +644,7 @@ class SuperadminInvoiceController extends Controller
             redirect('superadmin/invoice/affiliates');
         }
         $html = $this->payoutStatementHtml($batch, $ops->payoutItems((int) $batch['id']));
-        $mailer = new MailService(corevia_default_mail_settings());
+        $mailer = new MailService(corevia_mail_settings(0));
         if ($mailer->send((string) $batch['affiliate_email'], (string) $batch['affiliate_name'], 'Corevia affiliate payout statement ' . (string) $batch['payout_reference'], $html)) {
             AuditLog::recordPlatform('affiliate_payout_emailed', 'Emailed affiliate payout statement.', 'AffiliatePayout', (int) $batch['id']);
             Session::flash('success', 'Payout statement emailed.');
@@ -1258,7 +1258,7 @@ class SuperadminInvoiceController extends Controller
             <p>For security, the system will ask you to create a new private password when you first sign in.</p>
         HTML;
 
-        $mailer = new MailService(corevia_default_mail_settings());
+        $mailer = new MailService(corevia_mail_settings(0));
         try {
             if ($mailer->send($email, $name, $title, corevia_email_shell($title, $intro, $body))) {
                 AuditLog::recordPlatform('affiliate_welcome_email_sent', 'Sent affiliate login email to ' . $email, 'Affiliate');

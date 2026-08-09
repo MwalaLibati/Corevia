@@ -150,6 +150,69 @@ function corevia_default_mail_settings(): array
     ];
 }
 
+function corevia_mail_settings(?int $companyId = null): array
+{
+    $settings = corevia_default_mail_settings();
+
+    if (function_exists('db')) {
+        try {
+            $globalSql = "SELECT setting_key, setting_value FROM settings
+                          WHERE (company_id IS NULL OR company_id = 0)
+                            AND setting_key IN (
+                                'email_notifications_enabled','smtp_host','smtp_port','smtp_encryption',
+                                'smtp_username','smtp_password','smtp_from_email','smtp_from_name','smtp_hr_email'
+                            )";
+            foreach (db()->query($globalSql)->fetchAll() as $row) {
+                $settings[(string) $row['setting_key']] = (string) $row['setting_value'];
+            }
+
+            $cid = $companyId;
+            if ($cid === null && class_exists('Tenant')) {
+                $cid = Tenant::id();
+            }
+
+            if ((int) $cid > 0) {
+                $tenantStmt = db()->prepare(
+                    "SELECT setting_key, setting_value FROM settings
+                     WHERE company_id = :cid
+                       AND setting_key IN (
+                           'email_notifications_enabled','smtp_host','smtp_port','smtp_encryption',
+                           'smtp_username','smtp_password','smtp_from_email','smtp_from_name','smtp_hr_email'
+                       )"
+                );
+                $tenantStmt->execute(['cid' => (int) $cid]);
+                foreach ($tenantStmt->fetchAll() as $row) {
+                    $value = (string) $row['setting_value'];
+                    if ($value !== '') {
+                        $settings[(string) $row['setting_key']] = $value;
+                    }
+                }
+            }
+        } catch (Throwable) {
+            $settings = corevia_default_mail_settings();
+        }
+    }
+
+    if (isset($settings['smtp_password']) && class_exists('SecretBox')) {
+        $settings['smtp_password'] = SecretBox::decryptOrPlain((string) $settings['smtp_password']);
+    }
+
+    $serverFile = defined('BASE_PATH') ? BASE_PATH . '/config/server.php' : '';
+    if ($serverFile !== '' && is_file($serverFile)) {
+        $serverConfig = require $serverFile;
+        $serverMail = is_array($serverConfig) ? ($serverConfig['mail'] ?? []) : [];
+        if (is_array($serverMail)) {
+            foreach ($serverMail as $key => $value) {
+                if ($value !== null && (string) $value !== '') {
+                    $settings[(string) $key] = (string) $value;
+                }
+            }
+        }
+    }
+
+    return $settings;
+}
+
 function corevia_email_shell(string $title, string $intro, string $bodyHtml, array $options = []): string
 {
     $titleHtml = e($title);
