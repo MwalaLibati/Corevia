@@ -3,6 +3,7 @@
 .env.*
 config/app_secret.key
 config/server.php
+config/mail.local.php
 
 # Runtime uploads and generated files
 uploads/*
