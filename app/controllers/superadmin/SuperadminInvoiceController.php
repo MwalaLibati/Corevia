@@ -148,11 +148,7 @@ class SuperadminInvoiceController extends Controller
         $to = trim((string) ($invoice['company_email'] ?? ''));
         $subject = 'Invoice ' . (string) $invoice['invoice_number'] . ' - ' . app_vendor_name();
         $html = $this->invoiceEmailHtml($invoice, $model->lines($invoiceId));
-        $mailer = new MailService([
-            'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'info@stonesoftzambia.com',
-            'smtp_from_name' => app_vendor_name(),
-        ]);
+        $mailer = new MailService(corevia_default_mail_settings());
 
         if ($mailer->send($to, (string) $invoice['company_name'], $subject, $html)) {
             $model->markSent($invoiceId, true);
@@ -248,8 +244,9 @@ class SuperadminInvoiceController extends Controller
                  (affiliate_code, affiliate_type, full_name, trading_name, email, alternate_email, phone, alternate_phone, nrc_number, tpin, address, city, province, date_of_birth, password_hash, must_change_password, commission_rate, commission_basis, commission_duration, commission_months, one_off_bonus, payout_tax_rate, payout_method, payout_details, bank_name, bank_account_name, bank_account_number, mobile_money_number, kyc_status, is_active)
                  VALUES (:code, :type, :name, :trading_name, :email, :alternate_email, :phone, :alternate_phone, :nrc, :tpin, :address, :city, :province, :date_of_birth, :hash, 1, :rate, :basis, :duration, :months, :bonus, :tax_rate, :method, :details, :bank_name, :bank_account_name, :bank_account_number, :mobile_money_number, :kyc_status, 1)"
             );
+            $affiliateCode = $this->generateAffiliateCode($name);
             $stmt->execute([
-                'code' => $this->generateAffiliateCode($name),
+                'code' => $affiliateCode,
                 'type' => $type,
                 'name' => $name,
                 'trading_name' => trim((string) $this->input('trading_name', '')) ?: null,
@@ -278,8 +275,12 @@ class SuperadminInvoiceController extends Controller
                 'mobile_money_number' => trim((string) $this->input('mobile_money_number', '')) ?: null,
                 'kyc_status' => $this->allowedValue((string) $this->input('kyc_status', 'Draft'), ['Draft','Pending Review','Approved','Rejected'], 'Draft'),
             ]);
-            AuditLog::recordPlatform('affiliate_created', 'Created affiliate ' . $email, 'Affiliate', (int) db()->lastInsertId());
-            Session::flash('success', 'Affiliate created.');
+            $affiliateId = (int) db()->lastInsertId();
+            AuditLog::recordPlatform('affiliate_created', 'Created affiliate ' . $email, 'Affiliate', $affiliateId);
+            $emailResult = $this->sendAffiliateWelcomeEmail($name, $email, $password, $affiliateCode);
+            Session::flash('success', $emailResult['sent']
+                ? 'Affiliate created and login instructions were emailed.'
+                : 'Affiliate created, but the welcome email could not be sent: ' . $emailResult['error']);
             redirect('superadmin/invoice/affiliates');
         } catch (Throwable $e) {
             Session::flash('error', 'Affiliate could not be created: ' . $e->getMessage());
@@ -438,7 +439,20 @@ class SuperadminInvoiceController extends Controller
         try {
             db()->prepare('UPDATE affiliates SET ' . implode(', ', $fields) . ' WHERE id = :id')->execute($params);
             AuditLog::recordPlatform('affiliate_updated', 'Updated affiliate ' . (string) $affiliate['email'], 'Affiliate', (int) $affiliate['id']);
-            Session::flash('success', $password !== '' ? 'Affiliate updated and password reset. They must change it on next login.' : 'Affiliate updated.');
+            if ($password !== '') {
+                $emailResult = $this->sendAffiliateWelcomeEmail(
+                    (string) $params['name'],
+                    (string) $affiliate['email'],
+                    $password,
+                    (string) $affiliate['affiliate_code'],
+                    true
+                );
+                Session::flash('success', $emailResult['sent']
+                    ? 'Affiliate updated and password reset instructions were emailed.'
+                    : 'Affiliate updated and password reset. Email could not be sent: ' . $emailResult['error']);
+            } else {
+                Session::flash('success', 'Affiliate updated.');
+            }
             redirect('superadmin/invoice/affiliateView/' . (int) $affiliate['id']);
         } catch (Throwable $e) {
             Session::flash('error', 'Affiliate could not be updated: ' . $e->getMessage());
@@ -630,11 +644,7 @@ class SuperadminInvoiceController extends Controller
             redirect('superadmin/invoice/affiliates');
         }
         $html = $this->payoutStatementHtml($batch, $ops->payoutItems((int) $batch['id']));
-        $mailer = new MailService([
-            'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'info@stonesoftzambia.com',
-            'smtp_from_name' => app_vendor_name(),
-        ]);
+        $mailer = new MailService(corevia_default_mail_settings());
         if ($mailer->send((string) $batch['affiliate_email'], (string) $batch['affiliate_name'], 'Corevia affiliate payout statement ' . (string) $batch['payout_reference'], $html)) {
             AuditLog::recordPlatform('affiliate_payout_emailed', 'Emailed affiliate payout statement.', 'AffiliatePayout', (int) $batch['id']);
             Session::flash('success', 'Payout statement emailed.');
@@ -1219,6 +1229,46 @@ class SuperadminInvoiceController extends Controller
               KEY idx_affiliate_documents_type (document_type)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
+    }
+
+    private function sendAffiliateWelcomeEmail(string $name, string $email, string $temporaryPassword, string $affiliateCode, bool $isReset = false): array
+    {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['sent' => false, 'error' => 'Invalid affiliate email address.'];
+        }
+
+        $loginUrl = base_url('affiliate/auth/login');
+        $safeName = e($name);
+        $safeEmail = e($email);
+        $safePassword = e($temporaryPassword);
+        $safeCode = e($affiliateCode);
+        $safeUrl = e($loginUrl);
+        $title = $isReset ? 'Affiliate Password Reset' : 'Welcome to Corevia Affiliates';
+        $intro = $isReset ? 'Your affiliate login details have been updated' : 'Your affiliate account is ready';
+        $actionWord = $isReset ? 'updated' : 'created';
+        $body = <<<HTML
+            <p style="margin-top:0">Hello {$safeName},</p>
+            <p>Your Corevia Affiliates account has been {$actionWord}.</p>
+            <table style="border-collapse:collapse;width:100%;margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0">
+                <tr><td style="padding:10px 12px;font-weight:bold;width:170px">Affiliate code</td><td style="padding:10px 12px">{$safeCode}</td></tr>
+                <tr><td style="padding:10px 12px;font-weight:bold">Login email</td><td style="padding:10px 12px">{$safeEmail}</td></tr>
+                <tr><td style="padding:10px 12px;font-weight:bold">One-time password</td><td style="padding:10px 12px;font-family:Consolas,monospace;font-size:16px">{$safePassword}</td></tr>
+                <tr><td style="padding:10px 12px;font-weight:bold">Login link</td><td style="padding:10px 12px"><a href="{$safeUrl}">{$safeUrl}</a></td></tr>
+            </table>
+            <p>For security, the system will ask you to create a new private password when you first sign in.</p>
+        HTML;
+
+        $mailer = new MailService(corevia_default_mail_settings());
+        try {
+            if ($mailer->send($email, $name, $title, corevia_email_shell($title, $intro, $body))) {
+                AuditLog::recordPlatform('affiliate_welcome_email_sent', 'Sent affiliate login email to ' . $email, 'Affiliate');
+                return ['sent' => true, 'error' => ''];
+            }
+
+            return ['sent' => false, 'error' => $mailer->lastError()];
+        } catch (Throwable $e) {
+            return ['sent' => false, 'error' => $e->getMessage()];
+        }
     }
 
     private function columnExists(string $table, string $column): bool

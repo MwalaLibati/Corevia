@@ -4,6 +4,23 @@
 -- 2) Replace older wording such as "attached document" with secure portal instructions.
 -- Safe to run more than once.
 
+INSERT INTO settings (company_id, setting_key, setting_value) VALUES
+(0, 'smtp_from_email', 'corevia@stonesoftzambia.com'),
+(0, 'smtp_from_name', 'Corevia HR & Payroll'),
+(0, 'smtp_hr_email', 'corevia@stonesoftzambia.com'),
+(0, 'email_notifications_enabled', '1')
+ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value);
+
+UPDATE settings
+SET setting_value = 'corevia@stonesoftzambia.com'
+WHERE setting_key IN ('smtp_from_email', 'smtp_hr_email')
+  AND (setting_value IS NULL OR setting_value = '' OR setting_value = 'info@stonesoftzambia.com');
+
+UPDATE settings
+SET setting_value = 'Corevia HR & Payroll'
+WHERE setting_key = 'smtp_from_name'
+  AND (setting_value IS NULL OR setting_value = '' OR setting_value IN ('StoneSoft IT Solutions', 'Stonesoft IT Solutions'));
+
 UPDATE settings
 SET setting_value = '0'
 WHERE setting_key IN (

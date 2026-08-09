@@ -129,3 +129,78 @@ function company_logo_url(?array $company = null): string
 
     return asset('assets/img/Logo.png');
 }
+
+function corevia_sender_email(): string
+{
+    return 'corevia@stonesoftzambia.com';
+}
+
+function corevia_brand_logo_url(): string
+{
+    return asset('assets/img/Logo.png');
+}
+
+function corevia_default_mail_settings(): array
+{
+    return [
+        'email_notifications_enabled' => '1',
+        'smtp_from_email' => corevia_sender_email(),
+        'smtp_from_name' => 'Corevia HR & Payroll',
+        'smtp_hr_email' => corevia_sender_email(),
+    ];
+}
+
+function corevia_email_shell(string $title, string $intro, string $bodyHtml, array $options = []): string
+{
+    $titleHtml = e($title);
+    $introHtml = e($intro);
+    $product = e(app_product_name());
+    $vendor = e(app_vendor_name());
+    $logo = e(corevia_brand_logo_url());
+    $address = e((string) ($options['address'] ?? 'Lusaka, Zambia'));
+    $phone = e((string) ($options['phone'] ?? '+260 768 296216'));
+    $email = e((string) ($options['email'] ?? corevia_sender_email()));
+
+    return <<<HTML
+    <html>
+    <body style="margin:0;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#0f172a">
+        <div style="max-width:680px;margin:0 auto;padding:28px 18px">
+            <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
+                <div style="background:#0f172a;color:#ffffff;padding:24px 28px">
+                    <table role="presentation" style="border-collapse:collapse;width:100%">
+                        <tr>
+                            <td style="width:86px;vertical-align:middle">
+                                <img src="{$logo}" alt="Stonesoft logo" style="max-width:72px;max-height:72px;display:block">
+                            </td>
+                            <td style="vertical-align:middle">
+                                <h1 style="font-size:22px;line-height:1.25;margin:0">{$titleHtml}</h1>
+                                <p style="margin:8px 0 0;color:#cbd5e1;font-size:14px">{$introHtml}</p>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div style="padding:28px;line-height:1.6;font-size:15px">
+                    {$bodyHtml}
+                    <div style="border-top:1px solid #e5e7eb;margin-top:26px;padding-top:18px">
+                        <table role="presentation" style="border-collapse:collapse;width:100%">
+                            <tr>
+                                <td style="width:72px;vertical-align:top">
+                                    <img src="{$logo}" alt="Stonesoft logo" style="max-width:58px;max-height:58px;display:block">
+                                </td>
+                                <td style="vertical-align:top;color:#334155;font-size:13px;line-height:1.5">
+                                    <strong style="font-size:14px;color:#0f172a">{$vendor}</strong><br>
+                                    {$product}<br>
+                                    {$address}<br>
+                                    {$phone} | {$email}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <p style="font-size:12px;color:#64748b;margin:18px 0 0">This is an automated Corevia notification. Please do not share temporary passwords with anyone.</p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    HTML;
+}

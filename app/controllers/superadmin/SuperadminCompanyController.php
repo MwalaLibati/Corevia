@@ -605,48 +605,37 @@ class SuperadminCompanyController extends Controller
         $product = htmlspecialchars(app_product_name(), ENT_QUOTES, 'UTF-8');
         $vendor = htmlspecialchars(app_vendor_name(), ENT_QUOTES, 'UTF-8');
 
-        return <<<HTML
-        <html>
-        <body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#0f172a">
-            <div style="max-width:640px;margin:0 auto;padding:28px 18px">
-                <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-                    <div style="background:#0f172a;color:#ffffff;padding:22px 26px">
-                        <h1 style="font-size:22px;line-height:1.3;margin:0">Welcome to {$product}</h1>
-                        <p style="margin:8px 0 0;color:#cbd5e1">Your company account is ready.</p>
-                    </div>
-                    <div style="padding:26px">
-                        <p style="margin-top:0">Hello {$name},</p>
-                        <p>Your administrator account for <strong>{$company}</strong> has been created on {$product}.</p>
-                        <table style="border-collapse:collapse;width:100%;margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0">
-                            <tr>
-                                <td style="padding:10px 12px;font-weight:bold;width:160px">Login email</td>
-                                <td style="padding:10px 12px">{$email}</td>
-                            </tr>
-                            <tr>
-                                <td style="padding:10px 12px;font-weight:bold">One-time password</td>
-                                <td style="padding:10px 12px;font-family:Consolas,monospace;font-size:16px">{$password}</td>
-                            </tr>
-                        </table>
-                        <p>Use the button below to sign in. For security, the system will ask you to create a new password before continuing.</p>
-                        <p style="margin:24px 0">
-                            <a href="{$url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Log in to Corevia</a>
-                        </p>
-                        <p style="font-size:13px;color:#64748b">If the button does not open, copy this link into your browser:<br>{$url}</p>
-                        <p style="margin-bottom:0">Kind regards,<br>{$vendor}</p>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
+        $body = <<<HTML
+            <p style="margin-top:0">Hello {$name},</p>
+            <p>Your administrator account for <strong>{$company}</strong> has been created on {$product}.</p>
+            <table style="border-collapse:collapse;width:100%;margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0">
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold;width:170px">Login email</td>
+                    <td style="padding:10px 12px">{$email}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold">One-time password</td>
+                    <td style="padding:10px 12px;font-family:Consolas,monospace;font-size:16px">{$password}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold">Login link</td>
+                    <td style="padding:10px 12px"><a href="{$url}">{$url}</a></td>
+                </tr>
+            </table>
+            <p>For security, this is a temporary password. The system will ask you to create a new private password before continuing.</p>
+            <p style="margin:24px 0">
+                <a href="{$url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Log in to Corevia</a>
+            </p>
+            <p style="font-size:13px;color:#64748b">If the button does not open, copy the login link above into your browser.</p>
         HTML;
+
+        return corevia_email_shell('Welcome to ' . app_product_name(), 'Your company account is ready', $body);
     }
 
     private function platformEmailSettings(): array
     {
         $defaults = [
-            'email_notifications_enabled' => '1',
-            'smtp_from_email' => 'info@stonesoftzambia.com',
-            'smtp_from_name' => app_vendor_name(),
+            ...corevia_default_mail_settings(),
         ];
 
         try {

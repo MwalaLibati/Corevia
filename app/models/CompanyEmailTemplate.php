@@ -57,25 +57,11 @@ class CompanyEmailTemplate
         $template = $this->template($type);
         $message = $this->paragraphHtml($this->renderText((string) $template['body'], $tokens));
         $signature = $this->paragraphHtml($this->renderText($this->settings->value('email_signature_body', $this->defaultSignature()), $tokens));
-        $company = htmlspecialchars((string) ($tokens['company_name'] ?? app_product_name()), ENT_QUOTES, 'UTF-8');
+        $company = (string) ($tokens['company_name'] ?? app_product_name());
+        $title = $type === 'payslip' ? 'Payslip Available' : 'Contract Available';
+        $intro = $company . ' official HR & payroll notification';
 
-        return <<<HTML
-        <html><body style="font-family:Arial,sans-serif;color:#1f2937;background:#f8fafc;padding:24px">
-            <div style="max-width:680px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-                <div style="background:#1a3a2a;color:#fff;padding:18px 22px">
-                    <h2 style="margin:0;font-size:20px">{$company}</h2>
-                    <div style="opacity:.85;font-size:13px">Official HR & Payroll Communication</div>
-                </div>
-                <div style="padding:22px;line-height:1.6">
-                    {$message}
-                    <div style="border-top:1px solid #e5e7eb;margin-top:22px;padding-top:16px;color:#334155">
-                        {$signature}
-                    </div>
-                    <p style="font-size:12px;color:#64748b;margin-top:18px">This email was sent by {$company} through Corevia HR & Payroll.</p>
-                </div>
-            </div>
-        </body></html>
-        HTML;
+        return corevia_email_shell($title, $intro, $message . '<div style="border-top:1px solid #e5e7eb;margin-top:22px;padding-top:16px;color:#334155">' . $signature . '</div>');
     }
 
     public function renderText(string $text, array $tokens): string
@@ -121,7 +107,7 @@ class CompanyEmailTemplate
 
     public function defaultSignature(): string
     {
-        return "Regards,\n{{company_name}}\n{{company_phone}}\n{{company_email}}";
+        return "Kind regards,\n{{company_name}}\n{{company_phone}}\n{{company_email}}";
     }
 
     private function defaultSubject(string $type): string

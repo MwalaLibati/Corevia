@@ -1114,13 +1114,18 @@ class EmployeeController extends Controller
         $employeeNumber = (string) ($employee['employee_number'] ?? '');
         $loginUrl = public_url('portal/login');
 
-        $html = '<p>Hello ' . e($employeeName) . ',</p>'
+        $html = corevia_email_shell(
+            'Employee Portal Access',
+            $companyName . ' self-service portal',
+            '<p style="margin-top:0">Hello ' . e($employeeName) . ',</p>'
             . '<p>Your employee self-service portal account for <strong>' . e($companyName) . '</strong> has been created.</p>'
-            . '<p><strong>Portal URL:</strong> <a href="' . e($loginUrl) . '">' . e($loginUrl) . '</a><br>'
-            . '<strong>Employee Number:</strong> ' . e($employeeNumber) . '<br>'
-            . '<strong>One-time Password:</strong> ' . e($temporaryPassword) . '</p>'
-            . '<p>This password expires in 72 hours and must be changed when you first sign in.</p>'
-            . '<p>Regards,<br>' . e($companyName) . '</p>';
+            . '<table style="border-collapse:collapse;width:100%;margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0">'
+            . '<tr><td style="padding:10px 12px;font-weight:bold;width:170px">Employee number</td><td style="padding:10px 12px">' . e($employeeNumber) . '</td></tr>'
+            . '<tr><td style="padding:10px 12px;font-weight:bold">One-time password</td><td style="padding:10px 12px;font-family:Consolas,monospace;font-size:16px">' . e($temporaryPassword) . '</td></tr>'
+            . '<tr><td style="padding:10px 12px;font-weight:bold">Portal link</td><td style="padding:10px 12px"><a href="' . e($loginUrl) . '">' . e($loginUrl) . '</a></td></tr>'
+            . '</table>'
+            . '<p>This is a temporary password and must be changed when you first sign in.</p>'
+        );
 
         $mailer = new MailService($this->employeePortalEmailSettings());
         $sent = $mailer->send($email, $employeeName, 'Your Corevia Employee Portal Access', $html);
@@ -1169,9 +1174,7 @@ class EmployeeController extends Controller
             }
         }
 
-        $settings['smtp_from_email'] = $settings['smtp_from_email'] ?? 'info@stonesoftzambia.com';
-        $settings['smtp_from_name'] = $settings['smtp_from_name'] ?? app_product_name();
-        $settings['email_notifications_enabled'] = $settings['email_notifications_enabled'] ?? '1';
+        $settings = array_merge(corevia_default_mail_settings(), $settings);
 
         return $settings;
     }
