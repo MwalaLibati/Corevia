@@ -11,6 +11,13 @@ if (($_POST['token'] ?? $_GET['token'] ?? '') !== SETUP_TOKEN) {
     exit;
 }
 
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
+set_exception_handler(static function (Throwable $e): void {
+    http_response_code(500);
+    echo 'ERROR: ' . $e->getMessage();
+});
+
 spl_autoload_register(static function (string $className): void {
     $paths = [
         BASE_PATH . '/app/controllers/' . $className . '.php',
