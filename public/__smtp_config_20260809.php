@@ -34,7 +34,6 @@ spl_autoload_register(static function (string $className): void {
 
 require BASE_PATH . '/helpers/common.php';
 require BASE_PATH . '/config/app.php';
-require BASE_PATH . '/config/database.php';
 require BASE_PATH . '/core/SecretBox.php';
 require BASE_PATH . '/core/MailService.php';
 
@@ -57,18 +56,10 @@ $settings = [
     'smtp_hr_email' => 'corevia@stonesoftzambia.com',
 ];
 
-foreach ($settings as $key => $value) {
-    $find = db()->prepare('SELECT id FROM settings WHERE company_id IS NULL AND setting_key = :setting_key LIMIT 1');
-    $find->execute(['setting_key' => $key]);
-    $existingId = (int) ($find->fetchColumn() ?: 0);
-
-    if ($existingId > 0) {
-        db()->prepare('UPDATE settings SET setting_value = :setting_value WHERE id = :id')
-            ->execute(['setting_value' => $value, 'id' => $existingId]);
-    } else {
-        db()->prepare('INSERT INTO settings (company_id, setting_key, setting_value) VALUES (NULL, :setting_key, :setting_value)')
-            ->execute(['setting_key' => $key, 'setting_value' => $value]);
-    }
+$export = var_export(['mail' => $settings], true);
+$mailLocal = BASE_PATH . '/config/mail.local.php';
+if (file_put_contents($mailLocal, "<?php\n\ndeclare(strict_types=1);\n\nreturn {$export};\n") === false) {
+    throw new RuntimeException('Failed to write server-local mail config.');
 }
 
 $recipients = [

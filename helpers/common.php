@@ -193,8 +193,17 @@ function corevia_mail_settings(?int $companyId = null): array
         }
     }
 
-    if (isset($settings['smtp_password']) && class_exists('SecretBox')) {
-        $settings['smtp_password'] = SecretBox::decryptOrPlain((string) $settings['smtp_password']);
+    $localMailFile = defined('BASE_PATH') ? BASE_PATH . '/config/mail.local.php' : '';
+    if ($localMailFile !== '' && is_file($localMailFile)) {
+        $localConfig = require $localMailFile;
+        $localMail = is_array($localConfig) ? ($localConfig['mail'] ?? $localConfig) : [];
+        if (is_array($localMail)) {
+            foreach ($localMail as $key => $value) {
+                if ($value !== null && (string) $value !== '') {
+                    $settings[(string) $key] = (string) $value;
+                }
+            }
+        }
     }
 
     $serverFile = defined('BASE_PATH') ? BASE_PATH . '/config/server.php' : '';
@@ -208,6 +217,10 @@ function corevia_mail_settings(?int $companyId = null): array
                 }
             }
         }
+    }
+
+    if (isset($settings['smtp_password']) && class_exists('SecretBox')) {
+        $settings['smtp_password'] = SecretBox::decryptOrPlain((string) $settings['smtp_password']);
     }
 
     return $settings;
