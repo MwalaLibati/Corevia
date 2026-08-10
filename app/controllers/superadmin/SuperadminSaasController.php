@@ -150,8 +150,16 @@ class SuperadminSaasController extends Controller
         $stmt = $db->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid');
         $stmt->execute(['cid' => (int) $change['company_id']]);
         $employeeCount = (int) $stmt->fetchColumn();
+        $adminStmt = $db->prepare(
+            'SELECT COUNT(DISTINCT m.user_id)
+             FROM company_user_memberships m
+             JOIN users u ON u.id = m.user_id AND u.is_active = 1
+             WHERE m.company_id = :cid AND m.is_active = 1'
+        );
+        $adminStmt->execute(['cid' => (int) $change['company_id']]);
+        $billableSeats = $employeeCount + (int) $adminStmt->fetchColumn();
         $months = (string) $change['billing_cycle'] === 'Monthly' ? 1 : 12;
-        $price = ((string) $change['billing_model'] === 'flat' ? (float) $change['monthly_rate'] : (float) $change['monthly_rate'] * $employeeCount) * $months;
+        $price = ((string) $change['billing_model'] === 'flat' ? (float) $change['monthly_rate'] : (float) $change['monthly_rate'] * $billableSeats) * $months;
         $startsAt = (string) $change['effective_date'];
         $endsAt = date('Y-m-d', strtotime($startsAt . " +{$months} months"));
 
@@ -169,7 +177,7 @@ class SuperadminSaasController extends Controller
                 'plan' => (string) $change['requested_plan'],
                 'billing_model' => (string) $change['billing_model'],
                 'price' => $price,
-                'employee_count' => $employeeCount,
+                'employee_count' => $billableSeats,
                 'monthly_rate' => (float) $change['monthly_rate'],
                 'currency' => (string) ($targetPlan['currency'] ?? 'ZMW'),
                 'billing_cycle' => (string) $change['billing_cycle'],

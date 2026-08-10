@@ -58,8 +58,8 @@
                     <tr>
                         <th>Company</th>
                         <th>Plan</th>
-                        <th class="text-center">Emp @ Billing</th>
-                        <th class="text-center">Current Emp</th>
+                        <th class="text-center">Seats @ Billing</th>
+                        <th class="text-center">Current Seats</th>
                         <th class="text-end">Monthly</th>
                         <th class="text-end">Bill</th>
                         <th>Period</th>
@@ -73,6 +73,8 @@
                 <?php else: foreach ($subscriptions as $s):
                     $billedEmp = (int) $s['employee_count'];
                     $currentEmp = (int) $s['current_emp_count'];
+                    $currentAdmins = (int) ($s['current_admin_count'] ?? 0);
+                    $currentSeats = $currentEmp + $currentAdmins;
                     $monthlyRate = (float) $s['monthly_rate'];
                     $billingModel = (string) ($s['billing_model'] ?? 'per_user');
                     $monthlyBill = $billingModel === 'flat' ? $monthlyRate : $billedEmp * $monthlyRate;
@@ -89,13 +91,14 @@
                     </td>
                     <td>
                         <span class="badge bg-secondary"><?= e((string)$s['plan']) ?></span>
-                        <div class="text-muted" style="font-size:.68rem"><?= $billingModel === 'flat' ? 'Flat' : 'Per user' ?></div>
+                        <div class="text-muted" style="font-size:.68rem"><?= $billingModel === 'flat' ? 'Flat' : 'Per seat' ?></div>
                     </td>
                     <td class="text-center"><?= $billedEmp ?></td>
                     <td class="text-center">
-                        <?= $currentEmp ?>
-                        <?php if ($billingModel !== 'flat' && $currentEmp > $billedEmp): ?>
-                            <span title="More employees than last billed" class="text-warning"><i class="bi bi-arrow-up-circle-fill"></i></span>
+                        <?= $currentSeats ?>
+                        <div class="text-muted" style="font-size:.65rem"><?= $currentEmp ?> emp / <?= $currentAdmins ?> admin</div>
+                        <?php if ($billingModel !== 'flat' && $currentSeats > $billedEmp): ?>
+                            <span title="More billable seats than last billed" class="text-warning"><i class="bi bi-arrow-up-circle-fill"></i></span>
                         <?php endif; ?>
                     </td>
                     <td class="text-end"><?= e($currency) ?> <?= number_format($monthlyBill, 0) ?></td>

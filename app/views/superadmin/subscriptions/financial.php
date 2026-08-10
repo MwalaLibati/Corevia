@@ -62,7 +62,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Company</th>
-                                <th class="text-center">Employees</th>
+                                <th class="text-center">Billable Seats</th>
                                 <th>Model</th>
                                 <th class="text-end">Monthly</th>
                                 <th class="text-end">Bill</th>
@@ -77,13 +77,15 @@
                         $grandEmp = 0;
                         foreach ($perCompany as $c):
                             $emp = (int) $c['emp_count'];
+                            $admins = (int) ($c['admin_count'] ?? 0);
+                            $seats = $emp + $admins;
                             $model = (string) ($c['billing_model'] ?? 'per_user');
                             $rate = (float) ($c['monthly_rate'] ?? 0);
-                            $monthlyBill = $model === 'flat' ? $rate : $emp * $rate;
+                            $monthlyBill = $model === 'flat' ? $rate : $seats * $rate;
                             $bill = (float) ($c['annual_bill'] ?? 0);
                             $grandBill += $bill;
                             $grandMonthly += $monthlyBill;
-                            $grandEmp += $emp;
+                            $grandEmp += $seats;
                             $subStatus = $c['sub_status'] ?? null;
                             $daysLeft = $c['ends_at'] ? (int) ceil((strtotime((string)$c['ends_at']) - time()) / 86400) : null;
                         ?>
@@ -92,8 +94,11 @@
                                 <div class="fw-semibold"><?= e((string)$c['name']) ?></div>
                                 <code style="font-size:.68rem"><?= e((string)$c['slug']) ?></code>
                             </td>
-                            <td class="text-center fw-bold"><?= $emp ?></td>
-                            <td><?= $model === 'flat' ? 'Flat' : 'Per user' ?></td>
+                            <td class="text-center fw-bold">
+                                <?= $seats ?>
+                                <div class="text-muted fw-normal" style="font-size:.65rem"><?= $emp ?> emp / <?= $admins ?> admin</div>
+                            </td>
+                            <td><?= $model === 'flat' ? 'Flat' : 'Per seat' ?></td>
                             <td class="text-end">ZMW <?= number_format($monthlyBill, 2) ?></td>
                             <td class="text-end fw-bold text-success">ZMW <?= number_format($bill, 2) ?></td>
                             <td>

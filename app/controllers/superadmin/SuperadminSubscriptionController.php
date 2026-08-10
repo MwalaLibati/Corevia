@@ -12,7 +12,11 @@ class SuperadminSubscriptionController extends Controller
 
         $subscriptions = $db->query(
             "SELECT s.*, c.name AS company_name, c.slug,
-                    (SELECT COUNT(*) FROM employees e WHERE e.company_id = s.company_id) AS current_emp_count
+                    (SELECT COUNT(*) FROM employees e WHERE e.company_id = s.company_id) AS current_emp_count,
+                    (SELECT COUNT(DISTINCT m.user_id)
+                     FROM company_user_memberships m
+                     JOIN users u ON u.id = m.user_id AND u.is_active = 1
+                     WHERE m.company_id = s.company_id AND m.is_active = 1) AS current_admin_count
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
              ORDER BY s.status ASC, s.ends_at ASC"
@@ -130,7 +134,11 @@ class SuperadminSubscriptionController extends Controller
 
         $companies = $db->query(
             "SELECT c.id, c.name, c.slug,
-                    (SELECT COUNT(*) FROM employees e WHERE e.company_id = c.id) AS emp_count
+                    (SELECT COUNT(*) FROM employees e WHERE e.company_id = c.id) AS emp_count,
+                    (SELECT COUNT(DISTINCT m.user_id)
+                     FROM company_user_memberships m
+                     JOIN users u ON u.id = m.user_id AND u.is_active = 1
+                     WHERE m.company_id = c.id AND m.is_active = 1) AS admin_count
              FROM companies c WHERE c.is_active = 1 ORDER BY c.name ASC"
         )->fetchAll();
 
@@ -185,9 +193,8 @@ class SuperadminSubscriptionController extends Controller
         }
 
         $db = db();
-        $stmt = $db->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid');
-        $stmt->execute(['cid' => $companyId]);
-        $empCount = (int) $stmt->fetchColumn();
+        $seatSummary = $this->billableSeatSummary($companyId);
+        $empCount = $seatSummary['total'];
 
         $billingModel = $billingModel === 'flat' ? 'flat' : 'per_user';
         $rate = $rateOverride !== '' ? $this->money($rateOverride) : (float) $planRow['default_monthly_rate'];
@@ -239,9 +246,8 @@ class SuperadminSubscriptionController extends Controller
         $sub = $this->findOrFail((int) $id);
         $db = db();
 
-        $stmt = $db->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid');
-        $stmt->execute(['cid' => $sub['company_id']]);
-        $empCount = (int) $stmt->fetchColumn();
+        $seatSummary = $this->billableSeatSummary((int) $sub['company_id']);
+        $empCount = $seatSummary['total'];
 
         $rate = (float) $sub['monthly_rate'];
         $months = $sub['billing_cycle'] === 'Monthly' ? 1 : 12;
@@ -305,6 +311,10 @@ class SuperadminSubscriptionController extends Controller
         $perCompany = db()->query(
             "SELECT c.id, c.name, c.slug, c.is_active,
                     (SELECT COUNT(*) FROM employees e WHERE e.company_id = c.id) AS emp_count,
+                    (SELECT COUNT(DISTINCT m.user_id)
+                     FROM company_user_memberships m
+                     JOIN users u ON u.id = m.user_id AND u.is_active = 1
+                     WHERE m.company_id = c.id AND m.is_active = 1) AS admin_count,
                     s.price AS annual_bill,
                     s.employee_count AS billed_emp,
                     s.monthly_rate,
@@ -375,6 +385,28 @@ class SuperadminSubscriptionController extends Controller
             'total_companies' => (int) $db->query('SELECT COUNT(*) FROM companies')->fetchColumn(),
             'active_companies' => (int) $db->query('SELECT COUNT(*) FROM companies WHERE is_active=1')->fetchColumn(),
             'rate_per_emp' => $this->defaultMonthlyRate(),
+        ];
+    }
+
+    private function billableSeatSummary(int $companyId): array
+    {
+        $employeeStmt = db()->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid');
+        $employeeStmt->execute(['cid' => $companyId]);
+        $employees = (int) $employeeStmt->fetchColumn();
+
+        $adminStmt = db()->prepare(
+            'SELECT COUNT(DISTINCT m.user_id)
+             FROM company_user_memberships m
+             JOIN users u ON u.id = m.user_id AND u.is_active = 1
+             WHERE m.company_id = :cid AND m.is_active = 1'
+        );
+        $adminStmt->execute(['cid' => $companyId]);
+        $admins = (int) $adminStmt->fetchColumn();
+
+        return [
+            'employees' => $employees,
+            'admins' => $admins,
+            'total' => $employees + $admins,
         ];
     }
 

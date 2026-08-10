@@ -86,13 +86,15 @@
                         $totalEmpAll = 0;
                         foreach ($companies as $c):
                             $emp = (int) $c['employee_count'];
+                            $admins = (int) ($c['user_count'] ?? 0);
+                            $billableSeats = $emp + $admins;
                             $currency = (string) ($c['currency'] ?? 'ZMW');
                             $monthlyRate = (float) ($c['monthly_rate'] ?? 0);
-                            $monthlyBill = (string)($c['billing_model'] ?? 'per_user') === 'flat' ? $monthlyRate : $emp * $monthlyRate;
+                            $monthlyBill = (string)($c['billing_model'] ?? 'per_user') === 'flat' ? $monthlyRate : $billableSeats * $monthlyRate;
                             $bill = (float) ($c['sub_price'] ?? 0);
                             $totalMonthly += $monthlyBill;
                             $totalBill += $bill;
-                            $totalEmpAll += $emp;
+                            $totalEmpAll += $billableSeats;
                             $daysLeft = $c['sub_ends_at'] ? (int) ceil((strtotime((string)$c['sub_ends_at']) - time()) / 86400) : null;
                             $expClass = ($daysLeft !== null && $daysLeft < 30) ? 'text-danger fw-bold' : (($daysLeft !== null && $daysLeft < 60) ? 'text-warning' : '');
                         ?>
@@ -101,7 +103,10 @@
                                 <div class="fw-semibold"><?= e((string)$c['name']) ?></div>
                                 <div class="text-muted" style="font-size:.7rem"><code><?= e((string)$c['slug']) ?></code></div>
                             </td>
-                            <td class="text-center fw-semibold"><?= $emp ?></td>
+                            <td class="text-center fw-semibold">
+                                <?= $billableSeats ?>
+                                <div class="text-muted" style="font-size:.65rem"><?= $emp ?> emp / <?= $admins ?> admin</div>
+                            </td>
                             <td class="text-end"><?= e($currency) ?> <?= number_format($monthlyBill, 0) ?></td>
                             <td class="text-end fw-semibold text-success"><?= e($currency) ?> <?= number_format($bill, 0) ?></td>
                             <td>

@@ -155,13 +155,19 @@ class SuperadminCompanyController extends Controller
             $stmt->execute(['client_entity_id' => $clientEntityId, 'name' => $name, 'slug' => $slug, 'email' => $email, 'phone' => $phone, 'plan' => $plan]);
             $companyId = (int) $db->lastInsertId();
 
+            $initialBillableSeats = 1;
+            $initialMonths = $billingCycle === 'Monthly' ? 1 : 12;
+            $initialPrice = ($billingModel === 'flat' ? $monthlyRate : $monthlyRate * $initialBillableSeats) * $initialMonths;
+
             $db->prepare(
                 "INSERT INTO subscriptions (company_id, plan, billing_model, price, employee_count, monthly_rate, currency, billing_cycle, starts_at, ends_at, status, notes)
-                 VALUES (:cid, :plan, :billing_model, 0, 0, :rate, :currency, :cycle, CURDATE(), :end, 'Active', :notes)"
+                 VALUES (:cid, :plan, :billing_model, :price, :emp, :rate, :currency, :cycle, CURDATE(), :end, 'Active', :notes)"
             )->execute([
                 'cid' => $companyId,
                 'plan' => $plan,
                 'billing_model' => $billingModel,
+                'price' => $initialPrice,
+                'emp' => $initialBillableSeats,
                 'rate' => $monthlyRate,
                 'currency' => (string) $planRow['currency'],
                 'cycle' => $billingCycle,
@@ -240,6 +246,8 @@ class SuperadminCompanyController extends Controller
             'company' => $company,
             'roles'   => $roleStmt->fetchAll(),
             'memberships' => $this->companyMemberships((int) $id),
+            'activeUsers' => $this->activeUserOptions((int) $id),
+            'billingSeats' => $this->billableSeatSummary((int) $id),
             'csrf'    => Session::csrfToken(),
             'flash'   => Session::flash('error'),
             'success' => Session::flash('success'),
@@ -290,6 +298,106 @@ class SuperadminCompanyController extends Controller
         redirect('superadmin/company/index');
     }
 
+    public function createAdmin(string $id = ''): void
+    {
+        require_superadmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { redirect('superadmin/company/index'); }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/company/edit/' . (int) $id);
+        }
+
+        $company = $this->findOrFail((int) $id);
+        $fullName = trim((string) $this->input('full_name', ''));
+        $email = strtolower(trim((string) $this->input('email', '')));
+        $roleId = (int) $this->input('role_id', 0);
+        $oneTimePassword = trim((string) $this->input('one_time_password', ''));
+
+        if ($fullName === '' || $email === '' || $roleId <= 0) {
+            Session::flash('error', 'Admin name, email, and role are required.');
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Session::flash('error', 'Please enter a valid admin email address.');
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        if ($oneTimePassword !== '' && !$this->isStrongTemporaryPassword($oneTimePassword)) {
+            Session::flash('error', 'One-time password must be at least 10 characters and include uppercase, lowercase, a number, and a special character.');
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        $roleStmt = db()->prepare('SELECT id FROM roles WHERE id = :id AND (company_id IS NULL OR company_id = :cid) LIMIT 1');
+        $roleStmt->execute(['id' => $roleId, 'cid' => (int) $company['id']]);
+        if (!$roleStmt->fetch()) {
+            Session::flash('error', 'Invalid role selected.');
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        $exists = db()->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
+        $exists->execute(['email' => $email]);
+        if ($exists->fetch()) {
+            Session::flash('error', 'A user with that email already exists. Use the existing user access form instead.');
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        $tempPassword = $oneTimePassword !== '' ? $oneTimePassword : $this->generateTemporaryPassword();
+        $db = db();
+
+        try {
+            $db->beginTransaction();
+
+            $userStmt = $db->prepare(
+                'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
+                 VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
+            );
+            $userStmt->execute([
+                'company_id' => (int) $company['id'],
+                'full_name' => $fullName,
+                'email' => $email,
+                'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
+            ]);
+            $userId = (int) $db->lastInsertId();
+
+            $db->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)')
+                ->execute(['uid' => $userId, 'rid' => $roleId]);
+
+            $db->prepare(
+                'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
+                 VALUES (:cid, :uid, :rid, 0, 1)'
+            )->execute(['cid' => (int) $company['id'], 'uid' => $userId, 'rid' => $roleId]);
+
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Session::flash('error', 'Admin user could not be created: ' . $e->getMessage());
+            redirect('superadmin/company/edit/' . (int) $company['id']);
+        }
+
+        AuditLog::recordPlatform('created_company_admin', 'Created company admin ' . $email, 'Company', (int) $company['id']);
+        $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $fullName, $email, $tempPassword);
+
+        $_SESSION['_new_company_admin_password'] = [
+            'company_id' => (int) $company['id'],
+            'email' => $email,
+            'password' => $tempPassword,
+            'email_sent' => $emailResult['sent'],
+            'email_error' => $emailResult['error'],
+        ];
+
+        $message = 'Admin user created. The one-time password is shown below and the user must change it after signing in.';
+        if ($emailResult['sent']) {
+            $message .= ' Login instructions were emailed to ' . $email . '.';
+        } elseif ($emailResult['error'] !== '') {
+            $message .= ' Mail error: ' . $emailResult['error'];
+        }
+        Session::flash('success', $message);
+        redirect('superadmin/company/edit/' . (int) $company['id']);
+    }
+
     public function grantAccess(string $id = ''): void
     {
         require_superadmin();
@@ -300,7 +408,7 @@ class SuperadminCompanyController extends Controller
         }
 
         $company = $this->findOrFail((int) $id);
-        $email = trim((string) $this->input('email', ''));
+        $email = strtolower(trim((string) $this->input('email', '')));
         $roleId = (int) $this->input('role_id', 0);
 
         if ($email === '' || $roleId <= 0) {
@@ -324,11 +432,22 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/edit/' . (int) $company['id']);
         }
 
-        db()->prepare(
-            'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
-             VALUES (:cid, :uid, :rid, 0, 1)
-             ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), is_active = 1'
-        )->execute(['cid' => (int) $company['id'], 'uid' => (int) $user['id'], 'rid' => $roleId]);
+        $membershipStmt = db()->prepare(
+            'SELECT id FROM company_user_memberships WHERE company_id = :cid AND user_id = :uid LIMIT 1'
+        );
+        $membershipStmt->execute(['cid' => (int) $company['id'], 'uid' => (int) $user['id']]);
+        $membershipId = (int) ($membershipStmt->fetchColumn() ?: 0);
+
+        if ($membershipId > 0) {
+            db()->prepare(
+                'UPDATE company_user_memberships SET role_id = :rid, is_active = 1 WHERE id = :id'
+            )->execute(['rid' => $roleId, 'id' => $membershipId]);
+        } else {
+            db()->prepare(
+                'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
+                 VALUES (:cid, :uid, :rid, 0, 1)'
+            )->execute(['cid' => (int) $company['id'], 'uid' => (int) $user['id'], 'rid' => $roleId]);
+        }
 
         AuditLog::recordPlatform('granted_access', 'Granted company access to ' . $email, 'Company', (int) $company['id']);
         Session::flash('success', 'Company access granted to ' . $email . '.');
@@ -535,6 +654,57 @@ class SuperadminCompanyController extends Controller
         $stmt->execute(['cid' => $companyId]);
 
         return $stmt->fetchAll();
+    }
+
+    private function activeUserOptions(int $companyId): array
+    {
+        $stmt = db()->prepare(
+            'SELECT u.id, u.full_name, u.email,
+                    CASE WHEN m.id IS NULL THEN 0 ELSE 1 END AS has_access
+             FROM users u
+             LEFT JOIN company_user_memberships m
+                ON m.user_id = u.id AND m.company_id = :cid AND m.is_active = 1
+             WHERE u.is_active = 1
+             ORDER BY u.full_name ASC, u.email ASC
+             LIMIT 500'
+        );
+        $stmt->execute(['cid' => $companyId]);
+
+        return $stmt->fetchAll();
+    }
+
+    private function billableSeatSummary(int $companyId): array
+    {
+        $employees = $this->countActiveEmployees($companyId);
+        $admins = $this->countActiveCompanyUsers($companyId);
+
+        return [
+            'employees' => $employees,
+            'admins' => $admins,
+            'total' => $employees + $admins,
+        ];
+    }
+
+    private function countActiveEmployees(int $companyId): int
+    {
+        $archivedColumn = $this->columnExists('employees', 'archived_at') ? ' AND archived_at IS NULL' : '';
+        $stmt = db()->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid' . $archivedColumn);
+        $stmt->execute(['cid' => $companyId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    private function countActiveCompanyUsers(int $companyId): int
+    {
+        $stmt = db()->prepare(
+            'SELECT COUNT(DISTINCT m.user_id)
+             FROM company_user_memberships m
+             JOIN users u ON u.id = m.user_id AND u.is_active = 1
+             WHERE m.company_id = :cid AND m.is_active = 1'
+        );
+        $stmt->execute(['cid' => $companyId]);
+
+        return (int) $stmt->fetchColumn();
     }
 
     private function ensureCompanySuperAdminRole(int $companyId): int
@@ -774,5 +944,16 @@ class SuperadminCompanyController extends Controller
         if ((int) $stmt->fetchColumn() === 0) {
             db()->exec("ALTER TABLE companies ADD COLUMN {$column} {$definition}");
         }
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = db()->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => $table, 'column' => $column]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 }

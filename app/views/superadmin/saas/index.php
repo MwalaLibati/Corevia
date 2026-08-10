@@ -91,14 +91,15 @@ $plans = $plans ?? [];
                         <thead class="table-light"><tr><th>Company</th><th class="text-center">Employees</th><th class="text-center">Users</th><th class="text-center">Payroll</th><th class="text-center">Contracts</th><th class="text-end">Monthly</th><th></th></tr></thead>
                         <tbody>
                         <?php foreach ($usage as $row):
+                            $billableSeats = (int)($row['employee_count'] ?? 0) + (int)($row['user_count'] ?? 0);
                             $monthly = (string)($row['billing_model'] ?? 'per_user') === 'flat'
                                 ? (float)($row['monthly_rate'] ?? 0)
-                                : (float)($row['monthly_rate'] ?? 0) * (int)($row['employee_count'] ?? 0);
+                                : (float)($row['monthly_rate'] ?? 0) * $billableSeats;
                         ?>
                         <tr>
                             <td><strong><?= e((string)$row['name']) ?></strong><div class="text-muted small"><?= e((string)($row['plan'] ?? $row['subscription_plan'] ?? 'No active plan')) ?></div></td>
-                            <td class="text-center"><?= (int)$row['employee_count'] ?><?php if ((int)($row['employee_count'] ?? 0) > (int)($row['billed_employees'] ?? 0) && !empty($row['subscription_id'])): ?> <i class="bi bi-arrow-up-circle-fill text-warning" title="Usage above billed employees"></i><?php endif; ?></td>
-                            <td class="text-center"><?= (int)$row['user_count'] ?></td>
+                            <td class="text-center"><?= (int)$row['employee_count'] ?></td>
+                            <td class="text-center"><?= (int)$row['user_count'] ?><?php if ($billableSeats > (int)($row['billed_employees'] ?? 0) && !empty($row['subscription_id'])): ?> <i class="bi bi-arrow-up-circle-fill text-warning" title="Usage above billed seats"></i><?php endif; ?></td>
                             <td class="text-center"><?= (int)$row['payroll_runs'] ?></td>
                             <td class="text-center"><?= (int)$row['contracts'] ?></td>
                             <td class="text-end"><?= e((string)($row['currency'] ?? 'ZMW')) ?> <?= number_format($monthly, 2) ?></td>

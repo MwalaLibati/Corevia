@@ -26,9 +26,10 @@
                             <?php foreach ($companies as $co): ?>
                             <option value="<?= (int)$co['id'] ?>"
                                     data-emp="<?= (int)$co['emp_count'] ?>"
+                                    data-admin="<?= (int)($co['admin_count'] ?? 0) ?>"
                                     data-name="<?= e((string)$co['name']) ?>"
                                     <?= ($selected && (int)$selected['id'] === (int)$co['id']) ? 'selected' : '' ?>>
-                                <?= e((string)$co['name']) ?> (<?= (int)$co['emp_count'] ?> employees)
+                                <?= e((string)$co['name']) ?> (<?= (int)$co['emp_count'] ?> employees, <?= (int)($co['admin_count'] ?? 0) ?> admins)
                             </option>
                             <?php endforeach; ?>
                         </select>
@@ -52,7 +53,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Billing Model</label>
                             <select name="billing_model" id="billingModel" class="form-select">
-                                <option value="per_user" selected>Per user / employee</option>
+                                <option value="per_user" selected>Per billable seat</option>
                                 <option value="flat">Flat monthly fee</option>
                             </select>
                         </div>
@@ -167,16 +168,18 @@
         }
 
         var emp = parseInt(opt.getAttribute('data-emp') || '0', 10);
+        var admin = parseInt(opt.getAttribute('data-admin') || '0', 10);
+        var seats = emp + admin;
         var months = cycleSelect.value === 'Monthly' ? 1 : 12;
         var currentRate = rate();
-        var model = billingModel.value === 'flat' ? 'Flat monthly fee' : 'Per user / employee';
-        var monthly = billingModel.value === 'flat' ? currentRate : emp * currentRate;
+        var model = billingModel.value === 'flat' ? 'Flat monthly fee' : 'Per billable seat';
+        var monthly = billingModel.value === 'flat' ? currentRate : seats * currentRate;
         var total = monthly * months;
 
         document.getElementById('noSelection').style.display = 'none';
         document.getElementById('billingPreview').style.display = '';
         document.getElementById('previewCompany').textContent = opt.getAttribute('data-name') || '';
-        document.getElementById('previewEmpCount').textContent = emp + ' active employees';
+        document.getElementById('previewEmpCount').textContent = emp + ' active employees + ' + admin + ' admin users = ' + seats + ' billable seats';
         document.getElementById('previewRate').textContent = currency() + ' ' + currentRate.toLocaleString('en-ZM', {minimumFractionDigits:2, maximumFractionDigits:2});
         document.getElementById('previewModel').textContent = model;
         document.getElementById('previewPeriod').textContent = months + ' month' + (months > 1 ? 's' : '');

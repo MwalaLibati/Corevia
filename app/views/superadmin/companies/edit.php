@@ -106,33 +106,88 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm mt-4" style="max-width:820px">
+<div class="card border-0 shadow-sm mt-4" style="max-width:1040px">
     <div class="card-body p-4">
-        <div class="d-flex align-items-center justify-content-between mb-3">
+        <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
             <div>
-                <h5 class="mb-1">Company Access</h5>
-                <p class="text-muted mb-0" style="font-size:.86rem">Grant an existing login access to this company with a company-specific role.</p>
+                <h5 class="mb-1">Company Administrators & Access</h5>
+                <p class="text-muted mb-0" style="font-size:.86rem">Add a new administrator or link an existing user to this company with a company-specific role.</p>
+            </div>
+            <?php $seats = $billingSeats ?? ['employees' => 0, 'admins' => 0, 'total' => 0]; ?>
+            <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-primary-subtle text-primary-emphasis px-3 py-2"><?= (int) $seats['employees'] ?> employee seat(s)</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis px-3 py-2"><?= (int) $seats['admins'] ?> admin seat(s)</span>
+                <span class="badge bg-success-subtle text-success-emphasis px-3 py-2"><?= (int) $seats['total'] ?> billable seat(s)</span>
             </div>
         </div>
 
-        <form method="post" action="<?= e(base_url('superadmin/company/grantAccess/' . (string) $company['id'])) ?>" class="row g-2 align-items-end mb-4">
-            <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
-            <div class="col-md-6">
-                <label class="form-label fw-semibold">Existing User Email</label>
-                <input type="email" name="email" class="form-control" placeholder="user@example.com" required>
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h6 class="fw-bold mb-2">Add Existing User</h6>
+                    <p class="text-muted small mb-3">Use this when the person already has a Corevia login and should also access this company.</p>
+                    <form method="post" action="<?= e(base_url('superadmin/company/grantAccess/' . (string) $company['id'])) ?>" class="row g-3 align-items-end">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Search User</label>
+                            <input type="email" name="email" class="form-control" list="activeUserOptions" placeholder="Start typing a user email" required>
+                            <datalist id="activeUserOptions">
+                                <?php foreach (($activeUsers ?? []) as $user): ?>
+                                    <option value="<?= e((string) $user['email']) ?>">
+                                        <?= e((string) $user['full_name']) ?><?= ((int) ($user['has_access'] ?? 0) === 1) ? ' - already has access' : '' ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </datalist>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Role in This Company</label>
+                            <select name="role_id" class="form-select" required>
+                                <?php foreach (($roles ?? []) as $role): ?>
+                                    <option value="<?= (int) $role['id'] ?>"><?= e((string) $role['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-outline-primary w-100">Grant Access</button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="col-md-4">
-                <label class="form-label fw-semibold">Role in This Company</label>
-                <select name="role_id" class="form-select" required>
-                    <?php foreach (($roles ?? []) as $role): ?>
-                        <option value="<?= (int) $role['id'] ?>"><?= e((string) $role['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
+            <div class="col-lg-6">
+                <div class="border rounded-3 p-3 h-100">
+                    <h6 class="fw-bold mb-2">Create New Admin</h6>
+                    <p class="text-muted small mb-3">Use this when the person does not yet have a Corevia login. They will be forced to change the one-time password.</p>
+                    <form method="post" action="<?= e(base_url('superadmin/company/createAdmin/' . (string) $company['id'])) ?>" class="row g-3 align-items-end">
+                        <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Full Name</label>
+                            <input type="text" name="full_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Role</label>
+                            <select name="role_id" class="form-select" required>
+                                <?php foreach (($roles ?? []) as $role): ?>
+                                    <option value="<?= (int) $role['id'] ?>"><?= e((string) $role['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">One-Time Password</label>
+                            <input type="text" name="one_time_password" class="form-control" placeholder="Leave blank to auto-generate">
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn text-white" style="background:#7c3aed">
+                                <i class="bi bi-person-plus me-1"></i>Create Admin
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100">Grant</button>
-            </div>
-        </form>
+        </div>
 
         <div class="table-responsive">
             <table class="table table-sm align-middle">

@@ -96,7 +96,13 @@ class SubscriptionInvoice extends Model
         $invoiceNumber = $this->generateInvoiceNumber();
         $issueDate = date('Y-m-d');
         $dueDate = date('Y-m-d', strtotime('+14 days'));
-        $total = (float) ($sub['price'] ?? 0);
+        $billingModel = (string) ($sub['billing_model'] ?? 'per_user');
+        $months = (string) ($sub['billing_cycle'] ?? 'Annual') === 'Monthly' ? 1 : 12;
+        $rate = (float) ($sub['monthly_rate'] ?? 0);
+        $seatSummary = $this->billableSeatSummary((int) $sub['company_id']);
+        $total = $billingModel === 'flat'
+            ? $rate * $months
+            : $rate * (int) $seatSummary['total'] * $months;
         $description = sprintf(
             '%s subscription (%s to %s)',
             (string) ($sub['plan'] ?? 'Subscription'),
@@ -126,15 +132,51 @@ class SubscriptionInvoice extends Model
             ]);
             $invoiceId = (int) $this->db->lastInsertId();
 
-            $this->db->prepare(
+            $lineInsert = $this->db->prepare(
                 "INSERT INTO subscription_invoice_lines (invoice_id, description, quantity, unit_price, line_total)
-                 VALUES (:invoice_id, :description, 1, :unit_price, :line_total)"
-            )->execute([
-                'invoice_id' => $invoiceId,
-                'description' => $description,
-                'unit_price' => $total,
-                'line_total' => $total,
-            ]);
+                 VALUES (:invoice_id, :description, :quantity, :unit_price, :line_total)"
+            );
+
+            if ($billingModel === 'flat') {
+                $lineInsert->execute([
+                    'invoice_id' => $invoiceId,
+                    'description' => $description . ' - flat platform fee',
+                    'quantity' => 1,
+                    'unit_price' => $total,
+                    'line_total' => $total,
+                ]);
+            } else {
+                $periodRate = $rate * $months;
+                if ((int) $seatSummary['employees'] > 0) {
+                    $lineInsert->execute([
+                        'invoice_id' => $invoiceId,
+                        'description' => $description . ' - employee seats',
+                        'quantity' => (int) $seatSummary['employees'],
+                        'unit_price' => $periodRate,
+                        'line_total' => (int) $seatSummary['employees'] * $periodRate,
+                    ]);
+                }
+
+                if ((int) $seatSummary['admins'] > 0) {
+                    $lineInsert->execute([
+                        'invoice_id' => $invoiceId,
+                        'description' => $description . ' - administrator seats',
+                        'quantity' => (int) $seatSummary['admins'],
+                        'unit_price' => $periodRate,
+                        'line_total' => (int) $seatSummary['admins'] * $periodRate,
+                    ]);
+                }
+
+                if ((int) $seatSummary['total'] === 0) {
+                    $lineInsert->execute([
+                        'invoice_id' => $invoiceId,
+                        'description' => $description . ' - no billable seats',
+                        'quantity' => 0,
+                        'unit_price' => $periodRate,
+                        'line_total' => 0,
+                    ]);
+                }
+            }
 
             $this->db->prepare('UPDATE subscriptions SET invoice_id = :invoice_id WHERE id = :id')
                 ->execute(['invoice_id' => $invoiceId, 'id' => $subscriptionId]);
@@ -147,6 +189,28 @@ class SubscriptionInvoice extends Model
             }
             throw $e;
         }
+    }
+
+    private function billableSeatSummary(int $companyId): array
+    {
+        $employeeStmt = $this->db->prepare('SELECT COUNT(*) FROM employees WHERE company_id = :cid');
+        $employeeStmt->execute(['cid' => $companyId]);
+        $employees = (int) $employeeStmt->fetchColumn();
+
+        $adminStmt = $this->db->prepare(
+            'SELECT COUNT(DISTINCT m.user_id)
+             FROM company_user_memberships m
+             JOIN users u ON u.id = m.user_id AND u.is_active = 1
+             WHERE m.company_id = :cid AND m.is_active = 1'
+        );
+        $adminStmt->execute(['cid' => $companyId]);
+        $admins = (int) $adminStmt->fetchColumn();
+
+        return [
+            'employees' => $employees,
+            'admins' => $admins,
+            'total' => $employees + $admins,
+        ];
     }
 
     public function recordPayment(int $invoiceId, float $amount, string $paidAt, string $method, string $reference, string $notes, int $recordedBy): void

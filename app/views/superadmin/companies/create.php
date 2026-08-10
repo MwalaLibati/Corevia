@@ -92,7 +92,7 @@ $selectedEntityId = (int)($old['client_entity_id'] ?? ($selectedClientEntityId ?
                     <label class="form-label fw-semibold">Billing Model</label>
                     <?php $selectedBillingModel = (string)($old['billing_model'] ?? 'per_user'); ?>
                     <select name="billing_model" class="form-select">
-                        <option value="per_user" <?= $selectedBillingModel === 'per_user' ? 'selected' : '' ?>>Per user / employee</option>
+                        <option value="per_user" <?= $selectedBillingModel === 'per_user' ? 'selected' : '' ?>>Per billable seat</option>
                         <option value="flat" <?= $selectedBillingModel === 'flat' ? 'selected' : '' ?>>Flat monthly fee</option>
                     </select>
                 </div>
