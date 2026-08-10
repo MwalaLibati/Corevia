@@ -122,6 +122,7 @@ class SuperadminCompanyController extends Controller
         }
 
         $existingAdmin = $this->findUserByEmail($adminEmail);
+        $platformAdmin = $existingAdmin ? null : $this->findPlatformAdminByEmail($adminEmail);
 
         $planRow = $this->findActiveSubscriptionPlan($plan);
         if (!$planRow) {
@@ -176,13 +177,14 @@ class SuperadminCompanyController extends Controller
                 $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
                 $this->upsertCompanyMembership($companyId, $userId, $roleId, true);
             } else {
+                $adminDisplayName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $adminName) : $adminName;
                 $userStmt = $db->prepare(
                     'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
                      VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
                 );
                 $userStmt->execute([
                     'company_id' => $companyId,
-                    'full_name' => $adminName,
+                    'full_name' => $adminDisplayName,
                     'email' => $adminEmail,
                     'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
                 ]);
@@ -216,7 +218,8 @@ class SuperadminCompanyController extends Controller
                 $message .= ' Mail error: ' . $emailResult['error'];
             }
         } else {
-            $emailResult = $this->sendCompanyWelcomeEmail($name, $adminName, $adminEmail, $tempPassword);
+            $welcomeName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $adminName) : $adminName;
+            $emailResult = $this->sendCompanyWelcomeEmail($name, $welcomeName, $adminEmail, $tempPassword);
 
             $_SESSION['_new_company_admin_password'] = [
                 'company_id' => $companyId,
@@ -227,6 +230,9 @@ class SuperadminCompanyController extends Controller
             ];
 
             $message = "Company '{$name}' created successfully. The admin must change the one-time password after signing in.";
+            if ($platformAdmin) {
+                $message = "Company '{$name}' created successfully. {$adminEmail} exists as a platform admin, so a separate company-login user was created with a one-time password.";
+            }
             if ($emailResult['sent']) {
                 $message .= ' Login instructions were emailed to ' . $adminEmail . '.';
             } else {
@@ -343,6 +349,7 @@ class SuperadminCompanyController extends Controller
         }
 
         $existingUser = $this->findUserByEmail($email);
+        $platformAdmin = $existingUser ? null : $this->findPlatformAdminByEmail($email);
         if ($existingUser && $this->activeMembershipExists((int) $company['id'], (int) $existingUser['id'])) {
             Session::flash('error', 'This user already has access to this company.');
             redirect('superadmin/company/edit/' . (int) $company['id']);
@@ -359,13 +366,14 @@ class SuperadminCompanyController extends Controller
                 $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
                 $this->upsertCompanyMembership((int) $company['id'], $userId, $roleId, false);
             } else {
+                $adminDisplayName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $fullName) : $fullName;
                 $userStmt = $db->prepare(
                     'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
                      VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
                 );
                 $userStmt->execute([
                     'company_id' => (int) $company['id'],
-                    'full_name' => $fullName,
+                    'full_name' => $adminDisplayName,
                     'email' => $email,
                     'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
                 ]);
@@ -397,7 +405,8 @@ class SuperadminCompanyController extends Controller
                 $message .= ' Mail error: ' . $emailResult['error'];
             }
         } else {
-            $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $fullName, $email, $tempPassword);
+            $welcomeName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $fullName) : $fullName;
+            $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $welcomeName, $email, $tempPassword);
 
             $_SESSION['_new_company_admin_password'] = [
                 'company_id' => (int) $company['id'],
@@ -408,6 +417,9 @@ class SuperadminCompanyController extends Controller
             ];
 
             $message = 'Admin user created. The one-time password is shown below and the user must change it after signing in.';
+            if ($platformAdmin) {
+                $message = 'This email exists as a platform admin, so a separate company-login user was created. The one-time password is shown below and must be changed after signing in.';
+            }
             if ($emailResult['sent']) {
                 $message .= ' Login instructions were emailed to ' . $email . '.';
             } elseif ($emailResult['error'] !== '') {
@@ -815,6 +827,19 @@ class SuperadminCompanyController extends Controller
         $row = $stmt->fetch();
 
         return $row ?: null;
+    }
+
+    private function findPlatformAdminByEmail(string $email): ?array
+    {
+        try {
+            $stmt = db()->prepare('SELECT * FROM platform_admins WHERE email = :email AND is_active = 1 LIMIT 1');
+            $stmt->execute(['email' => strtolower(trim($email))]);
+            $row = $stmt->fetch();
+
+            return $row ?: null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function activeMembershipExists(int $companyId, int $userId): bool
