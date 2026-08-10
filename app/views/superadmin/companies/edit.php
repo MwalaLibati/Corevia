@@ -178,6 +178,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">One-Time Password</label>
                             <input type="text" name="one_time_password" class="form-control" placeholder="Leave blank to auto-generate">
+                            <div class="form-text">For an active existing user, entering a password here will reset their company-login password.</div>
                         </div>
                         <div class="col-12">
                             <button type="submit" class="btn text-white" style="background:#7c3aed">

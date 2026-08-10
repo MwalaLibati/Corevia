@@ -137,6 +137,10 @@ class SuperadminCompanyController extends Controller
 
         $db = db();
         $tempPassword = $oneTimePassword !== '' ? $oneTimePassword : $this->generateTemporaryPassword();
+        $shouldIssuePassword = !$existingAdmin
+            || (int) ($existingAdmin['is_active'] ?? 0) !== 1
+            || $this->activeMembershipCount((int) ($existingAdmin['id'] ?? 0)) === 0
+            || $oneTimePassword !== '';
 
         try {
             $clientEntityId = $this->resolveClientEntityId($clientEntityId, $newClientEntityName, $name, $email, $phone);
@@ -174,7 +178,12 @@ class SuperadminCompanyController extends Controller
 
             if ($existingAdmin) {
                 $userId = (int) $existingAdmin['id'];
-                $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                if ($shouldIssuePassword) {
+                    $db->prepare('UPDATE users SET password_hash = :hash, must_change_password = 1, is_active = 1 WHERE id = :id')
+                        ->execute(['hash' => password_hash($tempPassword, PASSWORD_DEFAULT), 'id' => $userId]);
+                } else {
+                    $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                }
                 $this->upsertCompanyMembership($companyId, $userId, $roleId, true);
             } else {
                 $adminDisplayName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $adminName) : $adminName;
@@ -209,9 +218,9 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/create');
         }
 
-        if ($existingAdmin) {
-            $emailResult = $this->sendCompanyAccessLinkedEmail($name, $adminName, $adminEmail);
-            $message = "Company '{$name}' created successfully. Existing user {$adminEmail} was linked as company administrator.";
+        if ($existingAdmin && !$shouldIssuePassword) {
+            $emailResult = $this->sendCompanyAccessLinkedEmail($name, (string) ($existingAdmin['full_name'] ?? $adminName), $adminEmail);
+            $message = "Company '{$name}' created successfully. Existing active user {$adminEmail} was linked as company administrator.";
             if ($emailResult['sent']) {
                 $message .= ' Access notification was emailed.';
             } elseif ($emailResult['error'] !== '') {
@@ -219,6 +228,9 @@ class SuperadminCompanyController extends Controller
             }
         } else {
             $welcomeName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $adminName) : $adminName;
+            if ($existingAdmin) {
+                $welcomeName = (string) ($existingAdmin['full_name'] ?? $adminName);
+            }
             $emailResult = $this->sendCompanyWelcomeEmail($name, $welcomeName, $adminEmail, $tempPassword);
 
             $_SESSION['_new_company_admin_password'] = [
@@ -232,6 +244,8 @@ class SuperadminCompanyController extends Controller
             $message = "Company '{$name}' created successfully. The admin must change the one-time password after signing in.";
             if ($platformAdmin) {
                 $message = "Company '{$name}' created successfully. {$adminEmail} exists as a platform admin, so a separate company-login user was created with a one-time password.";
+            } elseif ($existingAdmin) {
+                $message = "Company '{$name}' created successfully. The existing company-login user was reactivated/reset and must use the one-time password.";
             }
             if ($emailResult['sent']) {
                 $message .= ' Login instructions were emailed to ' . $adminEmail . '.';
@@ -356,6 +370,10 @@ class SuperadminCompanyController extends Controller
         }
 
         $tempPassword = $oneTimePassword !== '' ? $oneTimePassword : $this->generateTemporaryPassword();
+        $shouldIssuePassword = !$existingUser
+            || (int) ($existingUser['is_active'] ?? 0) !== 1
+            || $this->activeMembershipCount((int) ($existingUser['id'] ?? 0)) === 0
+            || $oneTimePassword !== '';
         $db = db();
 
         try {
@@ -363,7 +381,12 @@ class SuperadminCompanyController extends Controller
 
             if ($existingUser) {
                 $userId = (int) $existingUser['id'];
-                $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                if ($shouldIssuePassword) {
+                    $db->prepare('UPDATE users SET password_hash = :hash, must_change_password = 1, is_active = 1 WHERE id = :id')
+                        ->execute(['hash' => password_hash($tempPassword, PASSWORD_DEFAULT), 'id' => $userId]);
+                } else {
+                    $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                }
                 $this->upsertCompanyMembership((int) $company['id'], $userId, $roleId, false);
             } else {
                 $adminDisplayName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $fullName) : $fullName;
@@ -396,7 +419,7 @@ class SuperadminCompanyController extends Controller
 
         AuditLog::recordPlatform($existingUser ? 'linked_company_admin' : 'created_company_admin', ($existingUser ? 'Linked existing company admin ' : 'Created company admin ') . $email, 'Company', (int) $company['id']);
 
-        if ($existingUser) {
+        if ($existingUser && !$shouldIssuePassword) {
             $emailResult = $this->sendCompanyAccessLinkedEmail((string) $company['name'], (string) ($existingUser['full_name'] ?? $fullName), $email);
             $message = 'Existing user linked to this company as an admin.';
             if ($emailResult['sent']) {
@@ -406,6 +429,9 @@ class SuperadminCompanyController extends Controller
             }
         } else {
             $welcomeName = $platformAdmin ? (string) ($platformAdmin['full_name'] ?? $fullName) : $fullName;
+            if ($existingUser) {
+                $welcomeName = (string) ($existingUser['full_name'] ?? $fullName);
+            }
             $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $welcomeName, $email, $tempPassword);
 
             $_SESSION['_new_company_admin_password'] = [
@@ -419,6 +445,8 @@ class SuperadminCompanyController extends Controller
             $message = 'Admin user created. The one-time password is shown below and the user must change it after signing in.';
             if ($platformAdmin) {
                 $message = 'This email exists as a platform admin, so a separate company-login user was created. The one-time password is shown below and must be changed after signing in.';
+            } elseif ($existingUser) {
+                $message = 'Existing company-login user reactivated/reset. The one-time password is shown below and must be changed after signing in.';
             }
             if ($emailResult['sent']) {
                 $message .= ' Login instructions were emailed to ' . $email . '.';
@@ -852,6 +880,22 @@ class SuperadminCompanyController extends Controller
         $stmt->execute(['cid' => $companyId, 'uid' => $userId]);
 
         return (bool) $stmt->fetchColumn();
+    }
+
+    private function activeMembershipCount(int $userId): int
+    {
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        $stmt = db()->prepare(
+            'SELECT COUNT(*)
+             FROM company_user_memberships
+             WHERE user_id = :uid AND is_active = 1'
+        );
+        $stmt->execute(['uid' => $userId]);
+
+        return (int) $stmt->fetchColumn();
     }
 
     private function upsertCompanyMembership(int $companyId, int $userId, int $roleId, bool $isDefault): void
