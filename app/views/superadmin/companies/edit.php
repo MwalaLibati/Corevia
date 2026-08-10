@@ -209,9 +209,21 @@
                             <td><?= e((string) $membership['email']) ?></td>
                             <td><span class="badge bg-secondary-subtle text-secondary-emphasis"><?= e((string) $membership['role_name']) ?></span></td>
                             <td class="text-end">
+                                <form method="post" action="<?= e(base_url('superadmin/company/resetAdminPassword/' . (string) $membership['id'])) ?>" class="d-inline">
+                                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('Reset this admin password and email a new one-time password?')">
+                                        <i class="bi bi-key me-1"></i>Reset
+                                    </button>
+                                </form>
                                 <form method="post" action="<?= e(base_url('superadmin/company/revokeAccess/' . (string) $membership['id'])) ?>" class="d-inline">
                                     <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
                                     <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Revoke this user access to this company?')">Revoke</button>
+                                </form>
+                                <form method="post" action="<?= e(base_url('superadmin/company/deleteAdminUser/' . (string) $membership['id'])) ?>" class="d-inline">
+                                    <input type="hidden" name="_csrf" value="<?= e($csrf) ?>">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Delete this admin user? If they belong to another company, only this company access will be removed.')">
+                                        <i class="bi bi-trash me-1"></i>Delete
+                                    </button>
                                 </form>
                             </td>
                         </tr>

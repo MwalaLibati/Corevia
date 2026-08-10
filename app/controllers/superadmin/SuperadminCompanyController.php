@@ -479,6 +479,105 @@ class SuperadminCompanyController extends Controller
         redirect('superadmin/company/edit/' . (int) $membership['company_id']);
     }
 
+    public function resetAdminPassword(string $membershipId = ''): void
+    {
+        require_superadmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { redirect('superadmin/company/index'); }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/company/index');
+        }
+
+        $record = $this->findMembershipWithUser((int) $membershipId);
+        if (!$record) {
+            Session::flash('error', 'Admin user access record not found.');
+            redirect('superadmin/company/index');
+        }
+
+        $tempPassword = $this->generateTemporaryPassword();
+        db()->prepare('UPDATE users SET password_hash = :hash, must_change_password = 1, is_active = 1 WHERE id = :id')
+            ->execute([
+                'hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
+                'id' => (int) $record['user_id'],
+            ]);
+
+        $emailResult = $this->sendCompanyPasswordResetEmail(
+            (string) $record['company_name'],
+            (string) $record['full_name'],
+            (string) $record['email'],
+            $tempPassword
+        );
+
+        $_SESSION['_new_company_admin_password'] = [
+            'company_id' => (int) $record['company_id'],
+            'email' => (string) $record['email'],
+            'password' => $tempPassword,
+            'email_sent' => $emailResult['sent'],
+            'email_error' => $emailResult['error'],
+        ];
+
+        AuditLog::recordPlatform('reset_company_admin_password', 'Reset company admin password for ' . (string) $record['email'], 'Company', (int) $record['company_id']);
+        $message = 'Admin password reset. The one-time password is shown below and the admin must change it after signing in.';
+        if ($emailResult['sent']) {
+            $message .= ' Login instructions were emailed to ' . (string) $record['email'] . '.';
+        } elseif ($emailResult['error'] !== '') {
+            $message .= ' Mail error: ' . $emailResult['error'];
+        }
+        Session::flash('success', $message);
+        redirect('superadmin/company/edit/' . (int) $record['company_id']);
+    }
+
+    public function deleteAdminUser(string $membershipId = ''): void
+    {
+        require_superadmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { redirect('superadmin/company/index'); }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/company/index');
+        }
+
+        $record = $this->findMembershipWithUser((int) $membershipId);
+        if (!$record) {
+            Session::flash('error', 'Admin user access record not found.');
+            redirect('superadmin/company/index');
+        }
+
+        $db = db();
+        $companyId = (int) $record['company_id'];
+        $userId = (int) $record['user_id'];
+
+        try {
+            $db->beginTransaction();
+
+            $activeMemberships = $db->prepare('SELECT COUNT(*) FROM company_user_memberships WHERE user_id = :uid AND is_active = 1');
+            $activeMemberships->execute(['uid' => $userId]);
+            $membershipCount = (int) $activeMemberships->fetchColumn();
+
+            $db->prepare('UPDATE company_user_memberships SET is_active = 0 WHERE id = :id')
+                ->execute(['id' => (int) $membershipId]);
+
+            if ($membershipCount <= 1) {
+                $db->prepare('UPDATE users SET is_active = 0 WHERE id = :id')
+                    ->execute(['id' => $userId]);
+                $actionMessage = 'Admin user deleted and login deactivated.';
+            } else {
+                $actionMessage = 'Admin access removed from this company. The user still has access to another company.';
+            }
+
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Session::flash('error', 'Admin user could not be deleted: ' . $e->getMessage());
+            redirect('superadmin/company/edit/' . $companyId);
+        }
+
+        AuditLog::recordPlatform('deleted_company_admin', 'Deleted company admin access for ' . (string) $record['email'], 'Company', $companyId);
+        Session::flash('success', $actionMessage);
+        redirect('superadmin/company/edit/' . $companyId);
+    }
+
     public function removeLogo(string $id = ''): void
     {
         require_superadmin();
@@ -644,7 +743,7 @@ class SuperadminCompanyController extends Controller
     private function companyMemberships(int $companyId): array
     {
         $stmt = db()->prepare(
-            'SELECT m.*, u.full_name, u.email, r.name AS role_name
+            'SELECT m.*, u.full_name, u.email, u.is_active AS user_is_active, r.name AS role_name
              FROM company_user_memberships m
              JOIN users u ON u.id = m.user_id
              JOIN roles r ON r.id = m.role_id
@@ -654,6 +753,22 @@ class SuperadminCompanyController extends Controller
         $stmt->execute(['cid' => $companyId]);
 
         return $stmt->fetchAll();
+    }
+
+    private function findMembershipWithUser(int $membershipId): ?array
+    {
+        $stmt = db()->prepare(
+            'SELECT m.*, u.full_name, u.email, u.is_active AS user_is_active, c.name AS company_name
+             FROM company_user_memberships m
+             JOIN users u ON u.id = m.user_id
+             JOIN companies c ON c.id = m.company_id
+             WHERE m.id = :id
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $membershipId]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
     }
 
     private function activeUserOptions(int $companyId): array
@@ -765,6 +880,29 @@ class SuperadminCompanyController extends Controller
         }
     }
 
+    private function sendCompanyPasswordResetEmail(string $companyName, string $adminName, string $adminEmail, string $temporaryPassword): array
+    {
+        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['sent' => false, 'error' => 'Invalid admin email address.'];
+        }
+
+        $loginUrl = base_url('auth/login');
+        $subject = app_product_name() . ' administrator password reset';
+        $html = $this->companyPasswordResetEmailHtml($companyName, $adminName, $adminEmail, $temporaryPassword, $loginUrl);
+        $mailer = new MailService($this->platformEmailSettings());
+
+        try {
+            if ($mailer->send($adminEmail, $adminName, $subject, $html)) {
+                AuditLog::recordPlatform('company_admin_password_reset_email_sent', 'Sent company admin password reset email to ' . $adminEmail, 'Company');
+                return ['sent' => true, 'error' => ''];
+            }
+
+            return ['sent' => false, 'error' => $mailer->lastError()];
+        } catch (Throwable $e) {
+            return ['sent' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     private function companyWelcomeEmailHtml(string $companyName, string $adminName, string $adminEmail, string $temporaryPassword, string $loginUrl): string
     {
         $company = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
@@ -800,6 +938,42 @@ class SuperadminCompanyController extends Controller
         HTML;
 
         return corevia_email_shell('Welcome to ' . app_product_name(), 'Your company account is ready', $body);
+    }
+
+    private function companyPasswordResetEmailHtml(string $companyName, string $adminName, string $adminEmail, string $temporaryPassword, string $loginUrl): string
+    {
+        $company = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+        $name = htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8');
+        $email = htmlspecialchars($adminEmail, ENT_QUOTES, 'UTF-8');
+        $password = htmlspecialchars($temporaryPassword, ENT_QUOTES, 'UTF-8');
+        $url = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
+        $product = htmlspecialchars(app_product_name(), ENT_QUOTES, 'UTF-8');
+
+        $body = <<<HTML
+            <p style="margin-top:0">Hello {$name},</p>
+            <p>Your administrator password for <strong>{$company}</strong> on {$product} has been reset by the platform administrator.</p>
+            <table style="border-collapse:collapse;width:100%;margin:18px 0;background:#f8fafc;border:1px solid #e2e8f0">
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold;width:170px">Login email</td>
+                    <td style="padding:10px 12px">{$email}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold">One-time password</td>
+                    <td style="padding:10px 12px;font-family:Consolas,monospace;font-size:16px">{$password}</td>
+                </tr>
+                <tr>
+                    <td style="padding:10px 12px;font-weight:bold">Login link</td>
+                    <td style="padding:10px 12px"><a href="{$url}">{$url}</a></td>
+                </tr>
+            </table>
+            <p>For security, the system will ask you to create a new private password before continuing.</p>
+            <p style="margin:24px 0">
+                <a href="{$url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Log in to Corevia</a>
+            </p>
+            <p style="font-size:13px;color:#64748b">If you did not expect this reset, please contact your platform administrator immediately.</p>
+        HTML;
+
+        return corevia_email_shell('Password reset', 'Your administrator login has been reset', $body);
     }
 
     private function platformEmailSettings(): array
