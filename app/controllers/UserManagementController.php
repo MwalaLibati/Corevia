@@ -69,10 +69,26 @@ class UserManagementController extends Controller
         }
 
         try {
+            $existingUser = $model->findActiveByEmail($data['email']);
+            if ($existingUser) {
+                if ($this->activeMembershipExists((int) $existingUser['id'])) {
+                    Session::flash('error', 'This user already has access to this company.');
+                    redirect('user-management/create');
+                }
+
+                $this->upsertMembership((int) $existingUser['id'], $roleId);
+                AuditLog::record('user_company_access_linked', 'Linked existing user ' . $data['email'] . ' to this company', 'User', (int) $existingUser['id']);
+                unset($_SESSION['_old_user_input']);
+                Session::flash('success', 'Existing user linked to this company.');
+                redirect('user-management/index');
+            }
+
             $model->createWithRole([
+                'company_id' => Tenant::id(),
                 'full_name' => $data['full_name'],
                 'email' => $data['email'],
                 'password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                'must_change_password' => 1,
                 'is_active' => $data['is_active'],
             ], $roleId);
             unset($_SESSION['_old_user_input']);
@@ -177,19 +193,52 @@ class UserManagementController extends Controller
         if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             return 'A valid email address is required.';
         }
-        if ($model->emailExists($data['email'], $excludeId)) {
-            return 'A user with this email already exists.';
+        $existing = $model->findActiveByEmail($data['email']);
+        if (!$creating && $model->emailExists($data['email'], $excludeId)) {
+            return 'A different user with this email already exists.';
         }
         if ($roleId <= 0) {
             return 'Role is required.';
         }
-        if ($creating && strlen($password) < 8) {
-            return 'Password must be at least 8 characters.';
+        if ($creating && !$existing && strlen($password) < 8) {
+            return 'Password must be at least 8 characters for a new user. Leave it blank only when linking an existing user.';
         }
         if (!$creating && trim($password) !== '' && strlen($password) < 8) {
             return 'New password must be at least 8 characters.';
         }
 
         return null;
+    }
+
+    private function activeMembershipExists(int $userId): bool
+    {
+        $stmt = db()->prepare(
+            'SELECT id FROM company_user_memberships
+             WHERE company_id = :cid AND user_id = :uid AND is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute(['cid' => Tenant::id(), 'uid' => $userId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function upsertMembership(int $userId, int $roleId): void
+    {
+        $stmt = db()->prepare(
+            'SELECT id FROM company_user_memberships WHERE company_id = :cid AND user_id = :uid LIMIT 1'
+        );
+        $stmt->execute(['cid' => Tenant::id(), 'uid' => $userId]);
+        $membershipId = (int) ($stmt->fetchColumn() ?: 0);
+
+        if ($membershipId > 0) {
+            db()->prepare('UPDATE company_user_memberships SET role_id = :rid, is_active = 1 WHERE id = :id')
+                ->execute(['rid' => $roleId, 'id' => $membershipId]);
+            return;
+        }
+
+        db()->prepare(
+            'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
+             VALUES (:cid, :uid, :rid, 0, 1)'
+        )->execute(['cid' => Tenant::id(), 'uid' => $userId, 'rid' => $roleId]);
     }
 }

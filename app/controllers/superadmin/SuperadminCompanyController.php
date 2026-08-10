@@ -121,13 +121,7 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/create');
         }
 
-        $userExists = db()->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-        $userExists->execute(['email' => $adminEmail]);
-        if ($userExists->fetch()) {
-            $this->flashCreateOldInput($oldInput);
-            Session::flash('error', 'A user with that admin email already exists. Use a new email, or grant the existing user access after creating the company.');
-            redirect('superadmin/company/create');
-        }
+        $existingAdmin = $this->findUserByEmail($adminEmail);
 
         $planRow = $this->findActiveSubscriptionPlan($plan);
         if (!$planRow) {
@@ -177,25 +171,28 @@ class SuperadminCompanyController extends Controller
 
             $roleId = $this->ensureCompanySuperAdminRole($companyId);
 
-            $userStmt = $db->prepare(
-                'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
-                 VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
-            );
-            $userStmt->execute([
-                'company_id' => $companyId,
-                'full_name' => $adminName,
-                'email' => $adminEmail,
-                'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
-            ]);
-            $userId = (int) $db->lastInsertId();
+            if ($existingAdmin) {
+                $userId = (int) $existingAdmin['id'];
+                $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                $this->upsertCompanyMembership($companyId, $userId, $roleId, true);
+            } else {
+                $userStmt = $db->prepare(
+                    'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
+                     VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
+                );
+                $userStmt->execute([
+                    'company_id' => $companyId,
+                    'full_name' => $adminName,
+                    'email' => $adminEmail,
+                    'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
+                ]);
+                $userId = (int) $db->lastInsertId();
 
-            $db->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)')
-                ->execute(['uid' => $userId, 'rid' => $roleId]);
+                $db->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)')
+                    ->execute(['uid' => $userId, 'rid' => $roleId]);
 
-            $db->prepare(
-                'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
-                 VALUES (:cid, :uid, :rid, 1, 1)'
-            )->execute(['cid' => $companyId, 'uid' => $userId, 'rid' => $roleId]);
+                $this->upsertCompanyMembership($companyId, $userId, $roleId, true);
+            }
 
             if ($db->inTransaction()) {
                 $db->commit();
@@ -210,23 +207,33 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/create');
         }
 
-        $emailResult = $this->sendCompanyWelcomeEmail($name, $adminName, $adminEmail, $tempPassword);
-
-        $_SESSION['_new_company_admin_password'] = [
-            'company_id' => $companyId,
-            'email' => $adminEmail,
-            'password' => $tempPassword,
-            'email_sent' => $emailResult['sent'],
-            'email_error' => $emailResult['error'],
-        ];
-
-        $message = "Company '{$name}' created successfully. The admin must change the one-time password after signing in.";
-        if ($emailResult['sent']) {
-            $message .= ' Login instructions were emailed to ' . $adminEmail . '.';
-        } else {
-            $message .= ' The welcome email could not be sent, so share the password securely.';
-            if ($emailResult['error'] !== '') {
+        if ($existingAdmin) {
+            $emailResult = $this->sendCompanyAccessLinkedEmail($name, $adminName, $adminEmail);
+            $message = "Company '{$name}' created successfully. Existing user {$adminEmail} was linked as company administrator.";
+            if ($emailResult['sent']) {
+                $message .= ' Access notification was emailed.';
+            } elseif ($emailResult['error'] !== '') {
                 $message .= ' Mail error: ' . $emailResult['error'];
+            }
+        } else {
+            $emailResult = $this->sendCompanyWelcomeEmail($name, $adminName, $adminEmail, $tempPassword);
+
+            $_SESSION['_new_company_admin_password'] = [
+                'company_id' => $companyId,
+                'email' => $adminEmail,
+                'password' => $tempPassword,
+                'email_sent' => $emailResult['sent'],
+                'email_error' => $emailResult['error'],
+            ];
+
+            $message = "Company '{$name}' created successfully. The admin must change the one-time password after signing in.";
+            if ($emailResult['sent']) {
+                $message .= ' Login instructions were emailed to ' . $adminEmail . '.';
+            } else {
+                $message .= ' The welcome email could not be sent, so share the password securely.';
+                if ($emailResult['error'] !== '') {
+                    $message .= ' Mail error: ' . $emailResult['error'];
+                }
             }
         }
         Session::flash('success', $message);
@@ -335,10 +342,9 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/edit/' . (int) $company['id']);
         }
 
-        $exists = db()->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
-        $exists->execute(['email' => $email]);
-        if ($exists->fetch()) {
-            Session::flash('error', 'A user with that email already exists. Use the existing user access form instead.');
+        $existingUser = $this->findUserByEmail($email);
+        if ($existingUser && $this->activeMembershipExists((int) $company['id'], (int) $existingUser['id'])) {
+            Session::flash('error', 'This user already has access to this company.');
             redirect('superadmin/company/edit/' . (int) $company['id']);
         }
 
@@ -348,25 +354,28 @@ class SuperadminCompanyController extends Controller
         try {
             $db->beginTransaction();
 
-            $userStmt = $db->prepare(
-                'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
-                 VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
-            );
-            $userStmt->execute([
-                'company_id' => (int) $company['id'],
-                'full_name' => $fullName,
-                'email' => $email,
-                'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
-            ]);
-            $userId = (int) $db->lastInsertId();
+            if ($existingUser) {
+                $userId = (int) $existingUser['id'];
+                $db->prepare('UPDATE users SET is_active = 1 WHERE id = :id')->execute(['id' => $userId]);
+                $this->upsertCompanyMembership((int) $company['id'], $userId, $roleId, false);
+            } else {
+                $userStmt = $db->prepare(
+                    'INSERT INTO users (company_id, full_name, email, password_hash, must_change_password, is_active)
+                     VALUES (:company_id, :full_name, :email, :password_hash, 1, 1)'
+                );
+                $userStmt->execute([
+                    'company_id' => (int) $company['id'],
+                    'full_name' => $fullName,
+                    'email' => $email,
+                    'password_hash' => password_hash($tempPassword, PASSWORD_DEFAULT),
+                ]);
+                $userId = (int) $db->lastInsertId();
 
-            $db->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)')
-                ->execute(['uid' => $userId, 'rid' => $roleId]);
+                $db->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (:uid, :rid)')
+                    ->execute(['uid' => $userId, 'rid' => $roleId]);
 
-            $db->prepare(
-                'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
-                 VALUES (:cid, :uid, :rid, 0, 1)'
-            )->execute(['cid' => (int) $company['id'], 'uid' => $userId, 'rid' => $roleId]);
+                $this->upsertCompanyMembership((int) $company['id'], $userId, $roleId, false);
+            }
 
             $db->commit();
         } catch (Throwable $e) {
@@ -377,22 +386,33 @@ class SuperadminCompanyController extends Controller
             redirect('superadmin/company/edit/' . (int) $company['id']);
         }
 
-        AuditLog::recordPlatform('created_company_admin', 'Created company admin ' . $email, 'Company', (int) $company['id']);
-        $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $fullName, $email, $tempPassword);
+        AuditLog::recordPlatform($existingUser ? 'linked_company_admin' : 'created_company_admin', ($existingUser ? 'Linked existing company admin ' : 'Created company admin ') . $email, 'Company', (int) $company['id']);
 
-        $_SESSION['_new_company_admin_password'] = [
-            'company_id' => (int) $company['id'],
-            'email' => $email,
-            'password' => $tempPassword,
-            'email_sent' => $emailResult['sent'],
-            'email_error' => $emailResult['error'],
-        ];
+        if ($existingUser) {
+            $emailResult = $this->sendCompanyAccessLinkedEmail((string) $company['name'], (string) ($existingUser['full_name'] ?? $fullName), $email);
+            $message = 'Existing user linked to this company as an admin.';
+            if ($emailResult['sent']) {
+                $message .= ' Access notification was emailed to ' . $email . '.';
+            } elseif ($emailResult['error'] !== '') {
+                $message .= ' Mail error: ' . $emailResult['error'];
+            }
+        } else {
+            $emailResult = $this->sendCompanyWelcomeEmail((string) $company['name'], $fullName, $email, $tempPassword);
 
-        $message = 'Admin user created. The one-time password is shown below and the user must change it after signing in.';
-        if ($emailResult['sent']) {
-            $message .= ' Login instructions were emailed to ' . $email . '.';
-        } elseif ($emailResult['error'] !== '') {
-            $message .= ' Mail error: ' . $emailResult['error'];
+            $_SESSION['_new_company_admin_password'] = [
+                'company_id' => (int) $company['id'],
+                'email' => $email,
+                'password' => $tempPassword,
+                'email_sent' => $emailResult['sent'],
+                'email_error' => $emailResult['error'],
+            ];
+
+            $message = 'Admin user created. The one-time password is shown below and the user must change it after signing in.';
+            if ($emailResult['sent']) {
+                $message .= ' Login instructions were emailed to ' . $email . '.';
+            } elseif ($emailResult['error'] !== '') {
+                $message .= ' Mail error: ' . $emailResult['error'];
+            }
         }
         Session::flash('success', $message);
         redirect('superadmin/company/edit/' . (int) $company['id']);
@@ -788,6 +808,48 @@ class SuperadminCompanyController extends Controller
         return $stmt->fetchAll();
     }
 
+    private function findUserByEmail(string $email): ?array
+    {
+        $stmt = db()->prepare('SELECT * FROM users WHERE email = :email LIMIT 1');
+        $stmt->execute(['email' => strtolower(trim($email))]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
+    private function activeMembershipExists(int $companyId, int $userId): bool
+    {
+        $stmt = db()->prepare(
+            'SELECT id FROM company_user_memberships
+             WHERE company_id = :cid AND user_id = :uid AND is_active = 1
+             LIMIT 1'
+        );
+        $stmt->execute(['cid' => $companyId, 'uid' => $userId]);
+
+        return (bool) $stmt->fetchColumn();
+    }
+
+    private function upsertCompanyMembership(int $companyId, int $userId, int $roleId, bool $isDefault): void
+    {
+        $stmt = db()->prepare(
+            'SELECT id FROM company_user_memberships WHERE company_id = :cid AND user_id = :uid LIMIT 1'
+        );
+        $stmt->execute(['cid' => $companyId, 'uid' => $userId]);
+        $membershipId = (int) ($stmt->fetchColumn() ?: 0);
+
+        if ($membershipId > 0) {
+            db()->prepare(
+                'UPDATE company_user_memberships SET role_id = :rid, is_default = :is_default, is_active = 1 WHERE id = :id'
+            )->execute(['rid' => $roleId, 'is_default' => $isDefault ? 1 : 0, 'id' => $membershipId]);
+            return;
+        }
+
+        db()->prepare(
+            'INSERT INTO company_user_memberships (company_id, user_id, role_id, is_default, is_active)
+             VALUES (:cid, :uid, :rid, :is_default, 1)'
+        )->execute(['cid' => $companyId, 'uid' => $userId, 'rid' => $roleId, 'is_default' => $isDefault ? 1 : 0]);
+    }
+
     private function billableSeatSummary(int $companyId): array
     {
         $employees = $this->countActiveEmployees($companyId);
@@ -903,6 +965,29 @@ class SuperadminCompanyController extends Controller
         }
     }
 
+    private function sendCompanyAccessLinkedEmail(string $companyName, string $adminName, string $adminEmail): array
+    {
+        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            return ['sent' => false, 'error' => 'Invalid admin email address.'];
+        }
+
+        $loginUrl = base_url('auth/login');
+        $subject = 'You have been granted access to ' . $companyName;
+        $html = $this->companyAccessLinkedEmailHtml($companyName, $adminName, $loginUrl);
+        $mailer = new MailService($this->platformEmailSettings());
+
+        try {
+            if ($mailer->send($adminEmail, $adminName, $subject, $html)) {
+                AuditLog::recordPlatform('company_access_link_email_sent', 'Sent company access email to ' . $adminEmail, 'Company');
+                return ['sent' => true, 'error' => ''];
+            }
+
+            return ['sent' => false, 'error' => $mailer->lastError()];
+        } catch (Throwable $e) {
+            return ['sent' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     private function companyWelcomeEmailHtml(string $companyName, string $adminName, string $adminEmail, string $temporaryPassword, string $loginUrl): string
     {
         $company = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
@@ -974,6 +1059,26 @@ class SuperadminCompanyController extends Controller
         HTML;
 
         return corevia_email_shell('Password reset', 'Your administrator login has been reset', $body);
+    }
+
+    private function companyAccessLinkedEmailHtml(string $companyName, string $adminName, string $loginUrl): string
+    {
+        $company = htmlspecialchars($companyName, ENT_QUOTES, 'UTF-8');
+        $name = htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8');
+        $url = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
+        $product = htmlspecialchars(app_product_name(), ENT_QUOTES, 'UTF-8');
+
+        $body = <<<HTML
+            <p style="margin-top:0">Hello {$name},</p>
+            <p>Your existing {$product} login has been granted administrator access to <strong>{$company}</strong>.</p>
+            <p>You can use your current email address and password to sign in. If you already manage more than one company, the system will allow you to choose the company after login.</p>
+            <p style="margin:24px 0">
+                <a href="{$url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">Log in to Corevia</a>
+            </p>
+            <p style="font-size:13px;color:#64748b">If the button does not open, copy this link into your browser: <a href="{$url}">{$url}</a></p>
+        HTML;
+
+        return corevia_email_shell('Company access granted', 'You can now access another company', $body);
     }
 
     private function platformEmailSettings(): array

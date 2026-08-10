@@ -30,10 +30,12 @@ $postUrl = $isEdit ? base_url('user-management/update/' . (string) $user['id']) 
             </div>
 
             <div class="col-md-6">
-                <label class="form-label"><?= $isEdit ? 'New Password' : 'Password *' ?></label>
-                <input type="password" name="password" class="form-control" minlength="8" <?= $isEdit ? '' : 'required' ?> autocomplete="new-password">
+                <label class="form-label"><?= $isEdit ? 'New Password' : 'Password' ?></label>
+                <input type="password" name="password" class="form-control" minlength="8" autocomplete="new-password">
                 <?php if ($isEdit): ?>
                     <small class="text-gray">Leave blank to keep the current password.</small>
+                <?php else: ?>
+                    <small class="text-gray">Required for a new user. Leave blank when linking an existing Corevia user.</small>
                 <?php endif; ?>
             </div>
 
