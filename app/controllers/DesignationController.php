@@ -11,11 +11,13 @@ class DesignationController extends Controller
 
         $search = trim((string) $this->input('search', ''));
         $model = new Designation();
+        $setupWarning = $model->isReady() ? null : 'Designation setup is not complete on this server. Please run the production database migration, then reload this page.';
 
         $this->render('designations/index', [
             'title' => 'Designations',
             'designations' => $model->listWithDepartment($search),
             'search' => $search,
+            'setupWarning' => $setupWarning,
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),

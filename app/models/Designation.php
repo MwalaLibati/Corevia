@@ -6,18 +6,23 @@ class Designation extends Model
 {
     protected string $table = 'designations';
     protected bool $tenantScoped = true;
+    private bool $schemaReady = true;
 
     public function __construct()
     {
         parent::__construct();
-        $this->ensureSchema();
+        try {
+            $this->ensureSchema();
+        } catch (Throwable $e) {
+            $this->schemaReady = false;
+            error_log('Designation schema setup failed: ' . $e->getMessage());
+        }
     }
 
     public function ensureSchema(): void
     {
-        if (!$this->tableExists('designations')) {
-            $this->db->exec(
-                "CREATE TABLE designations (
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS designations (
                     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
                     company_id BIGINT UNSIGNED NOT NULL,
                     department_id BIGINT UNSIGNED NULL,
@@ -31,7 +36,23 @@ class Designation extends Model
                     UNIQUE KEY uq_designations_company_name (company_id, name),
                     KEY idx_designations_department (department_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-            );
+        );
+
+        $columns = [
+            'company_id' => 'BIGINT UNSIGNED NOT NULL',
+            'department_id' => 'BIGINT UNSIGNED NULL',
+            'code' => 'VARCHAR(30) NOT NULL',
+            'name' => 'VARCHAR(150) NOT NULL',
+            'description' => 'TEXT NULL',
+            'is_active' => 'TINYINT(1) NOT NULL DEFAULT 1',
+            'created_at' => 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP',
+            'updated_at' => 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+        ];
+
+        foreach ($columns as $column => $definition) {
+            if (!$this->columnExists('designations', $column)) {
+                $this->db->exec("ALTER TABLE designations ADD COLUMN {$column} {$definition}");
+            }
         }
 
         if (!$this->columnExists('employees', 'designation_id')) {
@@ -47,6 +68,10 @@ class Designation extends Model
 
     public function generateNextCode(): string
     {
+        if (!$this->schemaReady || !$this->tableExists('designations')) {
+            return 'DES001';
+        }
+
         $cid = Tenant::id();
         $sql = "SELECT code FROM designations WHERE code REGEXP :pattern"
              . ($cid > 0 ? ' AND company_id = :cid' : '')
@@ -65,6 +90,10 @@ class Designation extends Model
 
     public function activeOptions(?int $departmentId = null): array
     {
+        if (!$this->schemaReady || !$this->tableExists('designations')) {
+            return [];
+        }
+
         $cid = Tenant::id();
         $where = 'WHERE is_active = 1';
         $params = [];
@@ -85,6 +114,10 @@ class Designation extends Model
 
     public function listWithDepartment(string $search = ''): array
     {
+        if (!$this->schemaReady || !$this->tableExists('designations')) {
+            return [];
+        }
+
         $cid = Tenant::id();
         $where = $cid > 0 ? 'WHERE des.company_id = :cid' : 'WHERE 1=1';
         $params = [];
@@ -108,8 +141,19 @@ class Designation extends Model
         return $stmt->fetchAll();
     }
 
+    public function isReady(): bool
+    {
+        return $this->schemaReady
+            && $this->tableExists('designations')
+            && $this->columnExists('employees', 'designation_id');
+    }
+
     public function findName(int $id): ?string
     {
+        if (!$this->schemaReady || !$this->tableExists('designations')) {
+            return null;
+        }
+
         $row = $this->find($id);
         return $row ? (string) $row['name'] : null;
     }
@@ -126,6 +170,10 @@ class Designation extends Model
 
     private function valueExists(string $column, string $value, ?int $excludeId): bool
     {
+        if (!$this->schemaReady || !$this->tableExists('designations')) {
+            return false;
+        }
+
         $cid = Tenant::id();
         $sql = "SELECT id FROM designations WHERE {$column} = :value" . ($cid > 0 ? ' AND company_id = :cid' : '');
         $params = ['value' => $value];
@@ -146,7 +194,7 @@ class Designation extends Model
     private function seedFromEmployees(): void
     {
         $cid = Tenant::id();
-        if ($cid <= 0) {
+        if ($cid <= 0 || !$this->columnExists('employees', 'designation_id')) {
             return;
         }
 

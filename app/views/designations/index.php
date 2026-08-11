@@ -8,6 +8,7 @@
 
 <?php if (!empty($flashSuccess)): ?><div class="alert alert-success"><?= e((string) $flashSuccess) ?></div><?php endif; ?>
 <?php if (!empty($flashError)): ?><div class="alert alert-danger"><?= e((string) $flashError) ?></div><?php endif; ?>
+<?php if (!empty($setupWarning)): ?><div class="alert alert-warning"><?= e((string) $setupWarning) ?></div><?php endif; ?>
 
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
