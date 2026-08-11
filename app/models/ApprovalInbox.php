@@ -85,7 +85,7 @@ class ApprovalInbox extends Model
                 'Awaiting ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('leave', 1, 'Review Leave'),
-                'leave/view/' . (int) $row['id'],
+                'approval-inbox/show/leave/' . (int) $row['id'],
                 (string) ($row['created_at'] ?? ''),
                 (string) $row['start_date'] . ' to ' . (string) $row['end_date'] . ' - ' . number_format((float) $row['total_days'], 1) . ' day(s)'
             );
@@ -120,7 +120,7 @@ class ApprovalInbox extends Model
                 'Awaiting ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('salary_advance', 1, 'Review Advance'),
-                'salary-advance/index',
+                'approval-inbox/show/salary_advance/' . (int) $row['id'],
                 (string) ($row['created_at'] ?? ''),
                 format_currency((float) $row['amount']) . ' requested'
             );
@@ -170,7 +170,7 @@ class ApprovalInbox extends Model
                 $stageLabel . ' - ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('payroll', $step, 'Review Payroll'),
-                'payroll/edit/' . (int) $row['id'],
+                'approval-inbox/show/payroll/' . (int) $row['id'],
                 (string) ($row['created_at'] ?: $row['run_date']),
                 'Net payroll ' . format_currency((float) ($row['total_net'] ?? 0))
             );
@@ -211,7 +211,7 @@ class ApprovalInbox extends Model
                 (string) $row['approval_status'] . ' - ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('contract', $step, 'Review Contract'),
-                'contract/index',
+                'approval-inbox/show/contract/' . (int) $row['id'],
                 (string) ($row['created_at'] ?? ''),
                 (string) $row['contract_type'] . ' - ' . (string) $row['start_date'] . ' to ' . (string) $row['end_date']
             );
@@ -246,7 +246,7 @@ class ApprovalInbox extends Model
                 'Awaiting ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('employee_onboarding', 1, 'Review Onboarding'),
-                'onboarding/show/' . (int) $row['id'],
+                'approval-inbox/show/employee_onboarding/' . (int) $row['id'],
                 (string) (($row['submitted_at'] ?? '') ?: ($row['created_at'] ?? '')),
                 !empty($row['expected_start_date']) ? 'Expected start ' . (string) $row['expected_start_date'] : 'Submitted by employee'
             );
@@ -286,7 +286,7 @@ class ApprovalInbox extends Model
                 (string) $row['status'] . ' - ' . $role,
                 $role,
                 $this->workflow->actionLabelFor('salary_change', $step, 'Review Salary Change'),
-                'salary-change/index',
+                'approval-inbox/show/salary_change/' . (int) $row['id'],
                 (string) ($row['created_at'] ?? ''),
                 'Effective ' . (string) ($row['effective_date'] ?? '') . ' - ' . (string) ($row['salary_structure_name'] ?? '')
             );
