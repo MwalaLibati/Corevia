@@ -7,7 +7,7 @@ class Role extends Model
     protected string $table = 'roles';
     protected bool $tenantScoped = true;
 
-    public const ACCESS_LEVELS = ['Super Admin', 'HR Officer', 'Finance Officer', 'Viewer'];
+    public const ACCESS_LEVELS = ['Super Admin', 'Admin', 'HR Officer', 'Finance Officer', 'Viewer'];
 
     public function companyRoles(): array
     {

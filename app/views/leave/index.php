@@ -1,9 +1,16 @@
+<?php
+$currentUser = current_user() ?? [];
+$userRole = (string) ($currentUser['role'] ?? '');
+$userAccess = (string) ($currentUser['access_level'] ?? '');
+$canManageLeave = in_array($userRole, ['Super Admin','Admin','HR Officer'], true)
+    || in_array($userAccess, ['Super Admin','Admin','HR Officer'], true);
+?>
 <div class="d-flex align-items-center justify-content-between mr-bottom-30">
     <div>
         <h2 class="text-dark">Leave Management</h2>
         <p class="text-gray mb-0">View and manage employee leave requests.</p>
     </div>
-    <?php if (in_array(current_user()['role'] ?? '', ['Super Admin','HR Officer'], true)): ?>
+    <?php if ($canManageLeave): ?>
         <a href="<?= e(base_url('leave/create')) ?>" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i> New Request</a>
     <?php endif; ?>
 </div>
@@ -57,7 +64,7 @@
                     <td><?= e((string)($req['approved_by_name'] ?? '—')) ?></td>
                     <td class="text-end">
                         <a href="<?= e(base_url('leave/view/' . (string)$req['id'])) ?>" class="btn btn-sm btn-outline-primary">View</a>
-                        <?php if ($req['status'] === 'Pending' && in_array(current_user()['role'] ?? '', ['Super Admin','HR Officer'], true)): ?>
+                        <?php if ($req['status'] === 'Pending' && $canManageLeave): ?>
                             <form method="post" action="<?= e(base_url('leave/cancel/' . (string)$req['id'])) ?>" class="d-inline">
                                 <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                                 <button class="btn btn-sm btn-outline-secondary" onclick="return confirm('Cancel this request?')">Cancel</button>

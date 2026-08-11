@@ -2,7 +2,11 @@
 $statusClasses = ['Pending'=>'warning text-dark','Approved'=>'success','Rejected'=>'danger','Cancelled'=>'secondary'];
 $sc = $statusClasses[$request['status']] ?? 'secondary';
 $balance = $balance ?? ['entitled_days'=>0,'used_days'=>0,'balance'=>0];
-$canAction = in_array(current_user()['role'] ?? '', ['Super Admin','HR Officer'], true);
+$currentUser = current_user() ?? [];
+$userRole = (string) ($currentUser['role'] ?? '');
+$userAccess = (string) ($currentUser['access_level'] ?? '');
+$canAction = in_array($userRole, ['Super Admin','Admin','HR Officer'], true)
+    || in_array($userAccess, ['Super Admin','Admin','HR Officer'], true);
 ?>
 
 <div class="d-flex align-items-center justify-content-between mr-bottom-30">

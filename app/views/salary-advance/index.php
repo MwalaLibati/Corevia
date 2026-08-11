@@ -1,9 +1,16 @@
+<?php
+$currentUser = current_user() ?? [];
+$userRole = (string) ($currentUser['role'] ?? '');
+$userAccess = (string) ($currentUser['access_level'] ?? '');
+$canManageAdvances = in_array($userRole, ['Super Admin','Admin','Finance Officer'], true)
+    || in_array($userAccess, ['Super Admin','Admin','Finance Officer'], true);
+?>
 <div class="d-flex align-items-center justify-content-between mr-bottom-30">
     <div>
         <h2 class="text-dark">Salary Advances</h2>
         <p class="text-gray mb-0">Manage employee salary advances and repayment schedules.</p>
     </div>
-    <?php if (in_array(current_user()['role'] ?? '', ['Super Admin','Finance Officer'], true)): ?>
+    <?php if ($canManageAdvances): ?>
         <a href="<?= e(base_url('salary-advance/create')) ?>" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i> New Advance</a>
     <?php endif; ?>
 </div>
@@ -51,7 +58,7 @@
                     <td class="text-center"><span class="badge bg-<?= $sc ?>"><?= e((string)$adv['status']) ?></span></td>
                     <td><?= e((string)($adv['approved_by_name'] ?? '—')) ?></td>
                     <td class="text-end">
-                        <?php if ($adv['status'] === 'Pending' && in_array(current_user()['role'] ?? '', ['Super Admin','Finance Officer'], true)): ?>
+                        <?php if ($adv['status'] === 'Pending' && $canManageAdvances): ?>
                             <form method="post" action="<?= e(base_url('salary-advance/approve/' . (string)$adv['id'])) ?>" class="d-inline">
                                 <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                                 <input type="hidden" name="action" value="approve">
@@ -62,7 +69,7 @@
                                 <input type="hidden" name="action" value="reject">
                                 <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Reject this advance?')">Reject</button>
                             </form>
-                        <?php elseif ($adv['status'] === 'Active' && in_array(current_user()['role'] ?? '', ['Super Admin','Finance Officer'], true)): ?>
+                        <?php elseif ($adv['status'] === 'Active' && $canManageAdvances): ?>
                             <form method="post" action="<?= e(base_url('salary-advance/cancel/' . (string)$adv['id'])) ?>" class="d-inline">
                                 <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                                 <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel this advance?')">Cancel</button>

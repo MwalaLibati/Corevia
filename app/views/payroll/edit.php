@@ -138,12 +138,13 @@
             $statusColors  = ['Draft'=>'secondary','HR Approved'=>'info','Finance Approved'=>'warning',
                               'Admin Approved'=>'primary','Posted'=>'success','Partially Paid'=>'warning','Paid'=>'success'];
             $sColor        = $statusColors[$currentStatus] ?? 'secondary';
+            $userAccess = (string)(current_user()['access_level'] ?? '');
+            $isAdminAuthority = in_array($userRole, ['Super Admin','Admin'], true) || in_array($userAccess, ['Super Admin','Admin'], true);
 
             $workflowSteps = [];
             foreach (($workflow['steps'] ?? []) as $step) {
                 $workflowSteps[(int)($step['step_order'] ?? 0)] = $step;
             }
-            $userAccess = (string)(current_user()['access_level'] ?? '');
             $approvalMap = [
                 'Draft'            => ['label'=>$workflowSteps[1]['action_label'] ?? 'Submit for HR Review',      'role'=>$workflowSteps[1]['required_role'] ?? 'HR Officer'],
                 'HR Approved'      => ['label'=>$workflowSteps[2]['action_label'] ?? 'Submit for Finance Review', 'role'=>$workflowSteps[2]['required_role'] ?? 'Finance Officer'],
@@ -151,7 +152,7 @@
                 'Admin Approved'   => ['label'=>$workflowSteps[4]['action_label'] ?? 'Post Payroll',              'role'=>$workflowSteps[4]['required_role'] ?? 'Finance Officer'],
             ];
             $canApprove = isset($approvalMap[$currentStatus])
-                && ($userRole === 'Super Admin' || $userAccess === 'Super Admin' || $userRole === $approvalMap[$currentStatus]['role'] || $userAccess === $approvalMap[$currentStatus]['role']);
+                && ($isAdminAuthority || $userRole === $approvalMap[$currentStatus]['role'] || $userAccess === $approvalMap[$currentStatus]['role']);
             $hasItems   = count($runItems) > 0;
         ?>
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
@@ -195,7 +196,7 @@
                         </button>
                     </form>
                 <?php endif; ?>
-                <?php if ($hasItems && in_array($userRole, ['Super Admin','Finance Officer'], true)): ?>
+                <?php if ($hasItems && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                     <a href="<?= e(base_url('payroll/bankExport/' . (string) $run['id'])) ?>" class="btn btn-outline-dark">
                         <i class="bi bi-bank me-1"></i> Bank Export CSV
                     </a>
@@ -211,7 +212,7 @@
                         </button>
                     </form>
                 <?php endif; ?>
-                <?php if ($isLocked && (int)($run['payslips_released'] ?? 0) !== 1 && $balanceDue <= 0 && in_array($userRole, ['Super Admin','Finance Officer'], true)): ?>
+                <?php if ($isLocked && (int)($run['payslips_released'] ?? 0) !== 1 && $balanceDue <= 0 && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                     <form method="post" action="<?= e(base_url('payroll/releasePayslips/' . (string) $run['id'])) ?>" class="d-inline">
                         <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
                         <button type="submit" class="btn btn-success" onclick="return confirm('Release payslips to employee portal?');">
@@ -221,7 +222,7 @@
                 <?php elseif ((int)($run['payslips_released'] ?? 0) === 1): ?>
                     <span class="badge bg-success align-self-center px-3 py-2"><i class="bi bi-send-check me-1"></i>Payslips Released</span>
                 <?php endif; ?>
-                <?php if ($isLocked && !$isReversed && $userRole === 'Super Admin'): ?>
+                <?php if ($isLocked && !$isReversed && $isAdminAuthority): ?>
                     <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#reversePayrollBox">
                         <i class="bi bi-arrow-counterclockwise me-1"></i> Reverse / Correct
                     </button>
@@ -229,7 +230,7 @@
             </div>
         </div>
 
-        <?php if ($isLocked && !$isReversed && $userRole === 'Super Admin'): ?>
+        <?php if ($isLocked && !$isReversed && $isAdminAuthority): ?>
         <div class="collapse mb-4" id="reversePayrollBox">
             <div class="alert alert-warning">
                 Reversal preserves this locked run for audit and creates a new draft correction run. Use this only when a posted payroll needs correction.
@@ -417,7 +418,7 @@
                                 <td><?= e((string) ($item['generated_at'] ?? '-')) ?></td>
                                 <td class="text-end">
                                     <a class="btn btn-sm btn-outline-primary" href="<?= e(base_url('payroll/payslip/' . (string) $run['id'] . '/' . (string) ($item['employee_id'] ?? 0))) ?>">View Payslip</a>
-                                    <?php if (!$isLocked && $currentStatus === 'Draft' && in_array($userRole, ['Super Admin','Finance Officer'], true)): ?>
+                                    <?php if (!$isLocked && $currentStatus === 'Draft' && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                                     <button type="button"
                                             class="btn btn-sm btn-outline-danger"
                                             data-bs-toggle="modal"
@@ -427,7 +428,7 @@
                                         Add Deduction
                                     </button>
                                     <?php endif; ?>
-                                    <?php if ((float)($item['balance_due'] ?? 0) > 0 && in_array($userRole, ['Super Admin','Finance Officer'], true)): ?>
+                                    <?php if ((float)($item['balance_due'] ?? 0) > 0 && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                                     <form method="post" action="<?= e(base_url('payroll/recordPayslipPayment/' . (string) $item['id'])) ?>" class="d-inline">
                                         <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
                                         <input type="hidden" name="run_id" value="<?= e((string) $run['id']) ?>">
@@ -615,7 +616,7 @@
     </div>
 </div>
 
-<?php if (!$isLocked && $currentStatus === 'Draft' && in_array($userRole, ['Super Admin','Finance Officer'], true)): ?>
+<?php if (!$isLocked && $currentStatus === 'Draft' && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
 <div class="modal fade" id="customDeductionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <form method="post" action="<?= e(base_url('payroll/addCustomDeduction/' . (string) $run['id'])) ?>" class="modal-content">

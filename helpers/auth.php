@@ -80,6 +80,10 @@ function require_role(array $allowedRoles): void
         }
     }
 
+    if (in_array($role, ['Super Admin', 'Admin'], true) || in_array($accessLevel, ['Super Admin', 'Admin'], true)) {
+        return;
+    }
+
     if (!in_array($role, $allowedRoles, true) && !in_array($accessLevel, $allowedRoles, true)) {
         http_response_code(403);
         exit('403 Forbidden');

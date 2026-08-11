@@ -428,8 +428,8 @@ class EmployeeContract extends Model
         $role = (string) ($user['role'] ?? '');
         $accessLevel = (string) ($user['access_level'] ?? '');
 
-        return $role === 'Super Admin'
-            || $accessLevel === 'Super Admin'
+        return in_array($role, ['Super Admin', 'Admin'], true)
+            || in_array($accessLevel, ['Super Admin', 'Admin'], true)
             || $role === $requiredRole
             || $accessLevel === $requiredRole;
     }
