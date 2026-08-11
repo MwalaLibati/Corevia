@@ -27,6 +27,23 @@ class PayrollRun extends Model
         if ((int) $stmt->fetchColumn() === 0) {
             $this->db->exec("ALTER TABLE payroll_runs ADD COLUMN proration_mode VARCHAR(30) NOT NULL DEFAULT 'Full Month'");
         }
+
+        if ($this->tableExists('payroll_item_deductions')) {
+            $columnStmt = $this->db->prepare(
+                'SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = :table
+                   AND COLUMN_NAME = :column
+                 LIMIT 1'
+            );
+            $columnStmt->execute(['table' => 'payroll_item_deductions', 'column' => 'deduction_category']);
+            $categoryColumn = $columnStmt->fetch();
+
+            if ($categoryColumn && (string) ($categoryColumn['DATA_TYPE'] ?? '') === 'enum') {
+                $this->db->exec('ALTER TABLE payroll_item_deductions MODIFY deduction_category VARCHAR(40) NOT NULL');
+            }
+        }
     }
 
     public function listWithDetails(): array
