@@ -173,9 +173,15 @@ $statCard = static function (string $label, string $value, string $subtext, stri
                         <tr><td class="text-muted ps-0">Deductions</td><td class="text-danger">-ZMW <?= number_format((float)($latestPayslip['total_deductions'] ?? 0), 2) ?></td></tr>
                         <tr class="table-success"><td class="fw-bold ps-0">Net Pay</td><td class="fw-bold">ZMW <?= number_format((float)($latestPayslip['net_pay'] ?? 0), 2) ?></td></tr>
                     </table>
-                    <a href="<?= e(base_url('portal/payslipView/'.(string)$latestPayslip['id'])) ?>" class="btn btn-sm btn-success w-100 mt-auto">
+                    <button type="button"
+                            class="btn btn-sm btn-success w-100 mt-auto js-payslip-preview"
+                            data-bs-toggle="modal"
+                            data-bs-target="#payslipPreviewModal"
+                            data-preview-url="<?= e(base_url('portal/payslipPreview/' . (string)$latestPayslip['id'])) ?>"
+                            data-pdf-url="<?= e(base_url('portal/payslipPdf/' . (string)$latestPayslip['id'])) ?>"
+                            data-title="<?= e((string)($latestPayslip['pay_period'] ?? $latestPayslip['run_date'] ?? 'Payslip')) ?>">
                         <i class="bi bi-eye me-1"></i>View Payslip
-                    </a>
+                    </button>
                 <?php else: ?>
                     <p class="text-muted mb-0 text-center py-4"><i class="bi bi-info-circle me-1"></i>No approved payslips yet.</p>
                 <?php endif; ?>
@@ -298,3 +304,48 @@ $statCard = static function (string $label, string $value, string $subtext, stri
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="payslipPreviewModal" tabindex="-1" aria-labelledby="payslipPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0" id="payslipPreviewModalLabel">Payslip Preview</h5>
+                    <div class="text-muted small" id="payslipPreviewSubtitle"></div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="#" class="btn btn-success btn-sm" id="payslipPreviewDownload">
+                        <i class="bi bi-file-earmark-pdf me-1"></i> Download PDF
+                    </a>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" style="min-height:70vh">
+                <iframe id="payslipPreviewFrame" title="Payslip preview" src="about:blank" style="width:100%;height:72vh;border:0;background:#fff"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('click', function (event) {
+        const button = event.target.closest('.js-payslip-preview');
+        if (!button) { return; }
+
+        const frame = document.getElementById('payslipPreviewFrame');
+        const download = document.getElementById('payslipPreviewDownload');
+        const subtitle = document.getElementById('payslipPreviewSubtitle');
+
+        if (frame) { frame.src = button.dataset.previewUrl || 'about:blank'; }
+        if (download) { download.href = button.dataset.pdfUrl || '#'; }
+        if (subtitle) { subtitle.textContent = button.dataset.title || ''; }
+    });
+
+    const payslipModal = document.getElementById('payslipPreviewModal');
+    if (payslipModal) {
+        payslipModal.addEventListener('hidden.bs.modal', function () {
+            const frame = document.getElementById('payslipPreviewFrame');
+            if (frame) { frame.src = 'about:blank'; }
+        });
+    }
+</script>

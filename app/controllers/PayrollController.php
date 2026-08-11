@@ -820,39 +820,51 @@ class PayrollController extends Controller
         require_auth();
         require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
 
-        $runIdInt = (int) $runId;
-        $employeeIdInt = (int) $employeeId;
+        $payload = $this->payslipPayload((int) $runId, (int) $employeeId);
 
-        if ($runIdInt <= 0 || $employeeIdInt <= 0) {
+        $this->renderAuth('payroll/payslip', $payload + [
+            'title' => 'Payslip',
+            'embedded' => (string) $this->input('embedded', '') === '1',
+            'csrf' => Session::csrfToken(),
+        ]);
+    }
+
+    public function payslipPdf(string $runId, string $employeeId): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
+
+        $payload = $this->payslipPayload((int) $runId, (int) $employeeId);
+        PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'payslip'));
+    }
+
+    private function payslipPayload(int $runId, int $employeeId): array
+    {
+        if ($runId <= 0 || $employeeId <= 0) {
             Session::flash('error', 'Invalid payslip reference.');
             redirect('payroll/index');
         }
 
         $model = new PayrollRun();
-        $item = $model->itemForRunAndEmployee($runIdInt, $employeeIdInt);
+        $item = $model->itemForRunAndEmployee($runId, $employeeId);
 
         if (!$item) {
             Session::flash('error', 'Payslip not found for this run and employee.');
-            redirect('payroll/edit/' . $runIdInt);
+            redirect('payroll/edit/' . $runId);
         }
 
         $payPeriod = substr((string) ($item['pay_period'] ?? ''), 0, 7);
         $runDate = preg_match('/^20\d{2}-(0[1-9]|1[0-2])$/', $payPeriod)
             ? date('Y-m-t', strtotime($payPeriod . '-01'))
             : (string) ($item['run_date'] ?? date('Y-m-d'));
-        $salaryModel = new EmployeeSalary();
-        $bonusModel = new BonusOvertime();
-
-        $salary = $salaryModel->activeWithStructureForDate($employeeIdInt, $runDate) ?: [];
-        $bonuses = $bonusModel->forRunAndEmployee($runIdInt, $employeeIdInt);
+        $salary = (new EmployeeSalary())->activeWithStructureForDate($employeeId, $runDate) ?: [];
 
         $basicPay = (float) ($salary['basic_pay'] ?? 0);
         $housingAllowance = (float) ($salary['housing_allowance'] ?? 0);
         $transportAllowance = (float) ($salary['transport_allowance'] ?? 0);
         $otherAllowances = (float) ($salary['other_allowances'] ?? 0);
         $bonusTotal = 0.0;
-
-        foreach ($bonuses as $bonus) {
+        foreach ((new BonusOvertime())->forRunAndEmployee($runId, $employeeId) as $bonus) {
             $bonusTotal += (float) ($bonus['amount'] ?? 0);
         }
 
@@ -877,8 +889,7 @@ class PayrollController extends Controller
 
         $company = current_company() ?? [];
 
-        $this->renderAuth('payroll/payslip', [
-            'title' => 'Payslip',
+        return [
             'companyName' => (string) ($company['name'] ?? app_product_name()),
             'companyAddress' => (string) ($company['address'] ?? 'Payroll Office'),
             'companyLogoUrl' => company_logo_url($company),
@@ -890,8 +901,7 @@ class PayrollController extends Controller
             'totalDeductions' => $calculatedDeductions,
             'netPay' => (float) ($item['net_pay'] ?? 0),
             'downloadName' => $downloadName,
-            'csrf' => Session::csrfToken(),
-        ]);
+        ];
     }
 
     private function sendPayslipEmail(int $runId, int $employeeId): array

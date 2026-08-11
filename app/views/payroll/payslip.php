@@ -8,6 +8,9 @@
     $companyLogoUrl = $companyLogoUrl ?? company_logo_url();
     $paymentDate = (string) ($paymentDate ?? ($item['run_date'] ?? date('Y-m-d')));
     $paymentMethod = (string) ($paymentMethod ?? 'Bank Transfer');
+    $embedded = (bool) ($embedded ?? false);
+    $adminPdfUrl = base_url('payroll/payslipPdf/' . (string) ($item['payroll_run_id'] ?? 0) . '/' . (string) ($item['employee_id'] ?? 0));
+    $pdfUrl = (string) ($pdfUrl ?? $adminPdfUrl);
 ?>
 
 <!DOCTYPE html>
@@ -42,6 +45,12 @@
             align-items: center;
             padding: 40px 20px;
             color: var(--ink);
+        }
+
+        body.embedded {
+            background: #fff;
+            min-height: auto;
+            padding: 0;
         }
 
         .toolbar {
@@ -327,20 +336,29 @@
 
         @media (max-width: 768px) {
             body { padding: 16px; }
+            body.embedded { padding: 0; }
             #payslip { padding: 28px 22px; }
             .header, .net-pay, .footer { flex-direction: column; align-items: flex-start; }
             .slip-label { text-align: left; }
             .net-pay .payment-info, .signature-block { text-align: left; }
             .summary-row, .columns, .info-grid { grid-template-columns: 1fr; }
         }
+
+        body.embedded #payslip {
+            box-shadow: none;
+            max-width: 100%;
+            padding: 34px 38px;
+        }
     </style>
 </head>
-<body>
+<body class="<?= $embedded ? 'embedded' : '' ?>">
+    <?php if (!$embedded): ?>
     <div class="toolbar">
         <a class="btn btn-outline" href="<?= e(base_url('payroll/edit/' . (string) ($item['payroll_run_id'] ?? 0))) ?>">Back to Run</a>
         <button class="btn btn-primary" type="button" onclick="window.print()">Print Payslip</button>
-        <button class="btn btn-outline" type="button" onclick="downloadHTML()">Download HTML</button>
+        <a class="btn btn-outline" href="<?= e($pdfUrl) ?>">Download PDF</a>
     </div>
+    <?php endif; ?>
 
     <div id="payslip">
         <div class="header">
@@ -449,18 +467,5 @@
             </div>
         </div>
     </div>
-
-    <script>
-        function downloadHTML() {
-            const content = document.documentElement.outerHTML;
-            const blob = new Blob([content], { type: 'text/html' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = <?= json_encode(($downloadName ?: 'payslip') . '.html') ?>;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-    </script>
 </body>
 </html>

@@ -330,12 +330,43 @@ class PortalController extends Controller
     public function payslipView(string $id = '0'): void
     {
         require_employee_auth();
-        $empId     = (int) (current_employee()['id']);
-        $payslipId = (int) $id;
+        $payload = $this->portalPayslipPayload((int) $id);
+
+        $this->renderPortal('portal/payslip-view', [
+            'emp'        => current_employee(),
+            'slip'       => $payload['item'],
+            'deductions' => $payload['deductionLines'],
+            'earnings'   => $payload['earningsLines'],
+        ]);
+    }
+
+    public function payslipPreview(string $id = '0'): void
+    {
+        require_employee_auth();
+
+        $payload = $this->portalPayslipPayload((int) $id);
+        $this->renderAuth('payroll/payslip', $payload + [
+            'title' => 'Payslip',
+            'embedded' => true,
+        ]);
+    }
+
+    public function payslipPdf(string $id = '0'): void
+    {
+        require_employee_auth();
+
+        $payload = $this->portalPayslipPayload((int) $id);
+        PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'payslip'));
+    }
+
+    private function portalPayslipPayload(int $payslipId): array
+    {
+        $empId = (int) (current_employee()['id'] ?? 0);
 
         $stmt = db()->prepare(
             "SELECT pi.*, pr.run_date, pr.pay_period, pr.status AS run_status,
-                    e.full_name, e.employee_number, e.designation,
+                    e.full_name, e.full_name AS employee_name, e.employee_number, e.designation,
+                    e.bank_name, e.bank_account_number,
                     d.name AS department_name
              FROM payroll_items pi
              JOIN payroll_runs pr ON pr.id = pi.payroll_run_id
@@ -353,15 +384,28 @@ class PortalController extends Controller
         }
 
         $payrollModel = new PayrollRun();
-        $deductions = $payrollModel->deductionLinesForItem($payslipId);
         $earnings = $payrollModel->earningLinesForItem($payslipId);
+        if ($earnings === []) {
+            $earnings = [['label' => 'Gross Earnings', 'amount' => (float) ($slip['gross_pay'] ?? 0)]];
+        }
+        $deductions = $payrollModel->deductionLinesForItem($payslipId);
+        $company = current_company() ?? [];
+        $downloadName = strtolower(preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($slip['employee_number'] ?? 'employee')) . '-' . preg_replace('/[^A-Za-z0-9_-]/', '-', (string) ($slip['pay_period'] ?? 'pay-period')));
+        $downloadName = trim($downloadName, '-') ?: 'payslip';
 
-        $this->renderPortal('portal/payslip-view', [
-            'emp'        => current_employee(),
-            'slip'       => $slip,
-            'deductions' => $deductions,
-            'earnings'   => $earnings,
-        ]);
+        return [
+            'companyName' => (string) ($company['name'] ?? app_product_name()),
+            'companyAddress' => (string) ($company['address'] ?? 'Payroll Office'),
+            'companyLogoUrl' => company_logo_url($company),
+            'item' => $slip,
+            'salary' => [],
+            'earningsLines' => $earnings,
+            'deductionLines' => $deductions,
+            'grossEarnings' => (float) ($slip['gross_pay'] ?? 0),
+            'totalDeductions' => (float) ($slip['total_deductions'] ?? 0),
+            'netPay' => (float) ($slip['net_pay'] ?? 0),
+            'downloadName' => $downloadName,
+        ];
     }
 
     public function contract(): void

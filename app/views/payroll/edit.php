@@ -472,7 +472,19 @@
                                 <td class="<?= (float)($item['balance_due'] ?? 0) > 0 ? 'text-danger' : 'text-success' ?>"><?= e(format_currency((float) ($item['balance_due'] ?? 0))) ?></td>
                                 <td><?= e((string) ($item['generated_at'] ?? '-')) ?></td>
                                 <td class="text-end">
-                                    <a class="btn btn-sm btn-outline-primary" href="<?= e(base_url('payroll/payslip/' . (string) $run['id'] . '/' . (string) ($item['employee_id'] ?? 0))) ?>">View Payslip</a>
+                                    <?php
+                                        $payslipViewUrl = base_url('payroll/payslip/' . (string) $run['id'] . '/' . (string) ($item['employee_id'] ?? 0) . '?embedded=1');
+                                        $payslipPdfUrl = base_url('payroll/payslipPdf/' . (string) $run['id'] . '/' . (string) ($item['employee_id'] ?? 0));
+                                    ?>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-primary js-payslip-preview"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#payslipPreviewModal"
+                                            data-preview-url="<?= e($payslipViewUrl) ?>"
+                                            data-pdf-url="<?= e($payslipPdfUrl) ?>"
+                                            data-title="<?= e((string) ($item['employee_name'] ?? 'Payslip')) ?>">
+                                        View Payslip
+                                    </button>
                                     <?php if (!$isLocked && $currentStatus === 'Draft' && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                                     <button type="button"
                                             class="btn btn-sm btn-outline-danger"
@@ -507,6 +519,51 @@
                 </tbody>
             </table>
         </div>
+
+        <div class="modal fade" id="payslipPreviewModal" tabindex="-1" aria-labelledby="payslipPreviewModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content border-0">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title mb-0" id="payslipPreviewModalLabel">Payslip Preview</h5>
+                            <div class="text-muted small" id="payslipPreviewSubtitle"></div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="#" class="btn btn-success btn-sm" id="payslipPreviewDownload">
+                                <i class="bi bi-file-earmark-pdf me-1"></i> Download PDF
+                            </a>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                    </div>
+                    <div class="modal-body p-0" style="min-height:70vh">
+                        <iframe id="payslipPreviewFrame" title="Payslip preview" src="about:blank" style="width:100%;height:72vh;border:0;background:#fff"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('.js-payslip-preview');
+                if (!button) { return; }
+
+                const frame = document.getElementById('payslipPreviewFrame');
+                const download = document.getElementById('payslipPreviewDownload');
+                const subtitle = document.getElementById('payslipPreviewSubtitle');
+
+                if (frame) { frame.src = button.dataset.previewUrl || 'about:blank'; }
+                if (download) { download.href = button.dataset.pdfUrl || '#'; }
+                if (subtitle) { subtitle.textContent = button.dataset.title || ''; }
+            });
+
+            const payslipModal = document.getElementById('payslipPreviewModal');
+            if (payslipModal) {
+                payslipModal.addEventListener('hidden.bs.modal', function () {
+                    const frame = document.getElementById('payslipPreviewFrame');
+                    if (frame) { frame.src = 'about:blank'; }
+                });
+            }
+        </script>
 
         <hr class="my-4">
 
