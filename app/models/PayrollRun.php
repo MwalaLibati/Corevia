@@ -324,6 +324,11 @@ class PayrollRun extends Model
         }
 
         $calculation = $this->calculatePayrollItems($run);
+        $attendanceEngine = new AttendancePayrollRule();
+        $attendanceSnapshot = $attendanceEngine->persistApprovedInputsForRun($run);
+        if (!empty($attendanceSnapshot['enabled'])) {
+            $calculation['attendance'] = $attendanceSnapshot;
+        }
         $cid = Tenant::id();
         $userId = (int) (current_user()['id'] ?? 0) ?: null;
         (new Allowance())->ensureSchema();
@@ -427,6 +432,7 @@ class PayrollRun extends Model
                 'total_deductions' => $calculation['deductions'],
                 'net_pay' => $calculation['net'],
                 'employee_count' => $calculation['employees'],
+                'attendance_payroll' => $calculation['attendance']['totals'] ?? ['earnings' => 0, 'deductions' => 0],
             ], $userId);
 
             $this->db->commit();
@@ -470,6 +476,9 @@ class PayrollRun extends Model
         $employeeSalaryModel = new EmployeeSalary();
         $employeeDeductionModel = new EmployeeDeduction();
         $allowanceModel = new Allowance();
+        $attendanceEngine = new AttendancePayrollRule();
+        $attendancePayroll = $attendanceEngine->previewInputsForRun($run);
+        $attendanceByEmployee = $attendancePayroll['by_employee'] ?? [];
 
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
@@ -551,14 +560,19 @@ class PayrollRun extends Model
                 $bonusIds[] = (int) $bonus['id'];
             }
 
+            $attendanceInputs = $attendanceByEmployee[$employeeId] ?? [];
+            $attendanceEarnings = array_values(array_filter($attendanceInputs, static fn(array $line): bool => (string) ($line['input_type'] ?? '') === 'Earning'));
+            $attendanceDeductions = array_values(array_filter($attendanceInputs, static fn(array $line): bool => (string) ($line['input_type'] ?? '') === 'Deduction'));
+            $attendanceEarningTotal = round(array_sum(array_map(static fn(array $line): float => (float) ($line['amount'] ?? 0), $attendanceEarnings)), 2);
+
             $grossAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_gross'] === 1), 'amount'));
             $taxableAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['is_taxable'] === 1), 'amount'));
             $napsaAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_napsa'] === 1), 'amount'));
             $nhimaAllowances = array_sum(array_column(array_filter($allowanceLines, static fn(array $line): bool => (int) $line['included_in_nhima'] === 1), 'amount'));
-            $grossPay = round($basicPay + $grossAllowances + $bonusAmount, 2);
-            $taxablePay = round($basicPay + $taxableAllowances + $bonusAmount, 2);
-            $napsaBase = round($basicPay + $napsaAllowances, 2);
-            $nhimaBase = round($basicPay + $nhimaAllowances + $bonusAmount, 2);
+            $grossPay = round($basicPay + $grossAllowances + $bonusAmount + $attendanceEarningTotal, 2);
+            $taxablePay = round($basicPay + $taxableAllowances + $bonusAmount + $attendanceEarningTotal, 2);
+            $napsaBase = round($basicPay + $napsaAllowances + $attendanceEarningTotal, 2);
+            $nhimaBase = round($basicPay + $nhimaAllowances + $bonusAmount + $attendanceEarningTotal, 2);
             $earningLines = [[
                 'code' => 'BASIC', 'name' => 'Basic Salary', 'category' => 'basic',
                 'calculation_type' => 'Fixed', 'base' => $fullBasicPay, 'rate_percent' => null, 'amount' => $basicPay,
@@ -568,6 +582,18 @@ class PayrollRun extends Model
             }
             if ($bonusAmount > 0) {
                 $earningLines[] = ['code' => 'BONUS', 'name' => 'Bonuses / Overtime', 'category' => 'bonus', 'calculation_type' => 'Actual', 'base' => $bonusAmount, 'rate_percent' => null, 'amount' => $bonusAmount];
+            }
+            foreach ($attendanceEarnings as $line) {
+                $earningLines[] = [
+                    'code' => (string) ($line['code'] ?? 'ATT-EARN'),
+                    'name' => (string) ($line['label'] ?? 'Attendance Earning'),
+                    'category' => 'attendance',
+                    'calculation_type' => 'Attendance',
+                    'base' => (float) ($line['rate'] ?? 0),
+                    'rate_percent' => null,
+                    'amount' => (float) ($line['amount'] ?? 0),
+                    'meta' => ['source' => 'attendance_payroll', 'quantity' => (float) ($line['quantity'] ?? 0), 'summary' => $line['summary'] ?? []],
+                ];
             }
             $deductionLines = [];
             $employeeSpecificTotal = 0.0;
@@ -589,6 +615,22 @@ class PayrollRun extends Model
                     'base' => $grossPay,
                     'rate_percent' => $calculationType === 'Percent' ? $rateOrAmount : null,
                     'amount' => $amount,
+                ];
+            }
+
+            $attendanceDeductionTotal = 0.0;
+            foreach ($attendanceDeductions as $line) {
+                $amount = round((float) ($line['amount'] ?? 0), 2);
+                $attendanceDeductionTotal += $amount;
+                $deductionLines[] = [
+                    'code' => (string) ($line['code'] ?? 'ATT-DED'),
+                    'name' => (string) ($line['label'] ?? 'Attendance Deduction'),
+                    'category' => 'attendance',
+                    'calculation_type' => 'Attendance',
+                    'base' => (float) ($line['rate'] ?? 0),
+                    'rate_percent' => null,
+                    'amount' => $amount,
+                    'meta' => ['source' => 'attendance_payroll', 'quantity' => (float) ($line['quantity'] ?? 0), 'summary' => $line['summary'] ?? []],
                 ];
             }
 
@@ -633,7 +675,7 @@ class PayrollRun extends Model
                 ];
             }
 
-            $deductions = round($employeeSpecificTotal + $statutoryTotal + $advanceDeduction, 2);
+            $deductions = round($employeeSpecificTotal + $attendanceDeductionTotal + $statutoryTotal + $advanceDeduction, 2);
             $netPay = max(0, round($grossPay - $deductions, 2));
 
             $items[] = [
@@ -652,6 +694,9 @@ class PayrollRun extends Model
                 'period_days' => $proration['period_days'],
                 'proration_factor' => $factor,
                 'proration_mode' => $prorationMode,
+                'attendance_inputs' => $attendanceInputs,
+                'attendance_earnings' => $attendanceEarningTotal,
+                'attendance_deductions' => $attendanceDeductionTotal,
             ];
 
             $totals['gross'] += $grossPay;
@@ -665,6 +710,7 @@ class PayrollRun extends Model
         $totals['net'] = round($totals['net'], 2);
         $totals['employer_contributions'] = round($totals['employer_contributions'], 2);
         $totals['items'] = $items;
+        $totals['attendance'] = $attendancePayroll;
 
         return $totals;
     }
@@ -880,6 +926,7 @@ class PayrollRun extends Model
         if ($cid > 0) { $params['cid'] = $cid; }
         $stmt->execute($params);
 
+        (new AttendancePayrollRule())->lockInputsForRun($runId);
         $this->recordCalculationAudit($runId, null, null, 'locked', [], $userId);
     }
 

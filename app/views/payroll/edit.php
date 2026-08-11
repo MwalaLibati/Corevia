@@ -23,6 +23,13 @@
     $paymentNotesDefault = (string) ($paymentOldInput['notes'] ?? '');
     $isLocked = (int) ($run['is_locked'] ?? 0) === 1;
     $isReversed = !empty($run['reversed_at']);
+    $attendancePayrollInputs = $attendancePayrollInputs ?? [];
+    $attendanceEarningsTotal = 0.0;
+    $attendanceDeductionsTotal = 0.0;
+    foreach ($attendancePayrollInputs as $api) {
+        if (($api['input_type'] ?? '') === 'Earning') { $attendanceEarningsTotal += (float) ($api['amount'] ?? 0); }
+        if (($api['input_type'] ?? '') === 'Deduction') { $attendanceDeductionsTotal += (float) ($api['amount'] ?? 0); }
+    }
 ?>
 
 <div class="row g-3 mb-4">
@@ -342,6 +349,54 @@
         </form>
 
         <hr class="my-4">
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Attendance Payroll Inputs</h5>
+                        <p class="text-gray mb-0">Approved attendance-derived earnings and deductions used by this run.</p>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <span class="badge bg-light text-dark border">Earnings: <?= e(format_currency($attendanceEarningsTotal)) ?></span>
+                        <span class="badge bg-light text-dark border">Deductions: <?= e(format_currency($attendanceDeductionsTotal)) ?></span>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Type</th>
+                                <th>Rule</th>
+                                <th>Qty</th>
+                                <th>Rate</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (empty($attendancePayrollInputs)): ?>
+                            <tr><td colspan="7" class="text-center text-gray">No attendance payroll inputs were generated for this run.</td></tr>
+                        <?php else: foreach ($attendancePayrollInputs as $input): ?>
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold"><?= e((string)($input['employee_name'] ?? '')) ?></div>
+                                    <div class="text-gray small"><?= e((string)($input['employee_number'] ?? '')) ?></div>
+                                </td>
+                                <td><span class="badge bg-<?= ($input['input_type'] ?? '') === 'Earning' ? 'success' : 'danger' ?>"><?= e((string)$input['input_type']) ?></span></td>
+                                <td><?= e((string)$input['label']) ?></td>
+                                <td><?= e(number_format((float)$input['quantity'], 2)) ?></td>
+                                <td><?= e(format_currency((float)$input['rate'])) ?></td>
+                                <td><?= e(format_currency((float)$input['amount'])) ?></td>
+                                <td><span class="badge bg-<?= ($input['status'] ?? '') === 'Locked' ? 'dark' : 'info' ?>"><?= e((string)$input['status']) ?></span></td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <div class="row g-3 mb-3">
             <div class="col-sm-6 col-xl-3">

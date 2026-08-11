@@ -872,6 +872,7 @@ class EmployeeController extends Controller
 
     private function collectEmployeeInput(): array
     {
+        (new AttendancePayrollRule())->ensureSchema();
         $departmentId = (int) $this->input('department_id', 0);
         $branchId = (int) $this->input('branch_id', 0);
         $designationId = (int) $this->input('designation_id', 0);
@@ -892,6 +893,7 @@ class EmployeeController extends Controller
             'designation_id' => $designationId > 0 ? $designationId : null,
             'designation' => $designationName ?? $this->normalizeNullableString((string) $this->input('designation', '')),
             'employment_type' => (string) $this->input('employment_type', 'Permanent'),
+            'pay_calculation_method' => $this->validPayCalculationMethod((string) $this->input('pay_calculation_method', 'Fixed Monthly Salary')),
             'bank_name' => $this->normalizeNullableString((string) $this->input('bank_name', '')),
             'bank_account_number' => $this->normalizeNullableString((string) $this->input('bank_account_number', '')),
             'contract_status' => (string) $this->input('contract_status', 'Active'),
@@ -1166,6 +1168,12 @@ class EmployeeController extends Controller
     private function employeePortalEmailSettings(): array
     {
         return corevia_mail_settings(Tenant::id());
+    }
+
+    private function validPayCalculationMethod(string $method): string
+    {
+        $allowed = ['Fixed Monthly Salary', 'Hourly', 'Daily', 'Shift-Based'];
+        return in_array($method, $allowed, true) ? $method : 'Fixed Monthly Salary';
     }
 
     private function normalizeNullableMoney(string $value): ?float

@@ -113,12 +113,23 @@
                 </select>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-3">
+                <label class="form-label">Pay Calculation Method</label>
+                <?php $payMethod = (string) ($old['pay_calculation_method'] ?? 'Fixed Monthly Salary'); ?>
+                <select name="pay_calculation_method" class="form-select">
+                    <?php foreach (['Fixed Monthly Salary', 'Hourly', 'Daily', 'Shift-Based'] as $method): ?>
+                        <option value="<?= e($method) ?>" <?= $payMethod === $method ? 'selected' : '' ?>><?= e($method) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-gray">Default keeps current fixed salary behavior.</small>
+            </div>
+
+            <div class="col-md-3">
                 <label class="form-label">Bank Name</label>
                 <input type="text" name="bank_name" class="form-control" value="<?= e((string) ($old['bank_name'] ?? '')) ?>">
             </div>
 
-            <div class="col-md-6">
+            <div class="col-md-3">
                 <label class="form-label">Bank Account Number</label>
                 <input type="text" name="bank_account_number" class="form-control" value="<?= e((string) ($old['bank_account_number'] ?? '')) ?>">
             </div>

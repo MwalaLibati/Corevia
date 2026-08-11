@@ -173,6 +173,7 @@ class PayrollController extends Controller
             'title' => 'Edit Payroll Run',
             'run' => $run,
             'runItems' => $model->itemsForRun($runId),
+            'attendancePayrollInputs' => (new AttendancePayrollRule())->inputsForRun($runId),
             'paymentSummary' => $paymentSummary,
             'paymentHistory' => $paymentHistory,
             'calculationHistory' => $model->calculationHistory($runId),
@@ -557,6 +558,7 @@ class PayrollController extends Controller
             'title' => 'Payroll Preview',
             'run' => $run,
             'preview' => $preview,
+            'attendancePreview' => $preview['attendance'] ?? ['enabled' => false, 'totals' => ['earnings' => 0, 'deductions' => 0], 'by_employee' => []],
             'csrf' => Session::csrfToken(),
         ]);
     }
