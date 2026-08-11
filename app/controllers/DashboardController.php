@@ -87,6 +87,11 @@ class DashboardController extends Controller
         $pendingAdvancesStmt->execute();
         $pendingAdvances = $pendingAdvancesStmt->fetchAll();
 
+        $approvalInbox = new ApprovalInbox();
+        $allApprovalItems = $approvalInbox->pendingForCurrentUser(500);
+        $approvalItems = array_slice($allApprovalItems, 0, 6);
+        $approvalSummary = $approvalInbox->summaryForItems($allApprovalItems);
+
         $contractModel = new EmployeeContract();
         $contractModel->autoExpire();
         $expiringContracts = $contractModel->expiringWithinDays(30);
@@ -122,6 +127,8 @@ class DashboardController extends Controller
             'leaveChart'        => $leaveChart,
             'pendingLeave'      => $pendingLeave,
             'pendingAdvances'   => $pendingAdvances,
+            'approvalItems'     => $approvalItems,
+            'approvalSummary'   => $approvalSummary,
         ]);
     }
 

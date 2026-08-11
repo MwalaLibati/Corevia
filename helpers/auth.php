@@ -90,6 +90,7 @@ function module_catalog(): array
 {
     return [
         'dashboard' => ['label' => 'Dashboard', 'icon' => 'bi-grid-1x2', 'url' => 'dashboard/index', 'section' => 'Overview', 'routes' => ['dashboard']],
+        'approvals' => ['label' => 'My Approvals', 'icon' => 'bi-inbox', 'url' => 'approval-inbox/index', 'section' => 'Overview', 'routes' => ['approval-inbox']],
         'employees' => ['label' => 'Employees', 'icon' => 'bi-people', 'url' => 'employee/index', 'section' => 'Employee Management', 'routes' => ['employee']],
         'onboarding' => ['label' => 'Onboarding Links', 'icon' => 'bi-person-plus', 'url' => 'onboarding/index', 'section' => 'Employee Management', 'routes' => ['onboarding']],
         'branches' => ['label' => 'Branches', 'icon' => 'bi-geo-alt', 'url' => 'branch/index', 'section' => 'Employee Management', 'routes' => ['branch']],
@@ -198,7 +199,12 @@ function user_allowed_modules(?array $user = null): array
         }
     }
 
-    return array_values(array_intersect($roleModules, company_subscription_modules()));
+    $allowed = array_values(array_intersect($roleModules, company_subscription_modules()));
+    if (!in_array('approvals', $allowed, true)) {
+        $allowed[] = 'approvals';
+    }
+
+    return $allowed;
 }
 
 function company_subscription_modules(): array
@@ -248,6 +254,10 @@ function can_access_module(string $moduleKey, ?array $user = null): bool
     }
 
     if ($moduleKey === 'dashboard') {
+        return true;
+    }
+
+    if ($moduleKey === 'approvals') {
         return true;
     }
 

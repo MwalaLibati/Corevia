@@ -10,6 +10,8 @@ $dashboardCompany = current_company();
 $dashboardCompanyName = (string) ($dashboardCompany['name'] ?? app_product_name());
 $contractExpiryUrl = base_url('report/contractExpiry') . '?date_from=' . date('Y-m-d') . '&date_to=' . date('Y-m-d', strtotime('+6 months'));
 $latestPayrollUrl = $latestRun ? base_url('payroll/edit/' . (int) $latestRun['id']) : base_url('payroll/index');
+$approvalItems = $approvalItems ?? [];
+$approvalSummary = $approvalSummary ?? ['total' => 0, 'by_type' => []];
 $dashboardCards = [
     [
         'label' => 'Total Employees',
@@ -204,6 +206,59 @@ $dashboardCards = [
         </div>
     </div>
     <?php endif; ?>
+</div>
+
+<!-- User approval queue -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="ent-section-header mb-3">
+            <div>
+                <h6 class="mb-0 fw-bold">My Pending Approvals</h6>
+                <div class="text-muted small">Only items assigned to your approval role appear here.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <?php if ((int) ($approvalSummary['total'] ?? 0) > 0): ?>
+                    <span class="badge bg-danger"><?= number_format((int) $approvalSummary['total']) ?></span>
+                <?php endif; ?>
+                <a href="<?= e(base_url('approval-inbox/index')) ?>" class="btn btn-sm btn-outline-secondary">Open Inbox</a>
+            </div>
+        </div>
+
+        <?php if (empty($approvalItems)): ?>
+            <div class="d-flex align-items-center gap-2 text-muted py-2">
+                <i class="bi bi-check2-circle text-success"></i>
+                <span>No approvals waiting for you.</span>
+            </div>
+        <?php else: ?>
+            <div class="row g-3">
+                <?php foreach ($approvalItems as $item): ?>
+                <div class="col-md-6 col-xl-4">
+                    <a href="<?= e((string) ($item['url'] ?? '#')) ?>" class="text-decoration-none d-block h-100">
+                        <div class="border rounded-3 p-3 h-100 bg-white">
+                            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+                                <div class="d-flex align-items-center gap-2 overflow-hidden">
+                                    <span style="width:34px;height:34px;border-radius:10px;background:#eff6ff;color:#1d4ed8;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+                                        <i class="bi <?= e((string) ($item['icon'] ?? 'bi-list-check')) ?>"></i>
+                                    </span>
+                                    <div class="overflow-hidden">
+                                        <div class="fw-semibold text-dark text-truncate"><?= e((string) ($item['title'] ?? 'Approval')) ?></div>
+                                        <div class="text-muted small text-truncate"><?= e((string) ($item['subject'] ?? '')) ?></div>
+                                    </div>
+                                </div>
+                                <span class="badge text-bg-warning flex-shrink-0"><?= e((string) ($item['type'] ?? 'Approval')) ?></span>
+                            </div>
+                            <div class="small text-muted mb-2"><?= e((string) ($item['meta'] ?? '')) ?></div>
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <span class="small text-muted"><?= e((string) ($item['stage'] ?? 'Pending')) ?></span>
+                                <span class="btn btn-primary btn-sm py-1"><?= e((string) ($item['action_label'] ?? 'Review')) ?></span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- Contract alert -->
