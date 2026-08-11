@@ -33,6 +33,7 @@ class OnboardingController extends Controller
             'csrf' => Session::csrfToken(),
             'employees' => $employeeModel->listWithDepartment(),
             'departments' => $employeeModel->departments(),
+            'designations' => $employeeModel->designations(),
             'employmentTypes' => (new EmploymentType())->active(),
             'requiredFieldOptions' => $this->availableRequiredFields(),
             'old' => $_SESSION['_old_onboarding_input'] ?? [],
@@ -221,6 +222,9 @@ class OnboardingController extends Controller
         $selectedEmployeeId = (int) $this->input('selected_employee_id', 0);
         $selectedEmployee = $selectedEmployeeId > 0 ? (new Employee())->find($selectedEmployeeId) : null;
         $departmentId = (int) $this->input('department_id', 0);
+        $designationId = (int) $this->input('designation_id', 0);
+        $resolvedDesignationId = $designationId > 0 ? $designationId : (!empty($selectedEmployee['designation_id']) ? (int) $selectedEmployee['designation_id'] : null);
+        $designationName = $resolvedDesignationId ? (new Designation())->findName((int) $resolvedDesignationId) : null;
         $expiresDays = max(1, min(30, (int) $this->input('expires_days', 7)));
         $requiredFields = $this->selectedRequiredFields();
         return [
@@ -230,7 +234,8 @@ class OnboardingController extends Controller
             'invited_email' => $this->nullable((string) $this->input('invited_email', '')) ?? $this->nullable((string) ($selectedEmployee['email'] ?? '')),
             'invited_phone' => $this->nullable((string) $this->input('invited_phone', '')) ?? $this->nullable((string) ($selectedEmployee['phone'] ?? '')),
             'department_id' => $departmentId > 0 ? $departmentId : (!empty($selectedEmployee['department_id']) ? (int) $selectedEmployee['department_id'] : null),
-            'designation' => $this->nullable((string) $this->input('designation', '')) ?? $this->nullable((string) ($selectedEmployee['designation'] ?? '')),
+            'designation_id' => $resolvedDesignationId,
+            'designation' => $designationName ?? $this->nullable((string) ($selectedEmployee['designation'] ?? '')),
             'employment_type' => trim((string) $this->input('employment_type', '')) ?: (string) ($selectedEmployee['employment_type'] ?? 'Permanent'),
             'expected_start_date' => $this->dateOrNull((string) $this->input('expected_start_date', '')),
             'expires_at' => date('Y-m-d H:i:s', strtotime('+' . $expiresDays . ' days')),
@@ -312,6 +317,7 @@ class OnboardingController extends Controller
             'napsa_number' => $this->nullable((string) ($request['napsa_number'] ?? '')),
             'tpin' => $this->nullable((string) ($request['tpin'] ?? '')),
             'department_id' => !empty($request['department_id']) ? (int) $request['department_id'] : null,
+            'designation_id' => !empty($request['designation_id']) ? (int) $request['designation_id'] : null,
             'designation' => $this->nullable((string) ($request['designation'] ?? '')),
             'employment_type' => (string) ($request['employment_type'] ?? 'Permanent'),
             'bank_name' => $this->nullable((string) ($request['bank_name'] ?? '')),

@@ -91,7 +91,14 @@
 
             <div class="col-md-3">
                 <label class="form-label">Designation</label>
-                <input type="text" name="designation" class="form-control" value="<?= e((string) ($old['designation'] ?? '')) ?>">
+                <select name="designation_id" class="form-select">
+                    <option value="">Select designation</option>
+                    <?php foreach (($designations ?? []) as $designation): ?>
+                        <option value="<?= e((string) $designation['id']) ?>" <?= ((string) ($old['designation_id'] ?? '') === (string) $designation['id']) ? 'selected' : '' ?>>
+                            <?= e((string) $designation['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
 
             <div class="col-md-3">

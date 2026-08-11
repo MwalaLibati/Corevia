@@ -99,6 +99,7 @@ function module_catalog(): array
         'onboarding' => ['label' => 'Onboarding Links', 'icon' => 'bi-person-plus', 'url' => 'onboarding/index', 'section' => 'Employee Management', 'routes' => ['onboarding']],
         'branches' => ['label' => 'Branches', 'icon' => 'bi-geo-alt', 'url' => 'branch/index', 'section' => 'Employee Management', 'routes' => ['branch']],
         'departments' => ['label' => 'Departments', 'icon' => 'bi-diagram-3', 'url' => 'department/index', 'section' => 'Employee Management', 'routes' => ['department']],
+        'designations' => ['label' => 'Designations', 'icon' => 'bi-person-workspace', 'url' => 'designation/index', 'section' => 'Employee Management', 'routes' => ['designation']],
         'employment_types' => ['label' => 'Employment Types', 'icon' => 'bi-person-badge', 'url' => 'employment-type/index', 'section' => 'Employee Management', 'routes' => ['employment-type']],
         'letter_templates' => ['label' => 'Letter Templates', 'icon' => 'bi-envelope-paper', 'url' => 'employee-letter-template/index', 'section' => 'Employee Management', 'routes' => ['employee-letter-template']],
         'contracts' => ['label' => 'Contracts', 'icon' => 'bi-file-earmark-text', 'url' => 'contract/index', 'section' => 'Contracts', 'routes' => ['contract']],
@@ -198,6 +199,9 @@ function user_allowed_modules(?array $user = null): array
             if (in_array('salary', $roleModules, true) && !in_array('allowances', $roleModules, true)) {
                 $roleModules[] = 'allowances';
             }
+            if (in_array('departments', $roleModules, true) && !in_array('designations', $roleModules, true)) {
+                $roleModules[] = 'designations';
+            }
         } catch (Throwable) {
             $roleModules = $catalogKeys;
         }
@@ -240,6 +244,9 @@ function company_subscription_modules(): array
         $modules = array_values(array_intersect(array_unique(array_map(static fn ($key) => normalize_module_key((string) $key), $rows)), $catalogKeys));
         if (in_array('salary', $modules, true) && !in_array('allowances', $modules, true)) {
             $modules[] = 'allowances';
+        }
+        if (in_array('departments', $modules, true) && !in_array('designations', $modules, true)) {
+            $modules[] = 'designations';
         }
         return $modules;
     } catch (Throwable) {

@@ -16,6 +16,7 @@ class Employee extends Model
         parent::__construct();
         (new ClientEntity())->ensureSchema();
         (new Branch())->ensureSchema();
+        (new Designation())->ensureSchema();
         $this->ensurePortalAccessSchema();
     }
 
@@ -63,10 +64,11 @@ class Employee extends Model
     {
         $cid = Tenant::id();
         $tidFilter = $cid > 0 ? 'AND e.company_id = :cid' : '';
-        $sql = "SELECT e.*, d.name AS department_name, b.name AS branch_name, c.name AS company_name,
+        $sql = "SELECT e.*, COALESCE(des.name, e.designation) AS designation, d.name AS department_name, b.name AS branch_name, c.name AS company_name,
                        ss.name AS active_salary_structure_name
                 FROM employees e
                 LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN designations des ON des.id = e.designation_id
                 LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN companies c ON c.id = e.company_id
                 LEFT JOIN employee_salary es ON es.employee_id = e.id AND es.is_active = 1
@@ -90,10 +92,11 @@ class Employee extends Model
     {
         $cid = Tenant::id();
         $where = $cid > 0 ? 'WHERE e.company_id = :cid AND e.archived_at IS NULL' : 'WHERE e.archived_at IS NULL';
-        $sql = "SELECT e.*, d.name AS department_name, b.name AS branch_name, c.name AS company_name,
+        $sql = "SELECT e.*, COALESCE(des.name, e.designation) AS designation, d.name AS department_name, b.name AS branch_name, c.name AS company_name,
                        ss.name AS active_salary_structure_name
                 FROM employees e
                 LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN designations des ON des.id = e.designation_id
                 LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN companies c ON c.id = e.company_id
                 LEFT JOIN employee_salary es ON es.employee_id = e.id AND es.is_active = 1
@@ -111,13 +114,15 @@ class Employee extends Model
     {
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND e.company_id = :cid' : '';
-        $sql = 'SELECT e.*, d.name AS department_name, d.code AS department_code,
+        $sql = 'SELECT e.*, COALESCE(des.name, e.designation) AS designation, des.code AS designation_code,
+                       d.name AS department_name, d.code AS department_code,
                        b.name AS branch_name, b.code AS branch_code, b.address AS branch_address,
                        b.phone AS branch_phone, b.email AS branch_email,
                        c.name AS company_name, ce.name AS client_entity_name, ce.code AS client_entity_code,
                        g.name AS gender_name
                 FROM employees e
                 LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN designations des ON des.id = e.designation_id
                 LEFT JOIN branches b ON b.id = e.branch_id
                 LEFT JOIN companies c ON c.id = e.company_id
                 LEFT JOIN client_entities ce ON ce.id = c.client_entity_id
@@ -244,6 +249,11 @@ class Employee extends Model
     public function branches(): array
     {
         return (new Branch())->activeOptions();
+    }
+
+    public function designations(): array
+    {
+        return (new Designation())->activeOptions();
     }
 
     public function payrollProfileSummary(int $employeeId): array

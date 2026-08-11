@@ -58,7 +58,14 @@ if (!is_array($selectedRequiredFields) || $selectedRequiredFields === []) {
             </div>
             <div class="col-md-4">
                 <label class="form-label">Designation</label>
-                <input type="text" name="designation" id="designation" class="form-control" value="<?= e((string)($old['designation'] ?? '')) ?>">
+                <select name="designation_id" id="designationId" class="form-select">
+                    <option value="">No designation yet</option>
+                    <?php foreach (($designations ?? []) as $designation): ?>
+                        <option value="<?= e((string)$designation['id']) ?>" <?= ((string)($old['designation_id'] ?? '') === (string)$designation['id']) ? 'selected' : '' ?>>
+                            <?= e((string)$designation['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Employment Type</label>
@@ -126,7 +133,7 @@ if (!is_array($selectedRequiredFields) || $selectedRequiredFields === []) {
             email: document.getElementById('invitedEmail'),
             phone: document.getElementById('invitedPhone'),
             department: document.getElementById('departmentId'),
-            designation: document.getElementById('designation'),
+            designation: document.getElementById('designationId'),
             employmentType: document.getElementById('employmentType')
         };
 
@@ -138,7 +145,7 @@ if (!is_array($selectedRequiredFields) || $selectedRequiredFields === []) {
                 'email' => (string)($employee['email'] ?? ''),
                 'phone' => (string)($employee['phone'] ?? ''),
                 'department' => (string)($employee['department_id'] ?? ''),
-                'designation' => (string)($employee['designation'] ?? ''),
+                'designation' => (string)($employee['designation_id'] ?? ''),
                 'employmentType' => (string)($employee['employment_type'] ?? ''),
             ];
         }, $employees ?? []), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
@@ -153,7 +160,7 @@ if (!is_array($selectedRequiredFields) || $selectedRequiredFields === []) {
             if (fields.email) fields.email.value = employee.email || '';
             if (fields.phone) fields.phone.value = employee.phone || '';
             if (fields.department && employee.department) fields.department.value = employee.department;
-            if (fields.designation) fields.designation.value = employee.designation || '';
+            if (fields.designation && employee.designation) fields.designation.value = employee.designation;
             if (fields.employmentType && employee.employmentType) fields.employmentType.value = employee.employmentType;
         }
 

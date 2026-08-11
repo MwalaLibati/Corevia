@@ -39,6 +39,7 @@ class EmployeeController extends Controller
             'csrf' => Session::csrfToken(),
             'departments' => $employeeModel->departments(),
             'branches' => $employeeModel->branches(),
+            'designations' => $employeeModel->designations(),
             'employmentTypes' => (new EmploymentType())->active(),
             'flashError' => Session::flash('error'),
             'old' => $_SESSION['_old_employee_input'] ?? [],
@@ -102,6 +103,7 @@ class EmployeeController extends Controller
             'profileChangeRequests' => (new EmployeeProfileChangeRequest())->listPending($employeeId),
             'departments' => $employeeModel->departments(),
             'branches' => $employeeModel->branches(),
+            'designations' => $employeeModel->designations(),
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),
@@ -312,6 +314,7 @@ class EmployeeController extends Controller
             'employee' => $employee,
             'departments' => $employeeModel->departments(),
             'branches' => $employeeModel->branches(),
+            'designations' => $employeeModel->designations(),
             'employmentTypes' => (new EmploymentType())->active(),
             'salaryStructures' => $salaryStructureModel->findAll(),
             'activeSalaryAssignment' => $employeeSalaryModel->activeWithStructure($employeeId),
@@ -871,6 +874,8 @@ class EmployeeController extends Controller
     {
         $departmentId = (int) $this->input('department_id', 0);
         $branchId = (int) $this->input('branch_id', 0);
+        $designationId = (int) $this->input('designation_id', 0);
+        $designationName = $designationId > 0 ? (new Designation())->findName($designationId) : null;
 
         return [
             'employee_number' => strtoupper(trim((string) $this->input('employee_number', ''))),
@@ -884,7 +889,8 @@ class EmployeeController extends Controller
             'tpin' => $this->normalizeNullableString((string) $this->input('tpin', '')),
             'branch_id' => $branchId > 0 ? $branchId : null,
             'department_id' => $departmentId > 0 ? $departmentId : null,
-            'designation' => $this->normalizeNullableString((string) $this->input('designation', '')),
+            'designation_id' => $designationId > 0 ? $designationId : null,
+            'designation' => $designationName ?? $this->normalizeNullableString((string) $this->input('designation', '')),
             'employment_type' => (string) $this->input('employment_type', 'Permanent'),
             'bank_name' => $this->normalizeNullableString((string) $this->input('bank_name', '')),
             'bank_account_number' => $this->normalizeNullableString((string) $this->input('bank_account_number', '')),
@@ -913,6 +919,13 @@ class EmployeeController extends Controller
         $departments = [];
         foreach ($employeeModel->departments() as $department) {
             $departments[strtolower((string) $department['name'])] = (int) $department['id'];
+        }
+        $designations = [];
+        foreach ($employeeModel->designations() as $designation) {
+            $designations[strtolower((string) $designation['name'])] = [
+                'id' => (int) $designation['id'],
+                'name' => (string) $designation['name'],
+            ];
         }
         $employmentTypes = (new EmploymentType())->names();
         $allowedStatuses = ['Active', 'Ended', 'Suspended'];
@@ -943,6 +956,18 @@ class EmployeeController extends Controller
                 $departmentId = $departments[$departmentKey];
             }
 
+            $designationId = null;
+            $designationName = $this->normalizeNullableString((string) ($data['designation'] ?? ''));
+            if ($designationName !== null) {
+                $designationKey = strtolower($designationName);
+                if (!isset($designations[$designationKey])) {
+                    $errors[] = "Line {$line}: designation '{$data['designation']}' is not configured.";
+                    continue;
+                }
+                $designationId = $designations[$designationKey]['id'];
+                $designationName = $designations[$designationKey]['name'];
+            }
+
             $employmentType = (string) ($data['employment_type'] ?? 'Permanent');
             if (!in_array($employmentType, $employmentTypes, true)) {
                 $errors[] = "Line {$line}: employment_type '{$employmentType}' is not configured.";
@@ -969,7 +994,8 @@ class EmployeeController extends Controller
                 'napsa_number' => $this->normalizeNullableString((string) ($data['napsa_number'] ?? $data['ssno'] ?? $data['social_security_number'] ?? '')),
                 'tpin' => $this->normalizeNullableString((string) ($data['tpin'] ?? '')),
                 'department_id' => $departmentId,
-                'designation' => $this->normalizeNullableString((string) ($data['designation'] ?? '')),
+                'designation_id' => $designationId,
+                'designation' => $designationName,
                 'employment_type' => $employmentType,
                 'bank_name' => $this->normalizeNullableString((string) ($data['bank_name'] ?? '')),
                 'bank_account_number' => $this->normalizeNullableString((string) ($data['bank_account_number'] ?? '')),
@@ -1042,6 +1068,10 @@ class EmployeeController extends Controller
 
         if (!empty($data['branch_id']) && !(new Branch())->belongsToTenant((int) $data['branch_id'])) {
             return 'Invalid branch selected.';
+        }
+
+        if (!empty($data['designation_id']) && !(new Designation())->find((int) $data['designation_id'])) {
+            return 'Invalid designation selected.';
         }
 
         $allowedContractStatus = ['Active', 'Ended', 'Suspended'];

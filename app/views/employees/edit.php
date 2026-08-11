@@ -98,7 +98,17 @@ $oldInput = !empty($old) ? $old : $employee;
 
             <div class="col-md-3">
                 <label class="form-label">Designation</label>
-                <input type="text" name="designation" class="form-control" value="<?= e((string) ($oldInput['designation'] ?? '')) ?>">
+                <select name="designation_id" class="form-select">
+                    <option value="">Select designation</option>
+                    <?php foreach (($designations ?? []) as $designation): ?>
+                        <option value="<?= e((string) $designation['id']) ?>" <?= ((string) ($oldInput['designation_id'] ?? '') === (string) $designation['id']) ? 'selected' : '' ?>>
+                            <?= e((string) $designation['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <?php if (empty($oldInput['designation_id']) && !empty($oldInput['designation'])): ?>
+                    <small class="text-muted">Current text value: <?= e((string) $oldInput['designation']) ?></small>
+                <?php endif; ?>
             </div>
 
             <div class="col-md-3">
