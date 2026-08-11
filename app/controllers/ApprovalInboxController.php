@@ -9,12 +9,12 @@ class ApprovalInboxController extends Controller
         require_auth();
 
         $model = new ApprovalInbox();
-        $items = $model->pendingForCurrentUser(200);
+        $approvalInboxItems = $model->pendingForCurrentUser(200);
 
         $this->render('approvals/index', [
             'title' => 'My Approvals',
-            'items' => $items,
-            'summary' => $model->summaryForItems($items),
+            'approvalInboxItems' => $approvalInboxItems,
+            'approvalInboxSummary' => $model->summaryForItems($approvalInboxItems),
         ]);
     }
 }
