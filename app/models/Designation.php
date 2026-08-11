@@ -224,7 +224,7 @@ class Designation extends Model
             "UPDATE employees e
              JOIN designations des
                ON des.company_id = e.company_id
-              AND LOWER(des.name) = LOWER(TRIM(e.designation))
+              AND LOWER(des.name COLLATE utf8mb4_unicode_ci) = LOWER(TRIM(e.designation) COLLATE utf8mb4_unicode_ci)
              SET e.designation_id = des.id
              WHERE e.company_id = :cid
                AND e.designation_id IS NULL

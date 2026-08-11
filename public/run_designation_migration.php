@@ -131,7 +131,7 @@ try {
                 continue;
             }
 
-            $exists = $db->prepare('SELECT id FROM designations WHERE company_id = :cid AND LOWER(name) = LOWER(:name) LIMIT 1');
+            $exists = $db->prepare('SELECT id FROM designations WHERE company_id = :cid AND LOWER(name COLLATE utf8mb4_unicode_ci) = LOWER(:name COLLATE utf8mb4_unicode_ci) LIMIT 1');
             $exists->execute(['cid' => $companyId, 'name' => $name]);
             if ($exists->fetchColumn()) {
                 continue;
@@ -154,7 +154,7 @@ try {
             "UPDATE employees e
              JOIN designations des
                ON des.company_id = e.company_id
-              AND LOWER(des.name) = LOWER(TRIM(e.designation))
+              AND LOWER(des.name COLLATE utf8mb4_unicode_ci) = LOWER(TRIM(e.designation) COLLATE utf8mb4_unicode_ci)
              SET e.designation_id = des.id
              WHERE e.company_id = :cid
                AND e.designation_id IS NULL
