@@ -30,6 +30,8 @@ class AttendancePayrollRule extends Model
                 grace_minutes INT NOT NULL DEFAULT 15,
                 late_deduction_enabled TINYINT(1) NOT NULL DEFAULT 0,
                 late_rounding_minutes INT NOT NULL DEFAULT 15,
+                undertime_deduction_enabled TINYINT(1) NOT NULL DEFAULT 0,
+                undertime_rounding_minutes INT NOT NULL DEFAULT 15,
                 absence_deduction_enabled TINYINT(1) NOT NULL DEFAULT 0,
                 absence_deduction_method ENUM('Daily Rate','Hourly Rate') NOT NULL DEFAULT 'Daily Rate',
                 overtime_enabled TINYINT(1) NOT NULL DEFAULT 0,
@@ -74,6 +76,8 @@ class AttendancePayrollRule extends Model
         );
 
         $this->addColumnIfMissing('employees', 'pay_calculation_method', "VARCHAR(40) NOT NULL DEFAULT 'Fixed Monthly Salary'");
+        $this->addColumnIfMissing('attendance_payroll_rule_sets', 'undertime_deduction_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
+        $this->addColumnIfMissing('attendance_payroll_rule_sets', 'undertime_rounding_minutes', 'INT NOT NULL DEFAULT 15');
     }
 
     public function activeForDate(string $date): array
@@ -119,6 +123,7 @@ class AttendancePayrollRule extends Model
     {
         $data['attendance_impact_enabled'] = !empty($data['attendance_impact_enabled']) ? 1 : 0;
         $data['late_deduction_enabled'] = !empty($data['late_deduction_enabled']) ? 1 : 0;
+        $data['undertime_deduction_enabled'] = !empty($data['undertime_deduction_enabled']) ? 1 : 0;
         $data['absence_deduction_enabled'] = !empty($data['absence_deduction_enabled']) ? 1 : 0;
         $data['overtime_enabled'] = !empty($data['overtime_enabled']) ? 1 : 0;
         $data['overtime_requires_approval'] = !empty($data['overtime_requires_approval']) ? 1 : 0;
@@ -246,12 +251,33 @@ class AttendancePayrollRule extends Model
                 }
             }
 
+            if (!empty($rule['overtime_enabled']) && $summary['weekend_overtime_minutes'] >= (int) ($rule['overtime_min_minutes'] ?? 30)) {
+                $roundedMinutes = $this->roundMinutes($summary['weekend_overtime_minutes'], (int) ($rule['overtime_rounding_minutes'] ?? 15));
+                $hours = round($roundedMinutes / 60, 4);
+                $rate = round($hourlyRate * (float) ($rule['weekend_overtime_multiplier'] ?? 2.0), 4);
+                $amount = round($hours * $rate, 2);
+                if ($amount > 0) {
+                    $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Earning', 'ATT-WKND', 'Weekend Attendance Overtime', $hours, $rate, $amount, $summary);
+                    $totals['earnings'] += $amount;
+                }
+            }
+
             if (!empty($rule['late_deduction_enabled']) && $summary['late_minutes'] > 0) {
                 $roundedMinutes = $this->roundMinutes($summary['late_minutes'], (int) ($rule['late_rounding_minutes'] ?? 15));
                 $hours = round($roundedMinutes / 60, 4);
                 $amount = round($hours * $hourlyRate, 2);
                 if ($amount > 0) {
                     $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Deduction', 'ATT-LATE', 'Late Coming Deduction', $hours, $hourlyRate, $amount, $summary);
+                    $totals['deductions'] += $amount;
+                }
+            }
+
+            if (!empty($rule['undertime_deduction_enabled']) && $summary['undertime_minutes'] > 0) {
+                $roundedMinutes = $this->roundMinutes($summary['undertime_minutes'], (int) ($rule['undertime_rounding_minutes'] ?? 15));
+                $hours = round($roundedMinutes / 60, 4);
+                $amount = round($hours * $hourlyRate, 2);
+                if ($amount > 0) {
+                    $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Deduction', 'ATT-UNDER', 'Short Hours Deduction', $hours, $hourlyRate, $amount, $summary);
                     $totals['deductions'] += $amount;
                 }
             }
@@ -308,6 +334,8 @@ class AttendancePayrollRule extends Model
             'worked_minutes' => 0,
             'late_minutes' => 0,
             'overtime_minutes' => 0,
+            'weekend_overtime_minutes' => 0,
+            'undertime_minutes' => 0,
         ];
         $standardMinutes = (int) round(max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8)) * 60);
         $startTime = (string) ($rule['standard_start_time'] ?? '08:00:00');
@@ -327,8 +355,13 @@ class AttendancePayrollRule extends Model
             $summary['present_days']++;
             $worked = $this->workedMinutes($record);
             $summary['worked_minutes'] += $worked;
-            if ($worked > $standardMinutes) {
+            $isWeekend = in_array((int) date('N', strtotime((string) ($record['attendance_date'] ?? date('Y-m-d')))), [6, 7], true);
+            if ($isWeekend) {
+                $summary['weekend_overtime_minutes'] += $worked;
+            } elseif ($worked > $standardMinutes) {
                 $summary['overtime_minutes'] += $worked - $standardMinutes;
+            } elseif ($worked > 0 && $worked < $standardMinutes) {
+                $summary['undertime_minutes'] += $standardMinutes - $worked;
             }
 
             $late = $this->lateMinutes($record, $startTime, $grace);

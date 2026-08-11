@@ -92,6 +92,8 @@ class AttendancePayrollController extends Controller
             'grace_minutes' => max(0, (int) $this->input('grace_minutes', 15)),
             'late_deduction_enabled' => (int) $this->input('late_deduction_enabled', 0),
             'late_rounding_minutes' => max(1, (int) $this->input('late_rounding_minutes', 15)),
+            'undertime_deduction_enabled' => (int) $this->input('undertime_deduction_enabled', 0),
+            'undertime_rounding_minutes' => max(1, (int) $this->input('undertime_rounding_minutes', 15)),
             'absence_deduction_enabled' => (int) $this->input('absence_deduction_enabled', 0),
             'absence_deduction_method' => (string) $this->input('absence_deduction_method', 'Daily Rate'),
             'overtime_enabled' => (int) $this->input('overtime_enabled', 0),

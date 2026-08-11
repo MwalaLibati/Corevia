@@ -74,6 +74,7 @@ $impactOn = !empty($activeRule['attendance_impact_enabled']) && (string)($active
                             <?php foreach ([
                                 'attendance_impact_enabled' => 'Payroll Impact',
                                 'late_deduction_enabled' => 'Late',
+                                'undertime_deduction_enabled' => 'Short Hours',
                                 'absence_deduction_enabled' => 'Absence',
                                 'overtime_enabled' => 'Overtime',
                                 'night_shift_allowance_enabled' => 'Night Shift',

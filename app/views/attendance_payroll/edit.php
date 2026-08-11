@@ -82,7 +82,7 @@ $checked = static fn(string $key): string => !empty($rule[$key]) ? 'checked' : '
     </div>
 
     <div class="row g-4">
-        <div class="col-lg-4">
+        <div class="col-lg-3">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
                     <h5 class="mb-3">Late Coming</h5>
@@ -95,7 +95,20 @@ $checked = static fn(string $key): string => !empty($rule[$key]) ? 'checked' : '
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="mb-3">Short Hours</h5>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="undertime_deduction_enabled" value="1" id="undertime" <?= $checked('undertime_deduction_enabled') ?>>
+                        <label class="form-check-label" for="undertime">Deduct worked hours below standard day</label>
+                    </div>
+                    <label class="form-label">Round Short Minutes To</label>
+                    <input type="number" min="1" name="undertime_rounding_minutes" class="form-control" value="<?= e((string) ($rule['undertime_rounding_minutes'] ?? 15)) ?>">
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
                     <h5 class="mb-3">Absence</h5>
@@ -112,7 +125,7 @@ $checked = static fn(string $key): string => !empty($rule[$key]) ? 'checked' : '
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
+        <div class="col-lg-3">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
                     <h5 class="mb-3">Overtime</h5>
