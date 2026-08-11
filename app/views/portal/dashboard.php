@@ -11,6 +11,7 @@ $napsaTotals    = $napsaTotals ?? ['employee' => 0.0, 'employer' => 0.0, 'total'
 $gratuity       = $gratuityEstimate ?? ['accrued_amount' => 0.0, 'eligible' => false, 'years' => 0.0, 'rate' => 0.0];
 $expiry         = $contractExpiry ?? ['has_end_date' => false, 'label' => 'Open-ended', 'status' => 'No fixed expiry'];
 $completion     = $profileCompletion ?? ['percent' => 0, 'missing' => []];
+$requestSummary = $requestSummary ?? ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'total' => 0];
 $hour           = (int) date('G');
 $greeting       = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
 
@@ -100,7 +101,34 @@ $statCard = static function (string $label, string $value, string $subtext, stri
         $expiryAccent,
         $expirySoft
     );
+
+    $statCard(
+        'Pending Requests',
+        e((string) ((int) ($requestSummary['pending'] ?? 0))),
+        'Across leave, advances, profile updates and contracts',
+        'bi-inbox',
+        '#f97316',
+        '#ffedd5'
+    );
     ?>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+            <h6 class="fw-bold mb-1"><i class="bi bi-inbox me-2 text-primary"></i>Self-Service Request Center</h6>
+            <div class="text-muted small">
+                <?= (int) ($requestSummary['pending'] ?? 0) ?> pending,
+                <?= (int) ($requestSummary['approved'] ?? 0) ?> approved,
+                <?= (int) ($requestSummary['rejected'] ?? 0) ?> closed.
+            </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="<?= e(base_url('portal/requests')) ?>" class="btn btn-primary btn-sm"><i class="bi bi-list-check me-1"></i>View Requests</a>
+            <a href="<?= e(base_url('portal/leave')) ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-calendar-plus me-1"></i>Apply Leave</a>
+            <a href="<?= e(base_url('portal/profile')) ?>" class="btn btn-outline-secondary btn-sm"><i class="bi bi-person-lines-fill me-1"></i>Update Profile</a>
+        </div>
+    </div>
 </div>
 
 <?php if ($activeAdvance): ?>

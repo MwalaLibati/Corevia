@@ -213,6 +213,82 @@ class PortalController extends Controller
             'gratuityEstimate'     => $gratuity,
             'showGratuityCard'     => !$isPermanent,
             'profileCompletion'    => $this->profileCompletion($empId),
+            'requestSummary'       => $this->employeeRequestSummary($empId),
+        ]);
+    }
+
+    public function requests(): void
+    {
+        require_employee_auth();
+        $emp = current_employee();
+        $empId = (int) $emp['id'];
+
+        $leaveRequests = (new LeaveRequest())->forEmployee($empId);
+        $advanceRequests = (new SalaryAdvance())->forEmployee($empId);
+        $profileRequests = (new EmployeeProfileChangeRequest())->forEmployee($empId);
+        $contractRequests = $this->contractRenewalRequestsForEmployee($empId);
+
+        $items = [];
+        foreach ($leaveRequests as $row) {
+            $items[] = [
+                'type' => 'Leave',
+                'icon' => 'bi-calendar-heart',
+                'title' => (string) ($row['leave_type_name'] ?? 'Leave request'),
+                'details' => (string) ($row['start_date'] ?? '') . ' to ' . (string) ($row['end_date'] ?? '') . ' (' . number_format((float) ($row['total_days'] ?? 0), 1) . ' day(s))',
+                'status' => (string) ($row['status'] ?? 'Pending'),
+                'submitted_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+                'link' => base_url('portal/leave'),
+            ];
+        }
+        foreach ($advanceRequests as $row) {
+            $items[] = [
+                'type' => 'Salary Advance',
+                'icon' => 'bi-cash-coin',
+                'title' => 'ZMW ' . number_format((float) ($row['amount'] ?? 0), 2),
+                'details' => 'Monthly deduction: ZMW ' . number_format((float) ($row['monthly_deduction'] ?? 0), 2),
+                'status' => (string) ($row['status'] ?? 'Pending'),
+                'submitted_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['updated_at'] ?? ''),
+                'link' => base_url('portal/salaryAdvance'),
+            ];
+        }
+        foreach ($profileRequests as $row) {
+            $changes = json_decode((string) ($row['requested_changes_json'] ?? '{}'), true);
+            $changes = is_array($changes) ? $changes : [];
+            $labels = array_map(static fn(string $field): string => ucwords(str_replace('_', ' ', $field)), array_keys($changes));
+            $items[] = [
+                'type' => 'Profile Update',
+                'icon' => 'bi-person-lines-fill',
+                'title' => 'Profile change request',
+                'details' => $labels ? implode(', ', $labels) : 'Employee profile details',
+                'status' => (string) ($row['status'] ?? 'Pending'),
+                'submitted_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['reviewed_at'] ?? $row['updated_at'] ?? ''),
+                'link' => base_url('portal/profile'),
+            ];
+        }
+        foreach ($contractRequests as $row) {
+            $items[] = [
+                'type' => 'Contract Renewal',
+                'icon' => 'bi-arrow-repeat',
+                'title' => (string) ($row['contract_number'] ?? 'Contract renewal'),
+                'details' => !empty($row['requested_end_date']) ? 'Requested end date: ' . (string) $row['requested_end_date'] : 'Renewal request sent to HR',
+                'status' => (string) ($row['status'] ?? 'Pending'),
+                'submitted_at' => (string) ($row['created_at'] ?? ''),
+                'updated_at' => (string) ($row['reviewed_at'] ?? $row['updated_at'] ?? ''),
+                'link' => base_url('portal/contract'),
+            ];
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            return strcmp((string) ($b['submitted_at'] ?? ''), (string) ($a['submitted_at'] ?? ''));
+        });
+
+        $this->renderPortal('portal/requests', [
+            'emp' => $emp,
+            'items' => $items,
+            'summary' => $this->employeeRequestSummary($empId),
         ]);
     }
 
@@ -1068,6 +1144,54 @@ class PortalController extends Controller
 
         usort($items, static fn(array $a, array $b): int => strcmp((string) ($b['date'] ?? ''), (string) ($a['date'] ?? '')));
         return array_slice($items, 0, 20);
+    }
+
+    private function employeeRequestSummary(int $empId): array
+    {
+        $summary = [
+            'pending' => 0,
+            'approved' => 0,
+            'rejected' => 0,
+            'total' => 0,
+        ];
+
+        $add = static function (array $rows) use (&$summary): void {
+            foreach ($rows as $row) {
+                $status = strtolower((string) ($row['status'] ?? 'pending'));
+                $summary['total']++;
+                if (in_array($status, ['pending'], true)) {
+                    $summary['pending']++;
+                } elseif (in_array($status, ['approved', 'active', 'renewed'], true)) {
+                    $summary['approved']++;
+                } elseif (in_array($status, ['rejected', 'cancelled', 'dismissed'], true)) {
+                    $summary['rejected']++;
+                }
+            }
+        };
+
+        try { $add((new LeaveRequest())->forEmployee($empId)); } catch (Throwable) {}
+        try { $add((new SalaryAdvance())->forEmployee($empId)); } catch (Throwable) {}
+        try { $add((new EmployeeProfileChangeRequest())->forEmployee($empId)); } catch (Throwable) {}
+        try { $add($this->contractRenewalRequestsForEmployee($empId)); } catch (Throwable) {}
+
+        return $summary;
+    }
+
+    private function contractRenewalRequestsForEmployee(int $empId): array
+    {
+        if (!$this->tableExists('contract_renewal_requests')) {
+            return [];
+        }
+
+        $stmt = db()->prepare(
+            "SELECT crr.*, ec.contract_number, ec.contract_type, ec.start_date, ec.end_date
+             FROM contract_renewal_requests crr
+             LEFT JOIN employee_contracts ec ON ec.id = crr.contract_id
+             WHERE crr.employee_id = :employee_id
+             ORDER BY crr.created_at DESC, crr.id DESC"
+        );
+        $stmt->execute(['employee_id' => $empId]);
+        return $stmt->fetchAll();
     }
 
     private function activeLeaveTypesForPortal(): array

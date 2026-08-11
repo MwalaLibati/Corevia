@@ -17,6 +17,7 @@
             <li class="menu-item"><a href="<?= e(base_url('portal/dashboard')) ?>"><span class="nav-icon"><i class="bi bi-house-door"></i></span><span class="nav-text">Dashboard</span></a></li>
 
             <li class="menu-section-title" style="margin-top:8px">My Records</li>
+            <li class="menu-item"><a href="<?= e(base_url('portal/requests')) ?>"><span class="nav-icon"><i class="bi bi-inbox"></i></span><span class="nav-text">My Requests</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/payslips')) ?>"><span class="nav-icon"><i class="bi bi-receipt"></i></span><span class="nav-text">My Payslips</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/contract')) ?>"><span class="nav-icon"><i class="bi bi-file-earmark-text"></i></span><span class="nav-text">My Contract</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/leave')) ?>"><span class="nav-icon"><i class="bi bi-calendar-heart"></i></span><span class="nav-text">My Leave</span></a></li>
