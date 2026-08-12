@@ -241,6 +241,7 @@ class AttendancePayrollRule extends Model
             $shiftRate = round(((float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate), 4);
             $summary = $this->summarizeRecords($records, $rule);
             $inputs = [];
+            $deductAttendanceVariance = !in_array($paySource, ['Attendance Hours', 'Days Worked', 'Shifts Worked'], true);
 
             if ($paySource === 'Attendance Hours') {
                 $normalMinutes = max(0, $summary['worked_minutes'] - $summary['overtime_minutes'] - $summary['weekend_overtime_minutes']);
@@ -288,7 +289,7 @@ class AttendancePayrollRule extends Model
                 }
             }
 
-            if (!empty($rule['late_deduction_enabled']) && $summary['late_minutes'] > 0) {
+            if ($deductAttendanceVariance && !empty($rule['late_deduction_enabled']) && $summary['late_minutes'] > 0) {
                 $roundedMinutes = $this->roundMinutes($summary['late_minutes'], (int) ($rule['late_rounding_minutes'] ?? 15));
                 $hours = round($roundedMinutes / 60, 4);
                 $amount = round($hours * $hourlyRate, 2);
@@ -298,7 +299,7 @@ class AttendancePayrollRule extends Model
                 }
             }
 
-            if (!empty($rule['undertime_deduction_enabled']) && $summary['undertime_minutes'] > 0) {
+            if ($deductAttendanceVariance && !empty($rule['undertime_deduction_enabled']) && $summary['undertime_minutes'] > 0) {
                 $roundedMinutes = $this->roundMinutes($summary['undertime_minutes'], (int) ($rule['undertime_rounding_minutes'] ?? 15));
                 $hours = round($roundedMinutes / 60, 4);
                 $amount = round($hours * $hourlyRate, 2);
@@ -308,7 +309,7 @@ class AttendancePayrollRule extends Model
                 }
             }
 
-            if (!empty($rule['absence_deduction_enabled']) && $summary['absent_days'] > 0) {
+            if ($deductAttendanceVariance && !empty($rule['absence_deduction_enabled']) && $summary['absent_days'] > 0) {
                 $method = (string) ($rule['absence_deduction_method'] ?? 'Daily Rate');
                 $quantity = $method === 'Hourly Rate' ? $summary['absent_days'] * $standardHours : $summary['absent_days'];
                 $rate = $method === 'Hourly Rate' ? $hourlyRate : $dailyRate;
