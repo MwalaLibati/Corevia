@@ -260,6 +260,10 @@ class ApprovalInboxController extends Controller
             ['Effective Date', (string) ($request['effective_date'] ?? '-')],
             ['Structure Basic Pay', format_currency((float) ($request['structure_basic_pay'] ?? 0))],
             ['Actual Basic Pay', $request['actual_basic_pay'] !== null ? format_currency((float) $request['actual_basic_pay']) : 'Use structure rate'],
+            ['Basic Pay Source', (string) ($request['basic_pay_source'] ?? 'Fixed Salary')],
+            ['Hourly Rate', $request['hourly_rate'] !== null ? format_currency((float) $request['hourly_rate']) : '-'],
+            ['Daily Rate', $request['daily_rate'] !== null ? format_currency((float) $request['daily_rate']) : '-'],
+            ['Shift Rate', $request['shift_rate'] !== null ? format_currency((float) $request['shift_rate']) : '-'],
             ['Override Reason', (string) ($request['override_reason'] ?? '-')],
         ], [], 'SalaryChangeRequest', $id, 'salary-change/index', true);
     }
@@ -430,6 +434,10 @@ class ApprovalInboxController extends Controller
                 'actual_housing_allowance' => $request['actual_housing_allowance'] !== null ? (float) $request['actual_housing_allowance'] : null,
                 'actual_transport_allowance' => $request['actual_transport_allowance'] !== null ? (float) $request['actual_transport_allowance'] : null,
                 'actual_other_allowances' => $request['actual_other_allowances'] !== null ? (float) $request['actual_other_allowances'] : null,
+                'basic_pay_source' => (string) ($request['basic_pay_source'] ?? 'Fixed Salary'),
+                'hourly_rate' => $request['hourly_rate'] !== null ? (float) $request['hourly_rate'] : null,
+                'daily_rate' => $request['daily_rate'] !== null ? (float) $request['daily_rate'] : null,
+                'shift_rate' => $request['shift_rate'] !== null ? (float) $request['shift_rate'] : null,
                 'override_reason' => $request['override_reason'] ?? null,
             ]);
             $model->update($id, ['status' => 'Applied', 'admin_approved_by' => $userId]);

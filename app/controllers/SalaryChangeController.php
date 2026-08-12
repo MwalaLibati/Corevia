@@ -61,6 +61,10 @@ class SalaryChangeController extends Controller
                     'actual_housing_allowance' => $request['actual_housing_allowance'] !== null ? (float) $request['actual_housing_allowance'] : null,
                     'actual_transport_allowance' => $request['actual_transport_allowance'] !== null ? (float) $request['actual_transport_allowance'] : null,
                     'actual_other_allowances' => $request['actual_other_allowances'] !== null ? (float) $request['actual_other_allowances'] : null,
+                    'basic_pay_source' => (string) ($request['basic_pay_source'] ?? 'Fixed Salary'),
+                    'hourly_rate' => $request['hourly_rate'] !== null ? (float) $request['hourly_rate'] : null,
+                    'daily_rate' => $request['daily_rate'] !== null ? (float) $request['daily_rate'] : null,
+                    'shift_rate' => $request['shift_rate'] !== null ? (float) $request['shift_rate'] : null,
                     'override_reason' => $request['override_reason'] ?? null,
                 ]);
                 $model->update($requestId, ['status' => 'Applied', 'admin_approved_by' => $userId]);

@@ -235,10 +235,36 @@ class AttendancePayrollRule extends Model
             $basic = (float) ($salary['basic_pay'] ?? 0);
             $standardDays = max(1.0, (float) ($rule['standard_days_per_month'] ?? 26));
             $standardHours = max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8));
-            $dailyRate = round($basic / $standardDays, 4);
-            $hourlyRate = round($dailyRate / $standardHours, 4);
+            $paySource = (string) ($salary['basic_pay_source'] ?? 'Fixed Salary');
+            $dailyRate = round(((float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays), 4);
+            $hourlyRate = round(((float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours), 4);
+            $shiftRate = round(((float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate), 4);
             $summary = $this->summarizeRecords($records, $rule);
             $inputs = [];
+
+            if ($paySource === 'Attendance Hours') {
+                $normalMinutes = max(0, $summary['worked_minutes'] - $summary['overtime_minutes'] - $summary['weekend_overtime_minutes']);
+                $hours = round($normalMinutes / 60, 4);
+                $amount = round($hours * $hourlyRate, 2);
+                if ($amount > 0) {
+                    $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Earning', 'ATT-BASIC', 'Basic Pay - Approved Hours', $hours, $hourlyRate, $amount, $summary);
+                    $totals['earnings'] += $amount;
+                }
+            } elseif ($paySource === 'Days Worked') {
+                $days = max(0, $summary['present_days'] - $summary['weekend_days']);
+                $amount = round($days * $dailyRate, 2);
+                if ($amount > 0) {
+                    $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Earning', 'ATT-BASIC', 'Basic Pay - Approved Days', (float) $days, $dailyRate, $amount, $summary);
+                    $totals['earnings'] += $amount;
+                }
+            } elseif ($paySource === 'Shifts Worked') {
+                $shifts = max(0, $summary['present_days'] - $summary['weekend_days']);
+                $amount = round($shifts * $shiftRate, 2);
+                if ($amount > 0) {
+                    $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Earning', 'ATT-BASIC', 'Basic Pay - Approved Shifts', (float) $shifts, $shiftRate, $amount, $summary);
+                    $totals['earnings'] += $amount;
+                }
+            }
 
             if (!empty($rule['overtime_enabled']) && $summary['overtime_minutes'] >= (int) ($rule['overtime_min_minutes'] ?? 30)) {
                 $roundedMinutes = $this->roundMinutes($summary['overtime_minutes'], (int) ($rule['overtime_rounding_minutes'] ?? 15));
@@ -331,6 +357,7 @@ class AttendancePayrollRule extends Model
             'present_days' => 0,
             'leave_days' => 0,
             'absent_days' => 0,
+            'weekend_days' => 0,
             'worked_minutes' => 0,
             'late_minutes' => 0,
             'overtime_minutes' => 0,
@@ -357,6 +384,7 @@ class AttendancePayrollRule extends Model
             $summary['worked_minutes'] += $worked;
             $isWeekend = in_array((int) date('N', strtotime((string) ($record['attendance_date'] ?? date('Y-m-d')))), [6, 7], true);
             if ($isWeekend) {
+                $summary['weekend_days']++;
                 $summary['weekend_overtime_minutes'] += $worked;
             } elseif ($worked > $standardMinutes) {
                 $summary['overtime_minutes'] += $worked - $standardMinutes;

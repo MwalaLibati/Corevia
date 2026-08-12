@@ -23,6 +23,10 @@ class EmployeeSalary extends Model
             'actual_housing_allowance' => 'DECIMAL(12,2) NULL',
             'actual_transport_allowance' => 'DECIMAL(12,2) NULL',
             'actual_other_allowances' => 'DECIMAL(12,2) NULL',
+            'basic_pay_source' => "VARCHAR(40) NOT NULL DEFAULT 'Fixed Salary'",
+            'hourly_rate' => 'DECIMAL(12,4) NULL',
+            'daily_rate' => 'DECIMAL(12,4) NULL',
+            'shift_rate' => 'DECIMAL(12,4) NULL',
             'override_reason' => 'TEXT NULL',
         ];
 
@@ -37,7 +41,7 @@ class EmployeeSalary extends Model
     {
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND e.company_id = :employee_cid AND ss.company_id = :structure_cid' : '';
-        $sql = 'SELECT es.*, ss.name AS structure_name, ss.grade_level,
+        $sql = "SELECT es.*, ss.name AS structure_name, ss.grade_level,
                        ss.basic_pay AS structure_basic_pay,
                        ss.housing_allowance AS structure_housing_allowance,
                        ss.transport_allowance AS structure_transport_allowance,
@@ -45,12 +49,14 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_basic_pay, ss.basic_pay) AS basic_pay,
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
-                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances
+                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
+                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       es.hourly_rate, es.daily_rate, es.shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
                 WHERE es.employee_id = :employee_id
-                  AND es.is_active = 1' . $and . '
+                  AND es.is_active = 1" . $and . '
                 ORDER BY es.effective_date DESC, es.id DESC
                 LIMIT 1';
 
@@ -67,7 +73,7 @@ class EmployeeSalary extends Model
     {
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND e.company_id = :employee_cid AND ss.company_id = :structure_cid' : '';
-        $sql = 'SELECT es.*, ss.name AS structure_name, ss.grade_level,
+        $sql = "SELECT es.*, ss.name AS structure_name, ss.grade_level,
                        ss.basic_pay AS structure_basic_pay,
                        ss.housing_allowance AS structure_housing_allowance,
                        ss.transport_allowance AS structure_transport_allowance,
@@ -75,12 +81,14 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_basic_pay, ss.basic_pay) AS basic_pay,
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
-                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances
+                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
+                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       es.hourly_rate, es.daily_rate, es.shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
                 WHERE es.employee_id = :employee_id
-                  AND es.effective_date <= :as_of_date' . $and . '
+                  AND es.effective_date <= :as_of_date" . $and . '
                 ORDER BY es.effective_date DESC, es.id DESC
                 LIMIT 1';
 
@@ -100,7 +108,7 @@ class EmployeeSalary extends Model
     {
         $cid = Tenant::id();
         $and = $cid > 0 ? ' AND e.company_id = :employee_cid AND ss.company_id = :structure_cid' : '';
-        $sql = 'SELECT es.*, ss.name AS structure_name, ss.grade_level,
+        $sql = "SELECT es.*, ss.name AS structure_name, ss.grade_level,
                        ss.basic_pay AS structure_basic_pay,
                        ss.housing_allowance AS structure_housing_allowance,
                        ss.transport_allowance AS structure_transport_allowance,
@@ -108,11 +116,13 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_basic_pay, ss.basic_pay) AS basic_pay,
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
-                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances
+                       COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
+                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       es.hourly_rate, es.daily_rate, es.shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
-                WHERE es.employee_id = :employee_id' . $and . '
+                WHERE es.employee_id = :employee_id" . $and . '
                 ORDER BY es.effective_date DESC, es.id DESC';
 
         $stmt = $this->db->prepare($sql);
@@ -145,11 +155,13 @@ class EmployeeSalary extends Model
             $deactivate = $this->db->prepare('UPDATE employee_salary SET is_active = 0 WHERE employee_id = :employee_id AND is_active = 1');
             $deactivate->execute(['employee_id' => $employeeId]);
 
+            $source = $this->validBasicPaySource((string) ($agreedPay['basic_pay_source'] ?? 'Fixed Salary'));
+
             $insert = $this->db->prepare(
                 'INSERT INTO employee_salary
-                    (employee_id, salary_structure_id, effective_date, actual_basic_pay, actual_housing_allowance, actual_transport_allowance, actual_other_allowances, override_reason, is_active)
+                    (employee_id, salary_structure_id, effective_date, actual_basic_pay, actual_housing_allowance, actual_transport_allowance, actual_other_allowances, basic_pay_source, hourly_rate, daily_rate, shift_rate, override_reason, is_active)
                  VALUES
-                    (:employee_id, :salary_structure_id, :effective_date, :actual_basic_pay, :actual_housing_allowance, :actual_transport_allowance, :actual_other_allowances, :override_reason, 1)'
+                    (:employee_id, :salary_structure_id, :effective_date, :actual_basic_pay, :actual_housing_allowance, :actual_transport_allowance, :actual_other_allowances, :basic_pay_source, :hourly_rate, :daily_rate, :shift_rate, :override_reason, 1)'
             );
             $insert->execute([
                 'employee_id' => $employeeId,
@@ -159,6 +171,10 @@ class EmployeeSalary extends Model
                 'actual_housing_allowance' => $agreedPay['actual_housing_allowance'] ?? null,
                 'actual_transport_allowance' => $agreedPay['actual_transport_allowance'] ?? null,
                 'actual_other_allowances' => $agreedPay['actual_other_allowances'] ?? null,
+                'basic_pay_source' => $source,
+                'hourly_rate' => $agreedPay['hourly_rate'] ?? null,
+                'daily_rate' => $agreedPay['daily_rate'] ?? null,
+                'shift_rate' => $agreedPay['shift_rate'] ?? null,
                 'override_reason' => $agreedPay['override_reason'] ?? null,
             ]);
 
@@ -170,6 +186,12 @@ class EmployeeSalary extends Model
 
             throw $exception;
         }
+    }
+
+    private function validBasicPaySource(string $source): string
+    {
+        $allowed = ['Fixed Salary', 'Attendance Hours', 'Days Worked', 'Shifts Worked'];
+        return in_array($source, $allowed, true) ? $source : 'Fixed Salary';
     }
 
     private function columnExists(string $table, string $column): bool

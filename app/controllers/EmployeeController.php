@@ -563,6 +563,10 @@ class EmployeeController extends Controller
         $actualHousingAllowance = $this->normalizeNullableMoney((string) $this->input('actual_housing_allowance', ''));
         $actualTransportAllowance = $this->normalizeNullableMoney((string) $this->input('actual_transport_allowance', ''));
         $actualOtherAllowances = $this->normalizeNullableMoney((string) $this->input('actual_other_allowances', ''));
+        $basicPaySource = $this->validBasicPaySource((string) $this->input('basic_pay_source', 'Fixed Salary'));
+        $hourlyRate = $this->normalizeNullableMoney((string) $this->input('hourly_rate', ''));
+        $dailyRate = $this->normalizeNullableMoney((string) $this->input('daily_rate', ''));
+        $shiftRate = $this->normalizeNullableMoney((string) $this->input('shift_rate', ''));
         $overrideReason = trim((string) $this->input('override_reason', ''));
 
         $_SESSION['_old_salary_assignment_input'] = [
@@ -572,6 +576,10 @@ class EmployeeController extends Controller
             'actual_housing_allowance' => $actualHousingAllowance,
             'actual_transport_allowance' => $actualTransportAllowance,
             'actual_other_allowances' => $actualOtherAllowances,
+            'basic_pay_source' => $basicPaySource,
+            'hourly_rate' => $hourlyRate,
+            'daily_rate' => $dailyRate,
+            'shift_rate' => $shiftRate,
             'override_reason' => $overrideReason,
         ];
 
@@ -601,6 +609,10 @@ class EmployeeController extends Controller
                 'actual_housing_allowance' => $actualHousingAllowance,
                 'actual_transport_allowance' => $actualTransportAllowance,
                 'actual_other_allowances' => $actualOtherAllowances,
+                'basic_pay_source' => $basicPaySource,
+                'hourly_rate' => $hourlyRate,
+                'daily_rate' => $dailyRate,
+                'shift_rate' => $shiftRate,
                 'override_reason' => $overrideReason !== '' ? $overrideReason : null,
                 'status' => 'Pending Finance Review',
                 'reason' => trim((string) $this->input('reason', '')),
@@ -614,6 +626,10 @@ class EmployeeController extends Controller
                 'actual_housing_allowance' => $actualHousingAllowance,
                 'actual_transport_allowance' => $actualTransportAllowance,
                 'actual_other_allowances' => $actualOtherAllowances,
+                'basic_pay_source' => $basicPaySource,
+                'hourly_rate' => $hourlyRate,
+                'daily_rate' => $dailyRate,
+                'shift_rate' => $shiftRate,
                 'override_reason' => $overrideReason !== '' ? $overrideReason : null,
             ]);
             unset($_SESSION['_old_salary_assignment_input']);
@@ -1174,6 +1190,12 @@ class EmployeeController extends Controller
     {
         $allowed = ['Fixed Monthly Salary', 'Hourly', 'Daily', 'Shift-Based'];
         return in_array($method, $allowed, true) ? $method : 'Fixed Monthly Salary';
+    }
+
+    private function validBasicPaySource(string $source): string
+    {
+        $allowed = ['Fixed Salary', 'Attendance Hours', 'Days Worked', 'Shifts Worked'];
+        return in_array($source, $allowed, true) ? $source : 'Fixed Salary';
     }
 
     private function normalizeNullableMoney(string $value): ?float

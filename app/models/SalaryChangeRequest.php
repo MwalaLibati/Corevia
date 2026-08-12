@@ -20,6 +20,10 @@ class SalaryChangeRequest extends Model
             'actual_housing_allowance' => 'DECIMAL(12,2) NULL',
             'actual_transport_allowance' => 'DECIMAL(12,2) NULL',
             'actual_other_allowances' => 'DECIMAL(12,2) NULL',
+            'basic_pay_source' => "VARCHAR(40) NOT NULL DEFAULT 'Fixed Salary'",
+            'hourly_rate' => 'DECIMAL(12,4) NULL',
+            'daily_rate' => 'DECIMAL(12,4) NULL',
+            'shift_rate' => 'DECIMAL(12,4) NULL',
             'override_reason' => 'TEXT NULL',
         ];
 

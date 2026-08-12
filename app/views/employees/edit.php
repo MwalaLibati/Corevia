@@ -336,6 +336,32 @@ $oldInput = !empty($old) ? $old : $employee;
             </div>
 
             <div class="col-md-4">
+                <label class="form-label">Basic Pay Source</label>
+                <?php $basicPaySource = (string) ($salaryInput['basic_pay_source'] ?? ($activeSalaryAssignment['basic_pay_source'] ?? 'Fixed Salary')); ?>
+                <select name="basic_pay_source" class="form-select">
+                    <?php foreach (['Fixed Salary' => 'Fixed monthly salary', 'Attendance Hours' => 'Approved hours x hourly rate', 'Days Worked' => 'Approved days x daily rate', 'Shifts Worked' => 'Approved shifts x shift rate'] as $source => $label): ?>
+                        <option value="<?= e($source) ?>" <?= $basicPaySource === $source ? 'selected' : '' ?>><?= e($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-gray">Use fixed salary for normal monthly staff.</small>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Hourly Rate</label>
+                <input type="number" step="0.0001" min="0" name="hourly_rate" class="form-control" value="<?= e((string) ($salaryInput['hourly_rate'] ?? ($activeSalaryAssignment['hourly_rate'] ?? ''))) ?>" placeholder="For approved-hours pay">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Daily Rate</label>
+                <input type="number" step="0.0001" min="0" name="daily_rate" class="form-control" value="<?= e((string) ($salaryInput['daily_rate'] ?? ($activeSalaryAssignment['daily_rate'] ?? ''))) ?>" placeholder="For days-worked pay">
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Shift Rate</label>
+                <input type="number" step="0.0001" min="0" name="shift_rate" class="form-control" value="<?= e((string) ($salaryInput['shift_rate'] ?? ($activeSalaryAssignment['shift_rate'] ?? ''))) ?>" placeholder="For shifts-worked pay">
+            </div>
+
+            <div class="col-md-4">
                 <label class="form-label">Agreed Housing Allowance</label>
                 <input type="number" step="0.01" min="0" name="actual_housing_allowance" class="form-control" value="<?= e((string) ($salaryInput['actual_housing_allowance'] ?? '')) ?>" placeholder="Leave blank to use structure allowance">
             </div>
@@ -391,7 +417,10 @@ $oldInput = !empty($old) ? $old : $employee;
                             $variance = $agreedBasic - $standardBasic;
                             ?>
                             <td>ZMW <?= e(number_format($standardBasic, 2)) ?></td>
-                            <td>ZMW <?= e(number_format($agreedBasic, 2)) ?></td>
+                            <td>
+                                ZMW <?= e(number_format($agreedBasic, 2)) ?>
+                                <div class="text-gray small"><?= e((string) ($assignment['basic_pay_source'] ?? 'Fixed Salary')) ?></div>
+                            </td>
                             <td class="<?= $variance === 0.0 ? 'text-gray' : ($variance > 0 ? 'text-success' : 'text-danger') ?>">
                                 <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . 'ZMW ' . number_format($variance, 2)) ?>
                             </td>
