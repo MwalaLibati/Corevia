@@ -222,6 +222,10 @@ class SalaryController extends Controller
             'name' => trim((string) $this->input('name', '')),
             'grade_level' => $this->normalizeNullableString((string) $this->input('grade_level', '')),
             'basic_pay' => $this->normalizeMoney((string) $this->input('basic_pay', '0')),
+            'basic_pay_source' => $this->validBasicPaySource((string) $this->input('basic_pay_source', 'Fixed Salary')),
+            'hourly_rate' => $this->normalizeNullableMoney((string) $this->input('hourly_rate', '')),
+            'daily_rate' => $this->normalizeNullableMoney((string) $this->input('daily_rate', '')),
+            'shift_rate' => $this->normalizeNullableMoney((string) $this->input('shift_rate', '')),
             // Retained for compatibility with historical reports. New allowances live in the assignment table.
             'housing_allowance' => 0.0,
             'transport_allowance' => 0.0,
@@ -263,7 +267,25 @@ class SalaryController extends Controller
             return 'Salary structure name is required.';
         }
 
+        if ($data['basic_pay_source'] === 'Attendance Hours' && (float) ($data['hourly_rate'] ?? 0) <= 0) {
+            return 'Hourly rate is required when the salary structure uses approved hours worked.';
+        }
+
+        if ($data['basic_pay_source'] === 'Days Worked' && (float) ($data['daily_rate'] ?? 0) <= 0) {
+            return 'Daily rate is required when the salary structure uses days worked.';
+        }
+
+        if ($data['basic_pay_source'] === 'Shifts Worked' && (float) ($data['shift_rate'] ?? 0) <= 0) {
+            return 'Shift rate is required when the salary structure uses shifts worked.';
+        }
+
         return null;
+    }
+
+    private function validBasicPaySource(string $source): string
+    {
+        $allowed = ['Fixed Salary', 'Attendance Hours', 'Days Worked', 'Shifts Worked'];
+        return in_array($source, $allowed, true) ? $source : 'Fixed Salary';
     }
 
     private function normalizeNullableString(string $value): ?string
@@ -278,5 +300,11 @@ class SalaryController extends Controller
         $normalized = trim($value);
 
         return is_numeric($normalized) ? (float) $normalized : 0.0;
+    }
+
+    private function normalizeNullableMoney(string $value): ?float
+    {
+        $normalized = trim($value);
+        return $normalized === '' ? null : (is_numeric($normalized) ? (float) $normalized : null);
     }
 }

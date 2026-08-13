@@ -13,6 +13,7 @@ class EmployeeSalary extends Model
     public function __construct()
     {
         parent::__construct();
+        (new SalaryStructure())->ensureSchema();
         $this->ensureSchema();
     }
 
@@ -50,8 +51,10 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
                        COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
-                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
-                       es.hourly_rate, es.daily_rate, es.shift_rate
+                       COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
+                       COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
@@ -82,8 +85,10 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
                        COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
-                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
-                       es.hourly_rate, es.daily_rate, es.shift_rate
+                       COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
+                       COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
@@ -117,8 +122,10 @@ class EmployeeSalary extends Model
                        COALESCE(es.actual_housing_allowance, ss.housing_allowance) AS housing_allowance,
                        COALESCE(es.actual_transport_allowance, ss.transport_allowance) AS transport_allowance,
                        COALESCE(es.actual_other_allowances, ss.other_allowances) AS other_allowances,
-                       COALESCE(es.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
-                       es.hourly_rate, es.daily_rate, es.shift_rate
+                       COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
+                       COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
+                       COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id

@@ -31,7 +31,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Grade</th>
-                    <th>Basic</th>
+                    <th>Pay Basis</th>
                     <th>Allowances</th>
                     <th class="text-end">Actions</th>
                 </tr>
@@ -41,10 +41,21 @@
                 <tr><td colspan="5" class="text-center text-gray">No salary structures found.</td></tr>
             <?php else: ?>
                 <?php foreach ($structures as $row): ?>
+                    <?php
+                    $source = (string) ($row['basic_pay_source'] ?? 'Fixed Salary');
+                    $basisLabel = format_currency((float) ($row['basic_pay'] ?? 0));
+                    if ($source === 'Attendance Hours') {
+                        $basisLabel = 'Hours x ' . format_currency((float) ($row['hourly_rate'] ?? 0));
+                    } elseif ($source === 'Days Worked') {
+                        $basisLabel = 'Days x ' . format_currency((float) ($row['daily_rate'] ?? 0));
+                    } elseif ($source === 'Shifts Worked') {
+                        $basisLabel = 'Shifts x ' . format_currency((float) ($row['shift_rate'] ?? 0));
+                    }
+                    ?>
                     <tr>
                         <td><?= e((string) ($row['name'] ?? '')) ?></td>
                         <td><?= e((string) ($row['grade_level'] ?? '-')) ?></td>
-                        <td><?= e(format_currency((float) ($row['basic_pay'] ?? 0))) ?></td>
+                        <td><span class="badge bg-light text-dark border me-1"><?= e($source) ?></span><?= e($basisLabel) ?></td>
                         <td><?php $assigned=$allowancesByStructure[(int)$row['id']]??[]; ?><?php if(!$assigned): ?><span class="text-gray">None</span><?php else: ?><?php foreach($assigned as $a): ?><span class="badge bg-light text-dark border me-1 mb-1"><?= e((string)$a['name']) ?>: <?= $a['calculation_type']==='Percent'?e((string)$a['amount']).'%':e(format_currency((float)$a['amount'])) ?></span><?php endforeach; ?><?php endif; ?></td>
                         <td class="text-end">
                             <a href="<?= e(base_url('salary/edit/' . (string) $row['id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
