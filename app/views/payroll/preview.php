@@ -12,6 +12,7 @@
     $attendancePreview = $attendancePreview ?? ($preview['attendance'] ?? []);
     $attendanceEnabled = !empty($attendancePreview['enabled']);
     $attendanceTotals = $attendancePreview['totals'] ?? ['earnings' => 0, 'deductions' => 0];
+    $attendanceRule = $attendancePreview['rule'] ?? [];
 ?>
 
 <div class="row g-3 mb-4">
@@ -39,6 +40,16 @@
             <span class="badge bg-light text-dark border px-3 py-2">Earnings: <?= e(format_currency((float)($attendanceTotals['earnings'] ?? 0))) ?></span>
             <span class="badge bg-light text-dark border px-3 py-2">Deductions: <?= e(format_currency((float)($attendanceTotals['deductions'] ?? 0))) ?></span>
         </div>
+        <?php if (!empty($attendanceRule)): ?>
+            <div class="w-100 border-top pt-3 mt-2">
+                <div class="row g-2 small">
+                    <div class="col-md-3"><span class="text-gray">Policy:</span> <strong><?= e((string)($attendanceRule['name'] ?? 'Default Attendance Payroll Policy')) ?></strong></div>
+                    <div class="col-md-3"><span class="text-gray">Full shift:</span> <strong><?= e(number_format((float)($attendanceRule['full_shift_hours'] ?? 8), 2)) ?> hrs</strong></div>
+                    <div class="col-md-3"><span class="text-gray">OT after:</span> <strong><?= e(number_format((float)($attendanceRule['overtime_after_hours_per_day'] ?? 8), 2)) ?> hrs</strong></div>
+                    <div class="col-md-3"><span class="text-gray">OT rates:</span> <strong><?= e(number_format((float)($attendanceRule['normal_overtime_multiplier'] ?? 1.5), 2)) ?>x / <?= e(number_format((float)($attendanceRule['weekend_overtime_multiplier'] ?? 2), 2)) ?>x weekend</strong></div>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 

@@ -849,6 +849,23 @@ class PortalController extends Controller
         ]);
     }
 
+    public function attendance(): void
+    {
+        require_employee_auth();
+        $emp = current_employee();
+        $empId = (int) $emp['id'];
+        $month = $this->normalizePortalMonth((string) $this->input('month', date('Y-m')));
+        $records = (new AttendanceRecord())->forEmployeeMonth($empId, $month);
+        $enriched = $this->enrichPortalAttendanceRecords($records, $empId);
+
+        $this->renderPortal('portal/attendance', [
+            'emp' => $emp,
+            'month' => $month,
+            'records' => $enriched,
+            'summary' => $this->portalAttendanceSummary($enriched),
+        ]);
+    }
+
     public function salaryAdvanceApply(): void
     {
         require_employee_auth();
@@ -1457,6 +1474,145 @@ class PortalController extends Controller
         }
 
         return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+    }
+
+    private function normalizePortalMonth(string $value): string
+    {
+        $trimmed = trim($value);
+        return preg_match('/^\d{4}-\d{2}$/', $trimmed) ? $trimmed : date('Y-m');
+    }
+
+    private function enrichPortalAttendanceRecords(array $records, int $employeeId): array
+    {
+        $salaryModel = new EmployeeSalary();
+        $ruleModel = new AttendancePayrollRule();
+        $salaryCache = [];
+        $ruleCache = [];
+
+        foreach ($records as &$record) {
+            $date = (string) ($record['attendance_date'] ?? date('Y-m-d'));
+            $monthEnd = date('Y-m-t', strtotime($date));
+            $month = substr($date, 0, 7);
+
+            if (!isset($salaryCache[$month])) {
+                $salaryCache[$month] = $salaryModel->activeWithStructureForDate($employeeId, $monthEnd);
+            }
+            if (!isset($ruleCache[$month])) {
+                $ruleCache[$month] = $ruleModel->activeForDate($monthEnd);
+            }
+
+            $record['_attendance_calc'] = $this->portalAttendanceValueForRecord(
+                $record,
+                $salaryCache[$month] ?: [],
+                $ruleCache[$month] ?: []
+            );
+        }
+        unset($record);
+
+        return $records;
+    }
+
+    private function portalAttendanceValueForRecord(array $record, array $salary, array $rule): array
+    {
+        $workedMinutes = $this->portalWorkedMinutes($record);
+        $hours = round($workedMinutes / 60, 2);
+        $source = (string) ($salary['basic_pay_source'] ?? 'Fixed Salary');
+        $standardDays = max(1.0, (float) ($rule['standard_days_per_month'] ?? 26));
+        $standardHours = max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8));
+        $fullShiftHours = max(1.0, (float) ($rule['full_shift_hours'] ?? $standardHours));
+        $overtimeAfterHours = max(1.0, (float) ($rule['overtime_after_hours_per_day'] ?? $standardHours));
+        $basic = (float) ($salary['basic_pay'] ?? 0);
+        $dailyRate = (float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays;
+        $hourlyRate = (float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours;
+        $shiftRate = (float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate;
+        $amount = 0.0;
+        $label = 'Time record';
+        $isWeekend = in_array((int) date('N', strtotime((string) ($record['attendance_date'] ?? date('Y-m-d')))), [6, 7], true);
+        $overtimeEnabled = !empty($rule['overtime_enabled']);
+
+        if (in_array((string) ($record['status'] ?? ''), ['Absent', 'Leave'], true)) {
+            $hours = 0.0;
+        } elseif ($source === 'Attendance Hours') {
+            if ($isWeekend && $overtimeEnabled) {
+                $weekendRate = $hourlyRate * (float) ($rule['weekend_overtime_multiplier'] ?? 2.0);
+                $amount = round($hours * $weekendRate, 2);
+                $label = 'Weekend hours x ' . format_currency($weekendRate);
+            } elseif ($overtimeEnabled && $hours > $overtimeAfterHours) {
+                $normalHours = $overtimeAfterHours;
+                $overtimeHours = $hours - $overtimeAfterHours;
+                $overtimeRate = $hourlyRate * (float) ($rule['normal_overtime_multiplier'] ?? 1.5);
+                $amount = round(($normalHours * $hourlyRate) + ($overtimeHours * $overtimeRate), 2);
+                $label = number_format($normalHours, 2) . ' normal + ' . number_format($overtimeHours, 2) . ' OT hrs';
+            } else {
+                $amount = round($hours * $hourlyRate, 2);
+                $label = 'Hours x ' . format_currency($hourlyRate);
+            }
+        } elseif ($source === 'Days Worked') {
+            $amount = $workedMinutes > 0 ? round($dailyRate, 2) : 0.0;
+            $label = 'Day x ' . format_currency($dailyRate);
+            if (!$isWeekend && $overtimeEnabled && $hours > $overtimeAfterHours) {
+                $overtimeHours = $hours - $overtimeAfterHours;
+                $overtimeRate = $hourlyRate * (float) ($rule['normal_overtime_multiplier'] ?? 1.5);
+                $amount = round($amount + ($overtimeHours * $overtimeRate), 2);
+                $label .= ' + ' . number_format($overtimeHours, 2) . ' OT hrs';
+            }
+        } elseif ($source === 'Shifts Worked') {
+            $method = (string) ($rule['shift_count_method'] ?? 'Attendance Day');
+            $quantity = $method === 'Worked Hours / Full Shift'
+                ? round($workedMinutes / max(1, $fullShiftHours * 60), 4)
+                : ($workedMinutes > 0 ? 1.0 : 0.0);
+            $amount = round($quantity * $shiftRate, 2);
+            $label = number_format($quantity, 2) . ' shift(s) x ' . format_currency($shiftRate);
+            if (!$isWeekend && $overtimeEnabled && $hours > $overtimeAfterHours) {
+                $overtimeHours = $hours - $overtimeAfterHours;
+                $overtimeRate = $hourlyRate * (float) ($rule['normal_overtime_multiplier'] ?? 1.5);
+                $amount = round($amount + ($overtimeHours * $overtimeRate), 2);
+                $label .= ' + ' . number_format($overtimeHours, 2) . ' OT hrs';
+            }
+        } elseif ((string) ($rule['payroll_mode'] ?? '') === 'Fixed Salary + Attendance Adjustments') {
+            $label = 'Fixed salary attendance basis';
+        }
+
+        return [
+            'hours' => $hours,
+            'amount' => $amount,
+            'label' => $label,
+            'source' => $source,
+        ];
+    }
+
+    private function portalAttendanceSummary(array $records): array
+    {
+        $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'late' => 0, 'absent' => 0, 'leave' => 0];
+        foreach ($records as $record) {
+            $calc = $record['_attendance_calc'] ?? [];
+            $summary['hours'] += (float) ($calc['hours'] ?? 0);
+            $summary['estimated_value'] += (float) ($calc['amount'] ?? 0);
+            $status = strtolower((string) ($record['status'] ?? ''));
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            }
+        }
+        $summary['hours'] = round($summary['hours'], 2);
+        $summary['estimated_value'] = round($summary['estimated_value'], 2);
+        return $summary;
+    }
+
+    private function portalWorkedMinutes(array $record): int
+    {
+        if (empty($record['check_in']) || empty($record['check_out'])) {
+            return 0;
+        }
+        $date = (string) ($record['attendance_date'] ?? date('Y-m-d'));
+        $in = strtotime($date . ' ' . (string) $record['check_in']);
+        $out = strtotime($date . ' ' . (string) $record['check_out']);
+        if ($in === false || $out === false) {
+            return 0;
+        }
+        if ($out < $in) {
+            $out += 86400;
+        }
+        return max(0, (int) floor(($out - $in) / 60));
     }
 
     private function normalizeDate(string $value): ?string

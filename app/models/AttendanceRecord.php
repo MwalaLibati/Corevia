@@ -10,10 +10,24 @@ class AttendanceRecord extends Model
 {
     protected string $table = 'attendance_records';
 
-    public function listWithEmployee(): array
+    public function listWithEmployee(array $filters = []): array
     {
         $cid = Tenant::id();
-        $and = $cid > 0 ? ' WHERE e.company_id = :cid' : '';
+        $where = [];
+        $params = [];
+        if ($cid > 0) {
+            $where[] = 'e.company_id = :cid';
+            $params['cid'] = $cid;
+        }
+        if (!empty($filters['employee_id'])) {
+            $where[] = 'ar.employee_id = :employee_id';
+            $params['employee_id'] = (int) $filters['employee_id'];
+        }
+        if (!empty($filters['month']) && preg_match('/^\d{4}-\d{2}$/', (string) $filters['month'])) {
+            $where[] = "DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month";
+            $params['month'] = (string) $filters['month'];
+        }
+        $and = $where ? ' WHERE ' . implode(' AND ', $where) : '';
         $sql = 'SELECT ar.*, e.full_name AS employee_name, e.employee_number
                 FROM attendance_records ar
                 JOIN employees e ON e.id = ar.employee_id
@@ -21,26 +35,37 @@ class AttendanceRecord extends Model
                 ORDER BY ar.attendance_date DESC, ar.id DESC';
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
-    public function search(string $keyword): array
+    public function search(string $keyword, array $filters = []): array
     {
         $cid = Tenant::id();
-        $and = $cid > 0 ? ' AND e.company_id = :cid' : '';
+        $and = [];
+        $params = ['keyword' => '%' . $keyword . '%'];
+        if ($cid > 0) {
+            $and[] = 'e.company_id = :cid';
+            $params['cid'] = $cid;
+        }
+        if (!empty($filters['employee_id'])) {
+            $and[] = 'ar.employee_id = :employee_id';
+            $params['employee_id'] = (int) $filters['employee_id'];
+        }
+        if (!empty($filters['month']) && preg_match('/^\d{4}-\d{2}$/', (string) $filters['month'])) {
+            $and[] = "DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month";
+            $params['month'] = (string) $filters['month'];
+        }
         $sql = 'SELECT ar.*, e.full_name AS employee_name, e.employee_number
                 FROM attendance_records ar
                 JOIN employees e ON e.id = ar.employee_id
                 WHERE (e.full_name LIKE :keyword
                    OR e.employee_number LIKE :keyword
                    OR ar.status LIKE :keyword)
-                   ' . $and . '
+                   ' . ($and ? ' AND ' . implode(' AND ', $and) : '') . '
                 ORDER BY ar.attendance_date DESC, ar.id DESC';
 
         $stmt = $this->db->prepare($sql);
-        $params = ['keyword' => '%' . $keyword . '%'];
-        if ($cid > 0) { $params['cid'] = $cid; }
         $stmt->execute($params);
 
         return $stmt->fetchAll();
@@ -73,6 +98,30 @@ class AttendanceRecord extends Model
             . ' ORDER BY full_name'
         );
         $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
+        return $stmt->fetchAll();
+    }
+
+    public function forEmployeeMonth(int $employeeId, string $month): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT ar.*
+             FROM attendance_records ar
+             JOIN employees e ON e.id = ar.employee_id
+             WHERE ar.employee_id = :employee_id
+               AND e.company_id = :cid
+               AND DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month
+             ORDER BY ar.attendance_date DESC, ar.id DESC"
+        );
+        $stmt->execute([
+            'employee_id' => $employeeId,
+            'cid' => Tenant::id(),
+            'month' => $month,
+        ]);
+
         return $stmt->fetchAll();
     }
 

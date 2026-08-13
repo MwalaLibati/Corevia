@@ -18,25 +18,32 @@ $impactOn = !empty($activeRule['attendance_impact_enabled']) && (string)($active
 ?>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:<?= $impactOn ? '#16a34a' : '#64748b' ?>">
             <span class="stat-label">Current Mode</span>
             <div class="stat-value" style="font-size:1.05rem"><?= e((string) ($activeRule['payroll_mode'] ?? 'Fixed Salary Only')) ?></div>
             <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px"><?= $impactOn ? 'Attendance can affect payroll' : 'Attendance does not affect payroll' ?></div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:#2563eb">
             <span class="stat-label">Standard Day</span>
             <div class="stat-value" style="font-size:1.15rem"><?= e(number_format((float)($activeRule['standard_hours_per_day'] ?? 8), 2)) ?> hrs</div>
-            <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px">Used for hourly deductions and overtime</div>
+            <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px">Used for short-hour and absence rules</div>
         </div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+        <div class="ent-stat-card" style="--ent-stat-accent:#7c3aed">
+            <span class="stat-label">Full Shift</span>
+            <div class="stat-value" style="font-size:1.15rem"><?= e(number_format((float)($activeRule['full_shift_hours'] ?? 8), 2)) ?> hrs</div>
+            <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px"><?= e((string)($activeRule['shift_count_method'] ?? 'Attendance Day')) ?></div>
+        </div>
+    </div>
+    <div class="col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:#f97316">
-            <span class="stat-label">Grace Period</span>
-            <div class="stat-value" style="font-size:1.15rem"><?= e((string) ((int)($activeRule['grace_minutes'] ?? 15))) ?> mins</div>
-            <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px">Late coming threshold</div>
+            <span class="stat-label">Overtime Starts After</span>
+            <div class="stat-value" style="font-size:1.15rem"><?= e(number_format((float)($activeRule['overtime_after_hours_per_day'] ?? 8), 2)) ?> hrs</div>
+            <div style="font-size:.74rem;color:var(--ent-text-muted);margin-top:4px"><?= !empty($activeRule['overtime_enabled']) ? 'Overtime enabled' : 'Overtime disabled' ?></div>
         </div>
     </div>
 </div>
@@ -51,6 +58,7 @@ $impactOn = !empty($activeRule['attendance_impact_enabled']) && (string)($active
                         <th>Name</th>
                         <th>Mode</th>
                         <th>Effective</th>
+                        <th>Shift & Overtime</th>
                         <th>Rules Enabled</th>
                         <th>Status</th>
                         <th class="text-end">Action</th>
@@ -58,7 +66,7 @@ $impactOn = !empty($activeRule['attendance_impact_enabled']) && (string)($active
                 </thead>
                 <tbody>
                 <?php if (empty($rules)): ?>
-                    <tr><td colspan="6" class="text-center text-gray">No rule sets found.</td></tr>
+                    <tr><td colspan="7" class="text-center text-gray">No rule sets found.</td></tr>
                 <?php else: foreach ($rules as $rule): ?>
                     <tr>
                         <td>
@@ -69,6 +77,10 @@ $impactOn = !empty($activeRule['attendance_impact_enabled']) && (string)($active
                         <td>
                             <?= e((string) $rule['effective_from']) ?>
                             <?= !empty($rule['effective_to']) ? ' to ' . e((string) $rule['effective_to']) : '' ?>
+                        </td>
+                        <td>
+                            <div class="small">Full shift: <strong><?= e(number_format((float)($rule['full_shift_hours'] ?? 8), 2)) ?> hrs</strong></div>
+                            <div class="small text-gray">OT after <?= e(number_format((float)($rule['overtime_after_hours_per_day'] ?? 8), 2)) ?> hrs at <?= e(number_format((float)($rule['normal_overtime_multiplier'] ?? 1.5), 2)) ?>x</div>
                         </td>
                         <td>
                             <?php foreach ([

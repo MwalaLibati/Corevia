@@ -56,6 +56,16 @@
             </div>
 
             <div class="col-12">
+                <div class="alert alert-light border d-flex align-items-center justify-content-between flex-wrap gap-2 mb-0">
+                    <div>
+                        <strong>Hours preview:</strong>
+                        <span id="attendanceHoursPreview">0.00 hrs</span>
+                    </div>
+                    <small class="text-gray">The money value appears on the attendance list after saving, using the employee salary basis and company payroll rules.</small>
+                </div>
+            </div>
+
+            <div class="col-12">
                 <label class="form-label">Remarks</label>
                 <textarea name="remarks" class="form-control" rows="3"><?= e((string) ($oldInput['remarks'] ?? '')) ?></textarea>
             </div>
@@ -67,3 +77,27 @@
         </form>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var checkIn = document.querySelector('input[name="check_in"]');
+    var checkOut = document.querySelector('input[name="check_out"]');
+    var preview = document.getElementById('attendanceHoursPreview');
+    function minutes(value) {
+        if (!value || value.indexOf(':') === -1) { return null; }
+        var parts = value.split(':');
+        return (parseInt(parts[0], 10) * 60) + parseInt(parts[1], 10);
+    }
+    function update() {
+        var start = minutes(checkIn ? checkIn.value : '');
+        var end = minutes(checkOut ? checkOut.value : '');
+        var diff = 0;
+        if (start !== null && end !== null) {
+            diff = end >= start ? end - start : (end + 1440) - start;
+        }
+        if (preview) { preview.textContent = (diff / 60).toFixed(2) + ' hrs'; }
+    }
+    if (checkIn) { checkIn.addEventListener('input', update); }
+    if (checkOut) { checkOut.addEventListener('input', update); }
+    update();
+});
+</script>

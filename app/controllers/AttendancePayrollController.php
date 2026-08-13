@@ -87,6 +87,7 @@ class AttendancePayrollController extends Controller
             'effective_from' => $this->normalizeDate((string) $this->input('effective_from', date('Y-m-d'))) ?? date('Y-m-d'),
             'effective_to' => $this->normalizeDate((string) $this->input('effective_to', '')),
             'standard_hours_per_day' => max(1, (float) $this->input('standard_hours_per_day', 8)),
+            'full_shift_hours' => max(1, (float) $this->input('full_shift_hours', 8)),
             'standard_days_per_month' => max(1, (float) $this->input('standard_days_per_month', 26)),
             'standard_start_time' => $this->normalizeTime((string) $this->input('standard_start_time', '08:00')) ?? '08:00:00',
             'grace_minutes' => max(0, (int) $this->input('grace_minutes', 15)),
@@ -98,6 +99,7 @@ class AttendancePayrollController extends Controller
             'absence_deduction_method' => (string) $this->input('absence_deduction_method', 'Daily Rate'),
             'overtime_enabled' => (int) $this->input('overtime_enabled', 0),
             'overtime_requires_approval' => (int) $this->input('overtime_requires_approval', 1),
+            'overtime_after_hours_per_day' => max(1, (float) $this->input('overtime_after_hours_per_day', 8)),
             'overtime_min_minutes' => max(0, (int) $this->input('overtime_min_minutes', 30)),
             'overtime_rounding_minutes' => max(1, (int) $this->input('overtime_rounding_minutes', 15)),
             'normal_overtime_multiplier' => max(0, (float) $this->input('normal_overtime_multiplier', 1.5)),
@@ -105,6 +107,7 @@ class AttendancePayrollController extends Controller
             'holiday_overtime_multiplier' => max(0, (float) $this->input('holiday_overtime_multiplier', 2)),
             'night_shift_allowance_enabled' => (int) $this->input('night_shift_allowance_enabled', 0),
             'night_shift_allowance_amount' => max(0, (float) $this->input('night_shift_allowance_amount', 0)),
+            'shift_count_method' => (string) $this->input('shift_count_method', 'Attendance Day'),
             'notes' => trim((string) $this->input('notes', '')) ?: null,
             'is_active' => (int) $this->input('is_active', 0),
         ];
@@ -115,6 +118,9 @@ class AttendancePayrollController extends Controller
         }
         if (!in_array($data['absence_deduction_method'], ['Daily Rate', 'Hourly Rate'], true)) {
             $data['absence_deduction_method'] = 'Daily Rate';
+        }
+        if (!in_array($data['shift_count_method'], ['Attendance Day', 'Worked Hours / Full Shift'], true)) {
+            $data['shift_count_method'] = 'Attendance Day';
         }
 
         (new AttendancePayrollRule())->updateRule((int) $id, $data);

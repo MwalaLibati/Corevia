@@ -25,6 +25,7 @@ class AttendancePayrollRule extends Model
                 effective_from DATE NOT NULL,
                 effective_to DATE NULL,
                 standard_hours_per_day DECIMAL(6,2) NOT NULL DEFAULT 8.00,
+                full_shift_hours DECIMAL(6,2) NOT NULL DEFAULT 8.00,
                 standard_days_per_month DECIMAL(6,2) NOT NULL DEFAULT 26.00,
                 standard_start_time TIME NULL DEFAULT '08:00:00',
                 grace_minutes INT NOT NULL DEFAULT 15,
@@ -36,6 +37,7 @@ class AttendancePayrollRule extends Model
                 absence_deduction_method ENUM('Daily Rate','Hourly Rate') NOT NULL DEFAULT 'Daily Rate',
                 overtime_enabled TINYINT(1) NOT NULL DEFAULT 0,
                 overtime_requires_approval TINYINT(1) NOT NULL DEFAULT 1,
+                overtime_after_hours_per_day DECIMAL(6,2) NOT NULL DEFAULT 8.00,
                 overtime_min_minutes INT NOT NULL DEFAULT 30,
                 overtime_rounding_minutes INT NOT NULL DEFAULT 15,
                 normal_overtime_multiplier DECIMAL(6,2) NOT NULL DEFAULT 1.50,
@@ -43,6 +45,7 @@ class AttendancePayrollRule extends Model
                 holiday_overtime_multiplier DECIMAL(6,2) NOT NULL DEFAULT 2.00,
                 night_shift_allowance_enabled TINYINT(1) NOT NULL DEFAULT 0,
                 night_shift_allowance_amount DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+                shift_count_method ENUM('Attendance Day','Worked Hours / Full Shift') NOT NULL DEFAULT 'Attendance Day',
                 notes TEXT NULL,
                 is_active TINYINT(1) NOT NULL DEFAULT 1,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -78,6 +81,9 @@ class AttendancePayrollRule extends Model
         $this->addColumnIfMissing('employees', 'pay_calculation_method', "VARCHAR(40) NOT NULL DEFAULT 'Fixed Monthly Salary'");
         $this->addColumnIfMissing('attendance_payroll_rule_sets', 'undertime_deduction_enabled', 'TINYINT(1) NOT NULL DEFAULT 0');
         $this->addColumnIfMissing('attendance_payroll_rule_sets', 'undertime_rounding_minutes', 'INT NOT NULL DEFAULT 15');
+        $this->addColumnIfMissing('attendance_payroll_rule_sets', 'full_shift_hours', 'DECIMAL(6,2) NOT NULL DEFAULT 8.00');
+        $this->addColumnIfMissing('attendance_payroll_rule_sets', 'overtime_after_hours_per_day', 'DECIMAL(6,2) NOT NULL DEFAULT 8.00');
+        $this->addColumnIfMissing('attendance_payroll_rule_sets', 'shift_count_method', "ENUM('Attendance Day','Worked Hours / Full Shift') NOT NULL DEFAULT 'Attendance Day'");
     }
 
     public function activeForDate(string $date): array
@@ -235,6 +241,7 @@ class AttendancePayrollRule extends Model
             $basic = (float) ($salary['basic_pay'] ?? 0);
             $standardDays = max(1.0, (float) ($rule['standard_days_per_month'] ?? 26));
             $standardHours = max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8));
+            $fullShiftHours = max(1.0, (float) ($rule['full_shift_hours'] ?? $standardHours));
             $paySource = (string) ($salary['basic_pay_source'] ?? 'Fixed Salary');
             $dailyRate = round(((float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays), 4);
             $hourlyRate = round(((float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours), 4);
@@ -259,7 +266,7 @@ class AttendancePayrollRule extends Model
                     $totals['earnings'] += $amount;
                 }
             } elseif ($paySource === 'Shifts Worked') {
-                $shifts = max(0, $summary['present_days'] - $summary['weekend_days']);
+                $shifts = $this->payableShifts($summary, $rule, $fullShiftHours);
                 $amount = round($shifts * $shiftRate, 2);
                 if ($amount > 0) {
                     $inputs[] = $this->inputLine((int) $employeeId, (int) $rule['id'], 'Earning', 'ATT-BASIC', 'Basic Pay - Approved Shifts', (float) $shifts, $shiftRate, $amount, $summary);
@@ -366,6 +373,7 @@ class AttendancePayrollRule extends Model
             'undertime_minutes' => 0,
         ];
         $standardMinutes = (int) round(max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8)) * 60);
+        $overtimeAfterMinutes = (int) round(max(1.0, (float) ($rule['overtime_after_hours_per_day'] ?? ($rule['standard_hours_per_day'] ?? 8))) * 60);
         $startTime = (string) ($rule['standard_start_time'] ?? '08:00:00');
         $grace = (int) ($rule['grace_minutes'] ?? 15);
 
@@ -387,8 +395,8 @@ class AttendancePayrollRule extends Model
             if ($isWeekend) {
                 $summary['weekend_days']++;
                 $summary['weekend_overtime_minutes'] += $worked;
-            } elseif ($worked > $standardMinutes) {
-                $summary['overtime_minutes'] += $worked - $standardMinutes;
+            } elseif ($worked > $overtimeAfterMinutes) {
+                $summary['overtime_minutes'] += $worked - $overtimeAfterMinutes;
             } elseif ($worked > 0 && $worked < $standardMinutes) {
                 $summary['undertime_minutes'] += $standardMinutes - $worked;
             }
@@ -400,6 +408,17 @@ class AttendancePayrollRule extends Model
         }
 
         return $summary;
+    }
+
+    private function payableShifts(array $summary, array $rule, float $fullShiftHours): float
+    {
+        $method = (string) ($rule['shift_count_method'] ?? 'Attendance Day');
+        if ($method === 'Worked Hours / Full Shift') {
+            $normalWorkedMinutes = max(0, (int) ($summary['worked_minutes'] ?? 0) - (int) ($summary['weekend_overtime_minutes'] ?? 0));
+            return round($normalWorkedMinutes / max(1, $fullShiftHours * 60), 4);
+        }
+
+        return (float) max(0, (int) ($summary['present_days'] ?? 0) - (int) ($summary['weekend_days'] ?? 0));
     }
 
     private function workedMinutes(array $record): int
