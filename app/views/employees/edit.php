@@ -332,33 +332,48 @@ $oldInput = !empty($old) ? $old : $employee;
 
             <div class="col-md-4">
                 <label class="form-label">Agreed Basic Pay</label>
-                <input type="number" step="0.01" min="0" name="actual_basic_pay" class="form-control" value="<?= e((string) ($salaryInput['actual_basic_pay'] ?? '')) ?>" placeholder="Leave blank to use structure basic pay">
+                <input type="number" step="0.01" min="0" name="actual_basic_pay" class="form-control js-pay-field" data-pay-source-field="Fixed Salary" value="<?= e((string) ($salaryInput['actual_basic_pay'] ?? '')) ?>" placeholder="Leave blank to use structure basic pay">
+                <small class="text-gray">For monthly staff, this is the agreed monthly basic pay.</small>
             </div>
 
-            <div class="col-md-4">
-                <label class="form-label">Basic Pay Source</label>
+            <div class="col-12">
+                <label class="form-label mb-2">How should basic pay be calculated?</label>
                 <?php $basicPaySource = (string) ($salaryInput['basic_pay_source'] ?? ($activeSalaryAssignment['basic_pay_source'] ?? 'Fixed Salary')); ?>
-                <select name="basic_pay_source" class="form-select">
-                    <?php foreach (['Fixed Salary' => 'Fixed monthly salary', 'Attendance Hours' => 'Approved hours x hourly rate', 'Days Worked' => 'Approved days x daily rate', 'Shifts Worked' => 'Approved shifts x shift rate'] as $source => $label): ?>
-                        <option value="<?= e($source) ?>" <?= $basicPaySource === $source ? 'selected' : '' ?>><?= e($label) ?></option>
+                <input type="hidden" name="basic_pay_source" id="basicPaySourceInput" value="<?= e($basicPaySource) ?>">
+                <div class="row g-3">
+                    <?php foreach ([
+                        'Fixed Salary' => ['title' => 'Fixed monthly salary', 'desc' => 'Use this for permanent staff with a normal monthly basic pay.', 'icon' => 'bi-wallet2'],
+                        'Attendance Hours' => ['title' => 'Approved hours worked', 'desc' => 'Basic pay is approved normal hours multiplied by the hourly rate.', 'icon' => 'bi-clock-history'],
+                        'Days Worked' => ['title' => 'Approved days worked', 'desc' => 'Basic pay is approved days multiplied by the daily rate.', 'icon' => 'bi-calendar-check'],
+                        'Shifts Worked' => ['title' => 'Approved shifts worked', 'desc' => 'Basic pay is approved shifts multiplied by the shift rate.', 'icon' => 'bi-repeat'],
+                    ] as $source => $option): ?>
+                        <div class="col-md-3">
+                            <button type="button" class="btn w-100 text-start border js-pay-source-card <?= $basicPaySource === $source ? 'btn-primary text-white' : 'btn-light' ?>" data-pay-source="<?= e($source) ?>" style="min-height:116px">
+                                <i class="bi <?= e($option['icon']) ?> d-block mb-2"></i>
+                                <span class="fw-semibold d-block"><?= e($option['title']) ?></span>
+                                <small class="<?= $basicPaySource === $source ? 'text-white-50' : 'text-gray' ?> d-block mt-1"><?= e($option['desc']) ?></small>
+                            </button>
+                        </div>
                     <?php endforeach; ?>
-                </select>
-                <small class="text-gray">Use fixed salary for normal monthly staff.</small>
+                </div>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Attendance Hours">
                 <label class="form-label">Hourly Rate</label>
                 <input type="number" step="0.0001" min="0" name="hourly_rate" class="form-control" value="<?= e((string) ($salaryInput['hourly_rate'] ?? ($activeSalaryAssignment['hourly_rate'] ?? ''))) ?>" placeholder="For approved-hours pay">
+                <small class="text-gray">Example: approved hours x ZMW 25.00.</small>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Days Worked">
                 <label class="form-label">Daily Rate</label>
                 <input type="number" step="0.0001" min="0" name="daily_rate" class="form-control" value="<?= e((string) ($salaryInput['daily_rate'] ?? ($activeSalaryAssignment['daily_rate'] ?? ''))) ?>" placeholder="For days-worked pay">
+                <small class="text-gray">Example: approved work days x ZMW 240.00.</small>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Shifts Worked">
                 <label class="form-label">Shift Rate</label>
                 <input type="number" step="0.0001" min="0" name="shift_rate" class="form-control" value="<?= e((string) ($salaryInput['shift_rate'] ?? ($activeSalaryAssignment['shift_rate'] ?? ''))) ?>" placeholder="For shifts-worked pay">
+                <small class="text-gray">Example: approved shifts x ZMW 180.00.</small>
             </div>
 
             <div class="col-md-4">
@@ -385,10 +400,47 @@ $oldInput = !empty($old) ? $old : $employee;
                 <button type="submit" class="btn btn-outline-primary w-100">Request</button>
             </div>
             <div class="col-12">
-                <small class="text-gray">Leave agreed pay fields blank when the employee should use the salary structure amounts. Salary changes go through Finance review and Admin/Director approval before they are applied.</small>
+                <small class="text-gray">Choose fixed monthly salary for normal staff. Choose approved hours, days or shifts when payroll should calculate Basic Pay from attendance records. Salary changes go through Finance review and Admin/Director approval before they are applied.</small>
                 <a href="<?= e(base_url('salary-change/index')) ?>" class="ms-2">View approvals</a>
             </div>
         </form>
+
+        <script>
+            (function () {
+                const input = document.getElementById('basicPaySourceInput');
+                const cards = document.querySelectorAll('.js-pay-source-card');
+                const wraps = document.querySelectorAll('.js-pay-rate-wrap');
+                const fixedFields = document.querySelectorAll('.js-pay-field[data-pay-source-field="Fixed Salary"]');
+
+                function applyPaySource(source) {
+                    if (input) { input.value = source; }
+                    cards.forEach(function (card) {
+                        const active = card.dataset.paySource === source;
+                        card.classList.toggle('btn-primary', active);
+                        card.classList.toggle('text-white', active);
+                        card.classList.toggle('btn-light', !active);
+                        card.querySelectorAll('small').forEach(function (small) {
+                            small.classList.toggle('text-white-50', active);
+                            small.classList.toggle('text-gray', !active);
+                        });
+                    });
+                    wraps.forEach(function (wrap) {
+                        wrap.style.display = wrap.dataset.paySourceWrap === source ? '' : 'none';
+                    });
+                    fixedFields.forEach(function (field) {
+                        const wrap = field.closest('.col-md-4');
+                        if (wrap) { wrap.style.display = source === 'Fixed Salary' ? '' : 'none'; }
+                    });
+                }
+
+                cards.forEach(function (card) {
+                    card.addEventListener('click', function () {
+                        applyPaySource(card.dataset.paySource || 'Fixed Salary');
+                    });
+                });
+                applyPaySource(input ? input.value : 'Fixed Salary');
+            })();
+        </script>
 
         <div class="table-responsive mt-4">
             <table class="table table-striped align-middle mb-0">

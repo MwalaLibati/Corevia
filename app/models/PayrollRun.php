@@ -555,11 +555,24 @@ class PayrollRun extends Model
             $attendanceDerivedBasic = in_array($basicPaySource, ['Attendance Hours', 'Days Worked', 'Shifts Worked'], true);
             $attendanceInputs = $attendanceByEmployee[$employeeId] ?? [];
             $attendanceBasicLine = null;
+            $payWarnings = [];
             foreach ($attendanceInputs as $line) {
                 if ((string) ($line['code'] ?? '') === 'ATT-BASIC') {
                     $attendanceBasicLine = $line;
                     break;
                 }
+            }
+            if ($attendanceDerivedBasic && $attendanceInputs === []) {
+                $payWarnings[] = 'No attendance records were found for this attendance-based employee in this period.';
+            }
+            if ($basicPaySource === 'Attendance Hours' && (float) ($salary['hourly_rate'] ?? 0) <= 0) {
+                $payWarnings[] = 'Hourly rate is missing; Corevia used the salary structure fallback rate.';
+            }
+            if ($basicPaySource === 'Days Worked' && (float) ($salary['daily_rate'] ?? 0) <= 0) {
+                $payWarnings[] = 'Daily rate is missing; Corevia used the salary structure fallback rate.';
+            }
+            if ($basicPaySource === 'Shifts Worked' && (float) ($salary['shift_rate'] ?? 0) <= 0) {
+                $payWarnings[] = 'Shift rate is missing; Corevia used the salary structure fallback rate.';
             }
 
             $fullBasicPay = $attendanceDerivedBasic ? (float) ($attendanceBasicLine['amount'] ?? 0) : (float) ($salary['basic_pay'] ?? 0);
@@ -610,6 +623,9 @@ class PayrollRun extends Model
                 'amount' => $basicPay,
                 'meta' => $attendanceDerivedBasic ? ['source' => 'attendance_payroll', 'basic_pay_source' => $basicPaySource, 'quantity' => (float) ($attendanceBasicLine['quantity'] ?? 0), 'summary' => $attendanceBasicLine['summary'] ?? []] : [],
             ]];
+            $basicPayExplanation = $attendanceDerivedBasic
+                ? $this->attendanceBasicExplanation($basicPaySource, (float) ($attendanceBasicLine['quantity'] ?? 0), (float) ($attendanceBasicLine['rate'] ?? 0), $basicPay)
+                : 'Fixed monthly basic pay' . ($factor < 1 ? ' prorated to ' . number_format($factor * 100, 2) . '%' : '');
             foreach ($allowanceLines as $line) {
                 if ((int) $line['included_in_gross'] === 1) { $earningLines[] = $line; }
             }
@@ -730,6 +746,9 @@ class PayrollRun extends Model
                 'attendance_inputs' => $attendanceInputs,
                 'attendance_earnings' => $attendanceEarningTotal,
                 'attendance_deductions' => $attendanceDeductionTotal,
+                'basic_pay_source' => $basicPaySource,
+                'basic_pay_explanation' => $basicPayExplanation,
+                'pay_warnings' => $payWarnings,
             ];
 
             $totals['gross'] += $grossPay;
@@ -961,6 +980,20 @@ class PayrollRun extends Model
 
         (new AttendancePayrollRule())->lockInputsForRun($runId);
         $this->recordCalculationAudit($runId, null, null, 'locked', [], $userId);
+    }
+
+    private function attendanceBasicExplanation(string $source, float $quantity, float $rate, float $amount): string
+    {
+        $unit = match ($source) {
+            'Attendance Hours' => 'approved normal hours',
+            'Days Worked' => 'approved days',
+            'Shifts Worked' => 'approved shifts',
+            default => 'approved units',
+        };
+
+        return rtrim(rtrim(number_format($quantity, 2), '0'), '.') . ' ' . $unit
+            . ' x ' . format_currency($rate)
+            . ' = ' . format_currency($amount);
     }
 
     public function releasePayslips(int $runId, int $userId): void

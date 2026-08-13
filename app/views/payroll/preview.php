@@ -30,6 +30,9 @@
                     ? 'Attendance rules are enabled for this period and have been included in this preview.'
                     : 'Attendance payroll impact is off for this company/period. Fixed salary payroll remains unchanged.' ?>
             </p>
+            <div class="text-gray small mt-2">
+                Hourly, daily and shift-based staff can have Basic Pay calculated from approved attendance. Fixed monthly staff continue using their agreed monthly salary.
+            </div>
         </div>
         <div class="d-flex gap-2 flex-wrap">
             <span class="badge bg-<?= $attendanceEnabled ? 'success' : 'secondary' ?> px-3 py-2"><?= $attendanceEnabled ? 'Enabled' : 'Off' ?></span>
@@ -84,6 +87,17 @@
                                 <td><?= e(format_currency((float) ($item['total_deductions'] ?? 0))) ?></td>
                                 <td><?= e(format_currency((float) ($item['net_pay'] ?? 0))) ?></td>
                                 <td>
+                                    <?php if (!empty($item['basic_pay_explanation'])): ?>
+                                        <div class="small mb-2">
+                                            <span class="badge bg-primary-subtle text-primary border">basic pay</span>
+                                            <?= e((string) $item['basic_pay_explanation']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php foreach (($item['pay_warnings'] ?? []) as $warning): ?>
+                                        <div class="small text-warning mb-1">
+                                            <i class="bi bi-exclamation-triangle me-1"></i><?= e((string) $warning) ?>
+                                        </div>
+                                    <?php endforeach; ?>
                                     <?php foreach (($item['earning_lines'] ?? []) as $line): ?>
                                         <?php if (($line['category'] ?? '') === 'attendance'): ?>
                                             <div class="small">
