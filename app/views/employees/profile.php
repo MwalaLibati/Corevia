@@ -46,6 +46,23 @@ $profileField = static function (string $label, mixed $value): void {
     echo '<div class="profile-field-value">' . ($display !== '' ? e($display) : '<span class="text-gray">Not set</span>') . '</div>';
     echo '</div>';
 };
+$checklistStats = static function (array $items): array {
+    $total = max(1, count($items));
+    $done = 0;
+    foreach ($items as $item) {
+        if ((int)($item['is_completed'] ?? 0) === 1) {
+            $done++;
+        }
+    }
+
+    return [
+        'done' => $done,
+        'total' => count($items),
+        'score' => (int) round(($done / $total) * 100),
+    ];
+};
+$onboardingStats = $checklistStats($onboardingChecklist);
+$exitStats = $checklistStats($exitChecklist);
 ?>
 
 <style>
@@ -161,6 +178,49 @@ $profileField = static function (string $label, mixed $value): void {
     }
     .profile-lifecycle-row textarea.form-control {
         min-height: 96px;
+    }
+    .employee-readiness-card .progress {
+        height: 8px;
+        background: #f5f7fb;
+        border-radius: 999px;
+    }
+    .employee-readiness-card .progress-bar {
+        background: #7c3aed;
+        border-radius: 999px;
+    }
+    .employee-check-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 14px 0;
+    }
+    .employee-check-label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #0f172a;
+        font-weight: 600;
+    }
+    .employee-check-badge {
+        width: 31px;
+        height: 24px;
+        border-radius: 6px;
+        display: inline-grid;
+        place-items: center;
+        border: 1px solid #94a3b8;
+        color: #2563eb;
+        background: #fff;
+        flex: 0 0 auto;
+    }
+    .employee-check-badge.is-done {
+        border-color: #22c55e;
+        background: #22c55e;
+        color: #fff;
+    }
+    .employee-check-action {
+        min-width: 64px;
     }
     @media (max-width: 767.98px) {
         .profile-detail-row .card-body,
@@ -317,32 +377,60 @@ $profileField = static function (string $label, mixed $value): void {
 
 <div class="row g-4 mb-4">
     <div class="col-xl-6">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 shadow-sm h-100 employee-readiness-card">
             <div class="card-body">
-                <h5 class="mb-3">Onboarding Checklist</h5>
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1">Onboarding Readiness</h5>
+                        <p class="text-gray small mb-0"><?= e((string)$onboardingStats['done']) ?> of <?= e((string)$onboardingStats['total']) ?> items completed</p>
+                    </div>
+                    <span class="badge <?= $onboardingStats['score'] >= 100 ? 'bg-success' : 'bg-warning text-dark' ?>"><?= e((string)$onboardingStats['score']) ?>%</span>
+                </div>
+                <div class="progress mb-3">
+                    <div class="progress-bar" role="progressbar" style="width: <?= e((string)$onboardingStats['score']) ?>%" aria-valuenow="<?= e((string)$onboardingStats['score']) ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
                 <?php foreach ($onboardingChecklist as $item): ?>
-                    <form method="post" action="<?= e(base_url('employee/checklistToggle/' . (string)$item['id'])) ?>" class="d-flex align-items-center justify-content-between border-bottom py-2">
+                    <?php $isDone = (int)($item['is_completed'] ?? 0) === 1; ?>
+                    <form method="post" action="<?= e(base_url('employee/checklistToggle/' . (string)$item['id'])) ?>" class="employee-check-row">
                         <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                         <input type="hidden" name="employee_id" value="<?= e((string)$emp['id']) ?>">
-                        <span><?= (int)$item['is_completed'] === 1 ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : '<i class="bi bi-circle text-muted me-1"></i>' ?><?= e((string)$item['item_label']) ?></span>
-                        <?php if ($canEditEmployee): ?><button class="btn btn-sm btn-outline-primary" type="submit"><?= (int)$item['is_completed'] === 1 ? 'Undo' : 'Done' ?></button><?php endif; ?>
+                        <span class="employee-check-label">
+                            <span class="employee-check-badge <?= $isDone ? 'is-done' : '' ?>"><i class="bi <?= $isDone ? 'bi-check2' : 'bi-circle' ?>"></i></span>
+                            <?= e((string)$item['item_label']) ?>
+                        </span>
+                        <?php if ($canEditEmployee): ?><button class="btn btn-sm <?= $isDone ? 'btn-outline-secondary' : 'btn-outline-primary' ?> employee-check-action" type="submit"><?= $isDone ? 'Undo' : 'Done' ?></button><?php endif; ?>
                     </form>
                 <?php endforeach; ?>
+                <?php if (empty($onboardingChecklist)): ?><p class="text-gray text-center py-4 mb-0">No onboarding checklist items configured.</p><?php endif; ?>
             </div>
         </div>
     </div>
     <div class="col-xl-6">
-        <div class="card border-0 shadow-sm h-100">
+        <div class="card border-0 shadow-sm h-100 employee-readiness-card">
             <div class="card-body">
-                <h5 class="mb-3">Exit Checklist</h5>
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h5 class="mb-1">Exit Readiness</h5>
+                        <p class="text-gray small mb-0"><?= e((string)$exitStats['done']) ?> of <?= e((string)$exitStats['total']) ?> items completed</p>
+                    </div>
+                    <span class="badge <?= $exitStats['score'] >= 100 ? 'bg-success' : 'bg-warning text-dark' ?>"><?= e((string)$exitStats['score']) ?>%</span>
+                </div>
+                <div class="progress mb-3">
+                    <div class="progress-bar" role="progressbar" style="width: <?= e((string)$exitStats['score']) ?>%" aria-valuenow="<?= e((string)$exitStats['score']) ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
                 <?php foreach ($exitChecklist as $item): ?>
-                    <form method="post" action="<?= e(base_url('employee/checklistToggle/' . (string)$item['id'])) ?>" class="d-flex align-items-center justify-content-between border-bottom py-2">
+                    <?php $isDone = (int)($item['is_completed'] ?? 0) === 1; ?>
+                    <form method="post" action="<?= e(base_url('employee/checklistToggle/' . (string)$item['id'])) ?>" class="employee-check-row">
                         <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                         <input type="hidden" name="employee_id" value="<?= e((string)$emp['id']) ?>">
-                        <span><?= (int)$item['is_completed'] === 1 ? '<i class="bi bi-check-circle-fill text-success me-1"></i>' : '<i class="bi bi-circle text-muted me-1"></i>' ?><?= e((string)$item['item_label']) ?></span>
-                        <?php if ($canEditEmployee): ?><button class="btn btn-sm btn-outline-primary" type="submit"><?= (int)$item['is_completed'] === 1 ? 'Undo' : 'Done' ?></button><?php endif; ?>
+                        <span class="employee-check-label">
+                            <span class="employee-check-badge <?= $isDone ? 'is-done' : '' ?>"><i class="bi <?= $isDone ? 'bi-check2' : 'bi-circle' ?>"></i></span>
+                            <?= e((string)$item['item_label']) ?>
+                        </span>
+                        <?php if ($canEditEmployee): ?><button class="btn btn-sm <?= $isDone ? 'btn-outline-secondary' : 'btn-outline-primary' ?> employee-check-action" type="submit"><?= $isDone ? 'Undo' : 'Done' ?></button><?php endif; ?>
                     </form>
                 <?php endforeach; ?>
+                <?php if (empty($exitChecklist)): ?><p class="text-gray text-center py-4 mb-0">No exit checklist items configured.</p><?php endif; ?>
             </div>
         </div>
     </div>
