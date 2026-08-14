@@ -51,7 +51,7 @@ class User extends Model
         $sql = 'SELECT m.*, c.name AS company_name, c.slug AS company_slug, c.logo_path,
                        r.name AS role_name, COALESCE(r.access_level, r.name) AS access_level
                 FROM company_user_memberships m
-                JOIN companies c ON c.id = m.company_id AND c.is_active = 1
+                JOIN companies c ON c.id = m.company_id AND c.is_active = 1 AND c.deleted_at IS NULL
                 JOIN roles r ON r.id = m.role_id
                 WHERE m.user_id = :uid AND m.is_active = 1
                 ORDER BY m.is_default DESC, c.name ASC';
@@ -67,7 +67,7 @@ class User extends Model
         $sql = 'SELECT m.*, c.name AS company_name, c.slug AS company_slug, c.logo_path,
                        r.name AS role_name, COALESCE(r.access_level, r.name) AS access_level
                 FROM company_user_memberships m
-                JOIN companies c ON c.id = m.company_id AND c.is_active = 1
+                JOIN companies c ON c.id = m.company_id AND c.is_active = 1 AND c.deleted_at IS NULL
                 JOIN roles r ON r.id = m.role_id
                 WHERE m.user_id = :uid
                   AND m.company_id = :cid

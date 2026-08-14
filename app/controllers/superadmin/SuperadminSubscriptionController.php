@@ -19,6 +19,7 @@ class SuperadminSubscriptionController extends Controller
                      WHERE m.company_id = s.company_id AND m.is_active = 1) AS current_admin_count
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
+             WHERE c.deleted_at IS NULL
              ORDER BY s.status ASC, s.ends_at ASC"
         )->fetchAll();
 
@@ -139,7 +140,10 @@ class SuperadminSubscriptionController extends Controller
                      FROM company_user_memberships m
                      JOIN users u ON u.id = m.user_id AND u.is_active = 1
                      WHERE m.company_id = c.id AND m.is_active = 1) AS admin_count
-             FROM companies c WHERE c.is_active = 1 ORDER BY c.name ASC"
+             FROM companies c
+             WHERE c.is_active = 1
+               AND c.deleted_at IS NULL
+             ORDER BY c.name ASC"
         )->fetchAll();
 
         $selected = null;
@@ -324,6 +328,7 @@ class SuperadminSubscriptionController extends Controller
                     DATEDIFF(s.ends_at, CURDATE()) AS days_remaining
              FROM companies c
              LEFT JOIN subscriptions s ON s.company_id = c.id AND s.status = 'Active'
+             WHERE c.deleted_at IS NULL
              ORDER BY c.is_active DESC, c.name ASC"
         )->fetchAll();
 
@@ -332,7 +337,9 @@ class SuperadminSubscriptionController extends Controller
                     SUM(s.price) AS total,
                     COUNT(DISTINCT s.company_id) AS companies
              FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
              WHERE s.status IN ('Active','Expired')
+               AND c.deleted_at IS NULL
              GROUP BY YEAR(s.starts_at), MONTH(s.starts_at)
              ORDER BY MIN(s.starts_at) DESC
              LIMIT 12"
@@ -352,26 +359,57 @@ class SuperadminSubscriptionController extends Controller
         $db = db();
 
         $activeRevenue = (float) $db->query(
-            "SELECT COALESCE(SUM(price), 0) FROM subscriptions WHERE status = 'Active'"
+            "SELECT COALESCE(SUM(s.price), 0)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status = 'Active'
+               AND c.deleted_at IS NULL"
         )->fetchColumn();
 
         $totalEmp = (int) $db->query(
-            "SELECT COUNT(*) FROM employees e JOIN companies c ON c.id = e.company_id WHERE c.is_active = 1"
+            "SELECT COUNT(*)
+             FROM employees e
+             JOIN companies c ON c.id = e.company_id
+             WHERE c.is_active = 1
+               AND c.deleted_at IS NULL"
         )->fetchColumn();
 
         $projectedAnnual = (float) $db->query(
-            "SELECT COALESCE(SUM(CASE WHEN billing_model = 'flat' THEN monthly_rate ELSE employee_count * monthly_rate END * 12), 0)
-             FROM subscriptions WHERE status = 'Active'"
+            "SELECT COALESCE(SUM(CASE WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END * 12), 0)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status = 'Active'
+               AND c.deleted_at IS NULL"
         )->fetchColumn();
         $projectedMonthly = (float) $db->query(
-            "SELECT COALESCE(SUM(CASE WHEN billing_model = 'flat' THEN monthly_rate ELSE employee_count * monthly_rate END), 0)
-             FROM subscriptions WHERE status = 'Active'"
+            "SELECT COALESCE(SUM(CASE WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END), 0)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status = 'Active'
+               AND c.deleted_at IS NULL"
         )->fetchColumn();
 
-        $activeCount = (int) $db->query("SELECT COUNT(*) FROM subscriptions WHERE status='Active'")->fetchColumn();
-        $expiredCount = (int) $db->query("SELECT COUNT(*) FROM subscriptions WHERE status='Expired'")->fetchColumn();
+        $activeCount = (int) $db->query(
+            "SELECT COUNT(*)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status='Active'
+               AND c.deleted_at IS NULL"
+        )->fetchColumn();
+        $expiredCount = (int) $db->query(
+            "SELECT COUNT(*)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status='Expired'
+               AND c.deleted_at IS NULL"
+        )->fetchColumn();
         $expiringCount = (int) $db->query(
-            "SELECT COUNT(*) FROM subscriptions WHERE status='Active' AND ends_at <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
+            "SELECT COUNT(*)
+             FROM subscriptions s
+             JOIN companies c ON c.id = s.company_id
+             WHERE s.status='Active'
+               AND c.deleted_at IS NULL
+               AND s.ends_at <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)"
         )->fetchColumn();
 
         return [
@@ -382,8 +420,8 @@ class SuperadminSubscriptionController extends Controller
             'active_subs' => $activeCount,
             'expired_subs' => $expiredCount,
             'expiring_soon' => $expiringCount,
-            'total_companies' => (int) $db->query('SELECT COUNT(*) FROM companies')->fetchColumn(),
-            'active_companies' => (int) $db->query('SELECT COUNT(*) FROM companies WHERE is_active=1')->fetchColumn(),
+            'total_companies' => (int) $db->query('SELECT COUNT(*) FROM companies WHERE deleted_at IS NULL')->fetchColumn(),
+            'active_companies' => (int) $db->query('SELECT COUNT(*) FROM companies WHERE is_active=1 AND deleted_at IS NULL')->fetchColumn(),
             'rate_per_emp' => $this->defaultMonthlyRate(),
         ];
     }

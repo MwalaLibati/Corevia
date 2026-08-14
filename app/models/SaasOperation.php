@@ -11,14 +11,14 @@ class SaasOperation extends Model
         $db = $this->db;
 
         $summary = [
-            'active_companies' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1")->fetchColumn(),
-            'suspended_companies' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 0 OR account_status = 'Suspended'")->fetchColumn(),
-            'trials_expiring' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1 AND subscription_plan = 'Trial' AND trial_ends_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)")->fetchColumn(),
-            'trials_expired' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1 AND subscription_plan = 'Trial' AND trial_ends_at < CURDATE()")->fetchColumn(),
-            'renewals_due' => (int) $db->query("SELECT COUNT(*) FROM subscriptions WHERE status = 'Active' AND ends_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)")->fetchColumn(),
-            'overdue_invoices' => (int) $db->query("SELECT COUNT(*) FROM subscription_invoices WHERE balance_due > 0 AND due_date < CURDATE()")->fetchColumn(),
+            'active_companies' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1 AND deleted_at IS NULL")->fetchColumn(),
+            'suspended_companies' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE (is_active = 0 OR account_status = 'Suspended') AND deleted_at IS NULL")->fetchColumn(),
+            'trials_expiring' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1 AND deleted_at IS NULL AND subscription_plan = 'Trial' AND trial_ends_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)")->fetchColumn(),
+            'trials_expired' => (int) $db->query("SELECT COUNT(*) FROM companies WHERE is_active = 1 AND deleted_at IS NULL AND subscription_plan = 'Trial' AND trial_ends_at < CURDATE()")->fetchColumn(),
+            'renewals_due' => (int) $db->query("SELECT COUNT(*) FROM subscriptions s JOIN companies c ON c.id = s.company_id WHERE s.status = 'Active' AND c.deleted_at IS NULL AND s.ends_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)")->fetchColumn(),
+            'overdue_invoices' => (int) $db->query("SELECT COUNT(*) FROM subscription_invoices si JOIN companies c ON c.id = si.company_id WHERE si.balance_due > 0 AND si.due_date < CURDATE() AND c.deleted_at IS NULL")->fetchColumn(),
             'pending_plan_changes' => (int) $db->query("SELECT COUNT(*) FROM subscription_plan_changes WHERE status = 'Pending'")->fetchColumn(),
-            'outstanding_balance' => (float) $db->query("SELECT COALESCE(SUM(balance_due),0) FROM subscription_invoices WHERE status <> 'Paid'")->fetchColumn(),
+            'outstanding_balance' => (float) $db->query("SELECT COALESCE(SUM(si.balance_due),0) FROM subscription_invoices si JOIN companies c ON c.id = si.company_id WHERE si.status <> 'Paid' AND c.deleted_at IS NULL")->fetchColumn(),
         ];
 
         return [
@@ -40,6 +40,7 @@ class SaasOperation extends Model
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
              WHERE s.status = 'Active'
+               AND c.deleted_at IS NULL
                AND s.ends_at BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL :days DAY)
              ORDER BY s.ends_at ASC"
         );
@@ -58,6 +59,7 @@ class SaasOperation extends Model
              FROM subscription_invoices si
              JOIN companies c ON c.id = si.company_id
              WHERE si.balance_due > 0 AND si.due_date < CURDATE()
+               AND c.deleted_at IS NULL
              GROUP BY c.id, c.name, c.email, c.is_active, c.account_status
              ORDER BY days_overdue DESC, overdue_balance DESC"
         )->fetchAll();
@@ -69,6 +71,7 @@ class SaasOperation extends Model
             "SELECT c.*, DATEDIFF(c.trial_ends_at, CURDATE()) AS days_left
              FROM companies c
              WHERE c.subscription_plan = 'Trial'
+               AND c.deleted_at IS NULL
                AND c.trial_ends_at IS NOT NULL
                AND c.trial_ends_at <= DATE_ADD(CURDATE(), INTERVAL 14 DAY)
              ORDER BY c.trial_ends_at ASC"
@@ -88,6 +91,7 @@ class SaasOperation extends Model
                     s.currency, s.billing_cycle, s.ends_at
              FROM companies c
              LEFT JOIN subscriptions s ON s.company_id = c.id AND s.status = 'Active'
+             WHERE c.deleted_at IS NULL
              ORDER BY c.name ASC"
         )->fetchAll();
     }
@@ -98,6 +102,7 @@ class SaasOperation extends Model
             "SELECT spc.*, c.name AS company_name
              FROM subscription_plan_changes spc
              JOIN companies c ON c.id = spc.company_id
+             WHERE c.deleted_at IS NULL
              ORDER BY FIELD(spc.status, 'Pending', 'Approved', 'Applied', 'Rejected'), spc.created_at DESC"
         )->fetchAll();
     }
@@ -170,6 +175,7 @@ class SaasOperation extends Model
              FROM companies c
              JOIN subscription_invoices si ON si.company_id = c.id
              WHERE c.is_active = 1
+               AND c.deleted_at IS NULL
                AND si.balance_due > 0
                AND si.due_date < DATE_SUB(CURDATE(), INTERVAL :days DAY)
              GROUP BY c.id, c.name"
@@ -182,7 +188,7 @@ class SaasOperation extends Model
 
         $trialStmt = $this->db->query(
             "SELECT id, name FROM companies
-             WHERE is_active = 1 AND subscription_plan = 'Trial'
+             WHERE is_active = 1 AND deleted_at IS NULL AND subscription_plan = 'Trial'
                AND trial_ends_at IS NOT NULL AND trial_ends_at < CURDATE()"
         );
         $trials = $trialStmt->fetchAll();

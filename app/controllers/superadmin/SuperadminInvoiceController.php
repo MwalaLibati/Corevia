@@ -307,7 +307,7 @@ class SuperadminInvoiceController extends Controller
 
         $assigned = $model->companies($affiliateId);
         $assignedIds = array_map(static fn(array $row): int => (int) $row['company_id'], $assigned);
-        $companies = db()->query('SELECT id, name, email, account_status FROM companies ORDER BY name ASC')->fetchAll();
+        $companies = db()->query('SELECT id, name, email, account_status FROM companies WHERE deleted_at IS NULL ORDER BY name ASC')->fetchAll();
         $plans = db()->query('SELECT id, name, default_monthly_rate, currency FROM subscription_plans WHERE is_active = 1 ORDER BY sort_order ASC, name ASC')->fetchAll();
 
         $this->renderSuperAdmin('superadmin/affiliates/view', [

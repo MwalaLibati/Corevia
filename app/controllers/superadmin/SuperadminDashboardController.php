@@ -9,8 +9,19 @@ class SuperadminDashboardController extends Controller
         require_superadmin();
         $db = db();
 
-        $totalUsers     = (int) $db->query("SELECT COUNT(DISTINCT user_id) FROM company_user_memberships WHERE is_active = 1")->fetchColumn();
-        $totalEmployees = (int) $db->query("SELECT COUNT(*) FROM employees")->fetchColumn();
+        $totalUsers = (int) $db->query(
+            "SELECT COUNT(DISTINCT m.user_id)
+             FROM company_user_memberships m
+             JOIN companies c ON c.id = m.company_id
+             WHERE m.is_active = 1
+               AND c.deleted_at IS NULL"
+        )->fetchColumn();
+        $totalEmployees = (int) $db->query(
+            "SELECT COUNT(*)
+             FROM employees e
+             JOIN companies c ON c.id = e.company_id
+             WHERE c.deleted_at IS NULL"
+        )->fetchColumn();
 
         $companies = $db->query(
             "SELECT c.*,
@@ -21,6 +32,7 @@ class SuperadminDashboardController extends Controller
                     s.employee_count AS billed_emp
              FROM companies c
              LEFT JOIN subscriptions s ON s.company_id = c.id AND s.status = 'Active'
+             WHERE c.deleted_at IS NULL
              ORDER BY c.created_at DESC"
         )->fetchAll();
 
@@ -32,7 +44,9 @@ class SuperadminDashboardController extends Controller
         $expiringCompanies = $db->query(
             "SELECT c.name, s.ends_at, DATEDIFF(s.ends_at, CURDATE()) AS days_left
              FROM subscriptions s JOIN companies c ON c.id = s.company_id
-             WHERE s.status = 'Active' AND s.ends_at <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+             WHERE s.status = 'Active'
+               AND c.deleted_at IS NULL
+               AND s.ends_at <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
              ORDER BY s.ends_at ASC LIMIT 5"
         )->fetchAll();
 

@@ -67,7 +67,7 @@ class SuperadminAffiliateController extends Controller
 
         $assigned = $model->companies($affiliateId);
         $assignedIds = array_map(static fn(array $row): int => (int) $row['company_id'], $assigned);
-        $companies = db()->query('SELECT id, name, email, account_status FROM companies ORDER BY name ASC')->fetchAll();
+        $companies = db()->query('SELECT id, name, email, account_status FROM companies WHERE deleted_at IS NULL ORDER BY name ASC')->fetchAll();
 
         $this->renderSuperAdmin('superadmin/affiliates/view', [
             'title' => 'Affiliate: ' . (string) $affiliate['full_name'],
