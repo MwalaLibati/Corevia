@@ -1484,8 +1484,18 @@ class PortalController extends Controller
 
     private function enrichPortalAttendanceRecords(array $records, int $employeeId): array
     {
-        $salaryModel = new EmployeeSalary();
-        $ruleModel = new AttendancePayrollRule();
+        $salaryModel = null;
+        $ruleModel = null;
+        try {
+            $salaryModel = new EmployeeSalary();
+        } catch (Throwable $exception) {
+            error_log('Portal attendance salary enrichment unavailable: ' . $exception->getMessage());
+        }
+        try {
+            $ruleModel = new AttendancePayrollRule();
+        } catch (Throwable $exception) {
+            error_log('Portal attendance payroll rule enrichment unavailable: ' . $exception->getMessage());
+        }
         $salaryCache = [];
         $ruleCache = [];
 
@@ -1495,10 +1505,22 @@ class PortalController extends Controller
             $month = substr($date, 0, 7);
 
             if (!isset($salaryCache[$month])) {
-                $salaryCache[$month] = $salaryModel->activeWithStructureForDate($employeeId, $monthEnd);
+                try {
+                    $salaryCache[$month] = $salaryModel
+                        ? $salaryModel->activeWithStructureForDate($employeeId, $monthEnd)
+                        : null;
+                } catch (Throwable $exception) {
+                    error_log('Portal attendance salary row enrichment failed: ' . $exception->getMessage());
+                    $salaryCache[$month] = null;
+                }
             }
             if (!isset($ruleCache[$month])) {
-                $ruleCache[$month] = $ruleModel->activeForDate($monthEnd);
+                try {
+                    $ruleCache[$month] = $ruleModel ? $ruleModel->activeForDate($monthEnd) : [];
+                } catch (Throwable $exception) {
+                    error_log('Portal attendance payroll rule row enrichment failed: ' . $exception->getMessage());
+                    $ruleCache[$month] = [];
+                }
             }
 
             $record['_attendance_calc'] = $this->portalAttendanceValueForRecord(

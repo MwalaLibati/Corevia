@@ -274,8 +274,18 @@ class AttendanceController extends Controller
 
     private function enrichAttendanceRecords(array $records): array
     {
-        $salaryModel = new EmployeeSalary();
-        $ruleModel = new AttendancePayrollRule();
+        $salaryModel = null;
+        $ruleModel = null;
+        try {
+            $salaryModel = new EmployeeSalary();
+        } catch (Throwable $exception) {
+            error_log('Attendance salary enrichment unavailable: ' . $exception->getMessage());
+        }
+        try {
+            $ruleModel = new AttendancePayrollRule();
+        } catch (Throwable $exception) {
+            error_log('Attendance payroll rule enrichment unavailable: ' . $exception->getMessage());
+        }
         $salaryCache = [];
         $ruleCache = [];
 
@@ -286,10 +296,22 @@ class AttendanceController extends Controller
             $ruleKey = substr($date, 0, 7);
 
             if (!isset($salaryCache[$employeeId . '-' . $ruleKey])) {
-                $salaryCache[$employeeId . '-' . $ruleKey] = $salaryModel->activeWithStructureForDate($employeeId, $monthEnd);
+                try {
+                    $salaryCache[$employeeId . '-' . $ruleKey] = $salaryModel
+                        ? $salaryModel->activeWithStructureForDate($employeeId, $monthEnd)
+                        : null;
+                } catch (Throwable $exception) {
+                    error_log('Attendance salary row enrichment failed: ' . $exception->getMessage());
+                    $salaryCache[$employeeId . '-' . $ruleKey] = null;
+                }
             }
             if (!isset($ruleCache[$ruleKey])) {
-                $ruleCache[$ruleKey] = $ruleModel->activeForDate($monthEnd);
+                try {
+                    $ruleCache[$ruleKey] = $ruleModel ? $ruleModel->activeForDate($monthEnd) : [];
+                } catch (Throwable $exception) {
+                    error_log('Attendance payroll rule row enrichment failed: ' . $exception->getMessage());
+                    $ruleCache[$ruleKey] = [];
+                }
             }
 
             $record['_attendance_calc'] = $this->attendanceValueForRecord(
