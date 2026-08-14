@@ -33,7 +33,6 @@ class AttendanceController extends Controller
             $enrichedRecords = $this->safeAttendanceRows();
             $summary = $this->attendanceSummary($enrichedRecords);
             $employees = $this->safeAttendanceEmployees();
-            Session::flash('error', 'Attendance loaded in safe mode. Some payroll value estimates may be unavailable until setup is refreshed.');
         }
 
         $this->render('attendance/index', [
@@ -327,11 +326,16 @@ class AttendanceController extends Controller
                 }
             }
 
-            $record['_attendance_calc'] = $this->attendanceValueForRecord(
-                $record,
-                $salaryCache[$employeeId . '-' . $ruleKey] ?: [],
-                $ruleCache[$ruleKey] ?: []
-            );
+            try {
+                $record['_attendance_calc'] = $this->attendanceValueForRecord(
+                    $record,
+                    $salaryCache[$employeeId . '-' . $ruleKey] ?: [],
+                    $ruleCache[$ruleKey] ?: []
+                );
+            } catch (Throwable $exception) {
+                error_log('Attendance value calculation failed: ' . $exception->getMessage());
+                $record['_attendance_calc'] = $this->timeOnlyCalculation($record);
+            }
         }
         unset($record);
 
@@ -407,6 +411,16 @@ class AttendanceController extends Controller
         ];
     }
 
+    private function timeOnlyCalculation(array $record): array
+    {
+        return [
+            'hours' => round($this->workedMinutes($record) / 60, 2),
+            'amount' => 0.0,
+            'label' => 'Time only',
+            'source' => 'Time',
+        ];
+    }
+
     private function attendanceSummary(array $records): array
     {
         $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'absent' => 0, 'leave' => 0, 'late' => 0];
@@ -457,12 +471,7 @@ class AttendanceController extends Controller
             $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
             $rows = $stmt->fetchAll();
             foreach ($rows as &$row) {
-                $row['_attendance_calc'] = [
-                    'hours' => round($this->workedMinutes($row) / 60, 2),
-                    'amount' => 0.0,
-                    'label' => 'Time only',
-                    'source' => 'Safe Mode',
-                ];
+                $row['_attendance_calc'] = $this->timeOnlyCalculation($row);
             }
             unset($row);
             return $rows;

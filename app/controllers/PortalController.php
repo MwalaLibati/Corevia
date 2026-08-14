@@ -1523,11 +1523,16 @@ class PortalController extends Controller
                 }
             }
 
-            $record['_attendance_calc'] = $this->portalAttendanceValueForRecord(
-                $record,
-                $salaryCache[$month] ?: [],
-                $ruleCache[$month] ?: []
-            );
+            try {
+                $record['_attendance_calc'] = $this->portalAttendanceValueForRecord(
+                    $record,
+                    $salaryCache[$month] ?: [],
+                    $ruleCache[$month] ?: []
+                );
+            } catch (Throwable $exception) {
+                error_log('Portal attendance value calculation failed: ' . $exception->getMessage());
+                $record['_attendance_calc'] = $this->portalTimeOnlyCalculation($record);
+            }
         }
         unset($record);
 
@@ -1600,6 +1605,16 @@ class PortalController extends Controller
             'amount' => $amount,
             'label' => $label,
             'source' => $source,
+        ];
+    }
+
+    private function portalTimeOnlyCalculation(array $record): array
+    {
+        return [
+            'hours' => round($this->portalWorkedMinutes($record) / 60, 2),
+            'amount' => 0.0,
+            'label' => 'Time record',
+            'source' => 'Time',
         ];
     }
 
