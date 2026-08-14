@@ -13,20 +13,33 @@ class AttendanceController extends Controller
         require_auth();
         require_role(['Super Admin', 'HR Officer']);
 
-        $model = new AttendanceRecord();
         $search = trim((string) $this->input('search', ''));
         $filters = [
             'employee_id' => (int) $this->input('employee_id', 0),
             'month' => $this->normalizeMonth((string) $this->input('month', date('Y-m'))),
         ];
-        $records = $search === '' ? $model->listWithEmployee($filters) : $model->search($search, $filters);
-        $enrichedRecords = $this->enrichAttendanceRecords($records);
-        $summary = $this->attendanceSummary($enrichedRecords);
+        $employees = [];
+        $enrichedRecords = [];
+        $summary = $this->attendanceSummary([]);
+
+        try {
+            $model = new AttendanceRecord();
+            $records = $search === '' ? $model->listWithEmployee($filters) : $model->search($search, $filters);
+            $enrichedRecords = $this->enrichAttendanceRecords($records);
+            $summary = $this->attendanceSummary($enrichedRecords);
+            $employees = $model->employees();
+        } catch (Throwable $exception) {
+            error_log('Attendance index primary load failed: ' . $exception->getMessage());
+            $enrichedRecords = $this->safeAttendanceRows();
+            $summary = $this->attendanceSummary($enrichedRecords);
+            $employees = $this->safeAttendanceEmployees();
+            Session::flash('error', 'Attendance loaded in safe mode. Some payroll value estimates may be unavailable until setup is refreshed.');
+        }
 
         $this->render('attendance/index', [
             'title' => 'Attendance & Leave',
             'records' => $enrichedRecords,
-            'employees' => $model->employees(),
+            'employees' => $employees,
             'filters' => $filters,
             'summary' => $summary,
             'search' => $search,
@@ -426,5 +439,53 @@ class AttendanceController extends Controller
             $out += 86400;
         }
         return max(0, (int) floor(($out - $in) / 60));
+    }
+
+    private function safeAttendanceRows(): array
+    {
+        try {
+            $cid = Tenant::id();
+            $where = $cid > 0 ? ' WHERE e.company_id = :cid' : '';
+            $stmt = db()->prepare(
+                'SELECT ar.id, ar.employee_id, ar.attendance_date, ar.status, ar.check_in, ar.check_out, ar.remarks,
+                        e.full_name AS employee_name, e.employee_number
+                 FROM attendance_records ar
+                 JOIN employees e ON e.id = ar.employee_id' . $where . '
+                 ORDER BY ar.attendance_date DESC, ar.id DESC
+                 LIMIT 500'
+            );
+            $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as &$row) {
+                $row['_attendance_calc'] = [
+                    'hours' => round($this->workedMinutes($row) / 60, 2),
+                    'amount' => 0.0,
+                    'label' => 'Time only',
+                    'source' => 'Safe Mode',
+                ];
+            }
+            unset($row);
+            return $rows;
+        } catch (Throwable $exception) {
+            error_log('Attendance safe rows failed: ' . $exception->getMessage());
+            return [];
+        }
+    }
+
+    private function safeAttendanceEmployees(): array
+    {
+        try {
+            $cid = Tenant::id();
+            $stmt = db()->prepare(
+                'SELECT id, full_name, employee_number
+                 FROM employees' . ($cid > 0 ? ' WHERE company_id = :cid' : '') . '
+                 ORDER BY full_name ASC'
+            );
+            $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
+            return $stmt->fetchAll();
+        } catch (Throwable $exception) {
+            error_log('Attendance safe employees failed: ' . $exception->getMessage());
+            return [];
+        }
     }
 }
