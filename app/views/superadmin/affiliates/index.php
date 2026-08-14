@@ -47,7 +47,16 @@
                         <td>ZMW <?= number_format((float)($a['pending_commission'] ?? 0), 2) ?></td>
                         <td>ZMW <?= number_format((float)($a['paid_commission'] ?? 0), 2) ?></td>
                         <td><span class="badge <?= (int)$a['is_active'] === 1 ? 'bg-success' : 'bg-secondary' ?>"><?= (int)$a['is_active'] === 1 ? 'Active' : 'Inactive' ?></span></td>
-                        <td class="text-end"><a href="<?= e(base_url('superadmin/invoice/affiliateView/' . (string)$a['id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a></td>
+                        <td class="text-end">
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="<?= e(base_url('superadmin/invoice/affiliateView/' . (string)$a['id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a>
+                                <form method="post" action="<?= e(base_url('superadmin/invoice/affiliateDelete/' . (string)$a['id'])) ?>" data-affiliate-name="<?= e((string)$a['full_name']) ?>" onsubmit="return confirmAffiliateDelete(this)">
+                                    <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                                    <input type="hidden" name="confirm_name" value="">
+                                    <button class="btn btn-sm btn-outline-danger" title="Delete affiliate"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </td>
                     </tr>
                 <?php endforeach; endif; ?>
                 </tbody>
@@ -55,3 +64,19 @@
         </div>
     </div>
 </div>
+
+<script>
+function confirmAffiliateDelete(form) {
+    var affiliateName = form.getAttribute('data-affiliate-name') || '';
+    var typed = window.prompt('This will permanently delete the affiliate and related affiliate records. Type "' + affiliateName + '" to confirm.');
+    if (typed === null) {
+        return false;
+    }
+    if (typed !== affiliateName) {
+        alert('Affiliate was not deleted because the name did not match.');
+        return false;
+    }
+    form.querySelector('input[name="confirm_name"]').value = typed;
+    return true;
+}
+</script>

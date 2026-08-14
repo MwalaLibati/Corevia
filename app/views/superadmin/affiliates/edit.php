@@ -26,8 +26,18 @@
                 <div class="col-md-4"><label class="form-label">NRC Number</label><input name="nrc_number" class="form-control" value="<?= e((string)($affiliate['nrc_number'] ?? '')) ?>"></div>
                 <div class="col-md-4"><label class="form-label">TPIN</label><input name="tpin" class="form-control" value="<?= e((string)($affiliate['tpin'] ?? '')) ?>"></div>
                 <div class="col-md-4"><label class="form-label">Date of Birth / Incorporation</label><input type="date" name="date_of_birth" class="form-control" value="<?= e((string)($affiliate['date_of_birth'] ?? '')) ?>"></div>
-                <div class="col-md-4"><label class="form-label">City</label><input name="city" class="form-control" value="<?= e((string)($affiliate['city'] ?? '')) ?>"></div>
-                <div class="col-md-4"><label class="form-label">Province</label><input name="province" class="form-control" value="<?= e((string)($affiliate['province'] ?? '')) ?>"></div>
+                <div class="col-md-4">
+                    <label class="form-label">Province</label>
+                    <select name="province" id="affiliateProvince" class="form-select" data-current="<?= e((string)($affiliate['province'] ?? '')) ?>">
+                        <option value="">Select province</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">City</label>
+                    <select name="city" id="affiliateCity" class="form-select" data-current="<?= e((string)($affiliate['city'] ?? '')) ?>">
+                        <option value="">Select province first</option>
+                    </select>
+                </div>
                 <div class="col-12"><label class="form-label">Address</label><textarea name="address" class="form-control" rows="2"><?= e((string)($affiliate['address'] ?? '')) ?></textarea></div>
                 <div class="col-12"><label class="form-label">KYC Rejection Reason</label><textarea name="kyc_rejection_reason" class="form-control" rows="2"><?= e((string)($affiliate['kyc_rejection_reason'] ?? '')) ?></textarea></div>
             </div>
@@ -60,8 +70,12 @@
                 </div>
                 <div class="col-md-8">
                     <label class="form-label">Reset Temporary Password</label>
-                    <input type="password" name="password" class="form-control" placeholder="Leave blank to keep existing password">
-                    <div class="form-text">If entered, affiliate must change it on next login.</div>
+                    <div class="input-group">
+                        <input type="password" name="password" id="affiliatePassword" class="form-control" placeholder="Leave blank to keep existing password">
+                        <button type="button" class="btn btn-outline-secondary" id="toggleAffiliatePassword"><i class="bi bi-eye"></i></button>
+                        <button type="button" class="btn btn-outline-primary" id="generateAffiliatePassword"><i class="bi bi-magic me-1"></i>Generate</button>
+                    </div>
+                    <div class="form-text">If entered, use at least 10 characters with uppercase, lowercase, number, and special character. The affiliate must change it on next login.</div>
                 </div>
             </div>
 
@@ -69,3 +83,75 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var provinceSelect = document.getElementById('affiliateProvince');
+    var citySelect = document.getElementById('affiliateCity');
+    var passwordInput = document.getElementById('affiliatePassword');
+    var toggleButton = document.getElementById('toggleAffiliatePassword');
+    var generateButton = document.getElementById('generateAffiliatePassword');
+    var currentProvince = provinceSelect.getAttribute('data-current') || '';
+    var currentCity = citySelect.getAttribute('data-current') || '';
+    var citiesByProvince = {
+        'Central': ['Kabwe', 'Kapiri Mposhi', 'Mkushi', 'Serenje', 'Chibombo', 'Mumbwa'],
+        'Copperbelt': ['Kitwe', 'Ndola', 'Chingola', 'Mufulira', 'Luanshya', 'Kalulushi', 'Chililabombwe', 'Lufwanyama', 'Mpongwe', 'Masaiti'],
+        'Eastern': ['Chipata', 'Petauke', 'Katete', 'Lundazi', 'Nyimba', 'Sinda'],
+        'Luapula': ['Mansa', 'Samfya', 'Nchelenge', 'Kawambwa', 'Mwense'],
+        'Lusaka': ['Lusaka', 'Kafue', 'Chongwe', 'Chilanga', 'Rufunsa'],
+        'Muchinga': ['Chinsali', 'Mpika', 'Nakonde', 'Isoka', 'Mafinga'],
+        'Northern': ['Kasama', 'Mbala', 'Mpulungu', 'Mporokoso', 'Luwingu'],
+        'North-Western': ['Solwezi', 'Mwinilunga', 'Kasempa', 'Zambezi', 'Kabompo'],
+        'Southern': ['Livingstone', 'Choma', 'Mazabuka', 'Monze', 'Kalomo', 'Siavonga'],
+        'Western': ['Mongu', 'Sesheke', 'Senanga', 'Kalabo', 'Kaoma']
+    };
+
+    Object.keys(citiesByProvince).forEach(function (province) {
+        var option = new Option(province, province);
+        option.selected = province === currentProvince;
+        provinceSelect.add(option);
+    });
+
+    function populateCities() {
+        var cities = citiesByProvince[provinceSelect.value] || [];
+        citySelect.innerHTML = '';
+        if (cities.length === 0) {
+            citySelect.add(new Option('Select province first', ''));
+            citySelect.disabled = true;
+            return;
+        }
+        citySelect.add(new Option('Select city', ''));
+        cities.forEach(function (city) {
+            var option = new Option(city, city);
+            option.selected = city === currentCity;
+            citySelect.add(option);
+        });
+        citySelect.disabled = false;
+    }
+
+    function strongPassword() {
+        var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+        var specials = '!@#$%';
+        var password = 'Corevia@';
+        for (var i = 0; i < 6; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        password += specials.charAt(Math.floor(Math.random() * specials.length));
+        return password;
+    }
+
+    provinceSelect.addEventListener('change', function () {
+        currentCity = '';
+        populateCities();
+    });
+    populateCities();
+
+    generateButton.addEventListener('click', function () {
+        passwordInput.value = strongPassword();
+        passwordInput.type = 'text';
+    });
+    toggleButton.addEventListener('click', function () {
+        passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+    });
+});
+</script>

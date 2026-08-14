@@ -226,17 +226,24 @@ class SuperadminInvoiceController extends Controller
         $name = trim((string) $this->input('full_name', ''));
         $email = strtolower(trim((string) $this->input('email', '')));
         $phone = trim((string) $this->input('phone', ''));
-        $password = (string) $this->input('password', '');
+        $password = trim((string) $this->input('password', ''));
         $rate = max(0.0, min(100.0, (float) $this->input('commission_rate', '5')));
         $type = (string) $this->input('affiliate_type', 'Individual');
         if (!in_array($type, ['Individual','Company','Consultant','Reseller','Agency'], true)) {
             $type = 'Individual';
         }
 
-        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) {
-            Session::flash('error', 'Name, valid email, and password of at least 8 characters are required.');
+        if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Session::flash('error', 'Name and valid email are required.');
             redirect('superadmin/invoice/affiliateCreate');
         }
+
+        if ($password !== '' && !$this->isStrongTemporaryPassword($password)) {
+            Session::flash('error', 'Temporary password must be at least 10 characters and include uppercase, lowercase, a number, and a special character.');
+            redirect('superadmin/invoice/affiliateCreate');
+        }
+
+        $password = $password !== '' ? $password : $this->generateTemporaryPassword();
 
         try {
             $stmt = db()->prepare(
@@ -359,8 +366,8 @@ class SuperadminInvoiceController extends Controller
             redirect('superadmin/invoice/affiliateEdit/' . (int) $affiliate['id']);
         }
 
-        if ($password !== '' && strlen($password) < 8) {
-            Session::flash('error', 'Temporary password must be at least 8 characters.');
+        if ($password !== '' && !$this->isStrongTemporaryPassword($password)) {
+            Session::flash('error', 'Temporary password must be at least 10 characters and include uppercase, lowercase, number, and special character.');
             redirect('superadmin/invoice/affiliateEdit/' . (int) $affiliate['id']);
         }
 
@@ -442,7 +449,7 @@ class SuperadminInvoiceController extends Controller
             if ($password !== '') {
                 $emailResult = $this->sendAffiliateWelcomeEmail(
                     (string) $params['name'],
-                    (string) $affiliate['email'],
+                    (string) $params['email'],
                     $password,
                     (string) $affiliate['affiliate_code'],
                     true
@@ -498,6 +505,84 @@ class SuperadminInvoiceController extends Controller
         }
 
         redirect('superadmin/invoice/affiliateView/' . (int) $affiliate['id']);
+    }
+
+    public function affiliateDelete(string $id = ''): void
+    {
+        require_superadmin();
+        $this->ensureAffiliateSchema();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') { redirect('superadmin/invoice/affiliates'); }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/invoice/affiliates');
+        }
+
+        $affiliate = $this->affiliateOrFail((int) $id);
+        $confirmName = trim((string) $this->input('confirm_name', ''));
+        if ($confirmName !== (string) $affiliate['full_name']) {
+            Session::flash('error', 'Affiliate was not deleted. Type the affiliate name exactly to confirm deletion.');
+            redirect('superadmin/invoice/affiliateView/' . (int) $affiliate['id']);
+        }
+
+        $db = db();
+        $documents = [];
+        $agreements = [];
+        try {
+            $stmt = $db->prepare('SELECT file_path FROM affiliate_documents WHERE affiliate_id = :id');
+            $stmt->execute(['id' => (int) $affiliate['id']]);
+            $documents = $stmt->fetchAll();
+
+            $stmt = $db->prepare('SELECT signed_document_path FROM affiliate_agreements WHERE affiliate_id = :id AND signed_document_path IS NOT NULL');
+            $stmt->execute(['id' => (int) $affiliate['id']]);
+            $agreements = $stmt->fetchAll();
+        } catch (Throwable) {
+            $documents = [];
+            $agreements = [];
+        }
+
+        try {
+            $db->beginTransaction();
+            $batchIds = $this->idsForAffiliatePayoutBatches((int) $affiliate['id']);
+            if ($batchIds !== [] && $this->tableExists('affiliate_payout_items')) {
+                $placeholders = implode(',', array_fill(0, count($batchIds), '?'));
+                $db->prepare("DELETE FROM affiliate_payout_items WHERE payout_batch_id IN ({$placeholders})")->execute($batchIds);
+            }
+
+            foreach ([
+                'affiliate_payout_batches',
+                'affiliate_support_tickets',
+                'affiliate_login_history',
+                'affiliate_messages',
+                'affiliate_agreements',
+                'affiliate_documents',
+                'affiliate_leads',
+                'affiliate_commissions',
+                'affiliate_referrals',
+            ] as $table) {
+                if ($this->tableExists($table)) {
+                    $db->prepare("DELETE FROM {$table} WHERE affiliate_id = :id")->execute(['id' => (int) $affiliate['id']]);
+                }
+            }
+            $db->prepare('DELETE FROM affiliates WHERE id = :id')->execute(['id' => (int) $affiliate['id']]);
+            $db->commit();
+
+            foreach ($documents as $doc) {
+                $this->deleteStoredFile((string) ($doc['file_path'] ?? ''));
+            }
+            foreach ($agreements as $agreement) {
+                $this->deleteStoredFile((string) ($agreement['signed_document_path'] ?? ''));
+            }
+
+            AuditLog::recordPlatform('affiliate_deleted', 'Deleted affiliate ' . (string) $affiliate['email'], 'Affiliate', (int) $affiliate['id']);
+            Session::flash('success', "Affiliate '{$affiliate['full_name']}' has been deleted.");
+            redirect('superadmin/invoice/affiliates');
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            Session::flash('error', 'Affiliate could not be deleted: ' . $e->getMessage());
+            redirect('superadmin/invoice/affiliateView/' . (int) $affiliate['id']);
+        }
     }
 
     public function affiliateLeadUpdate(string $id = ''): void
@@ -1061,6 +1146,20 @@ class SuperadminInvoiceController extends Controller
         return $code;
     }
 
+    private function generateTemporaryPassword(): string
+    {
+        return 'Stonesoft@' . random_int(100000, 999999) . strtoupper(substr(bin2hex(random_bytes(3)), 0, 4));
+    }
+
+    private function isStrongTemporaryPassword(string $password): bool
+    {
+        return strlen($password) >= 10
+            && preg_match('/[A-Z]/', $password) === 1
+            && preg_match('/[a-z]/', $password) === 1
+            && preg_match('/\d/', $password) === 1
+            && preg_match('/[^A-Za-z0-9]/', $password) === 1;
+    }
+
     private function allowedValue(string $value, array $allowed, string $fallback): string
     {
         return in_array($value, $allowed, true) ? $value : $fallback;
@@ -1280,5 +1379,50 @@ class SuperadminInvoiceController extends Controller
         $stmt->execute(['table_name' => $table, 'column_name' => $column]);
 
         return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function tableExists(string $table): bool
+    {
+        try {
+            $stmt = db()->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+            );
+            $stmt->execute(['table_name' => $table]);
+
+            return (int) $stmt->fetchColumn() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function idsForAffiliatePayoutBatches(int $affiliateId): array
+    {
+        if (!$this->tableExists('affiliate_payout_batches')) {
+            return [];
+        }
+
+        $stmt = db()->prepare('SELECT id FROM affiliate_payout_batches WHERE affiliate_id = :id');
+        $stmt->execute(['id' => $affiliateId]);
+
+        return array_map('intval', array_column($stmt->fetchAll(), 'id'));
+    }
+
+    private function deleteStoredFile(string $relativePath): void
+    {
+        $relativePath = ltrim($relativePath, '/\\');
+        if ($relativePath === '') {
+            return;
+        }
+
+        $base = realpath(BASE_PATH);
+        $path = realpath(BASE_PATH . '/' . $relativePath);
+        if ($base === false || $path === false || !str_starts_with($path, $base)) {
+            return;
+        }
+
+        if (is_file($path)) {
+            @unlink($path);
+        }
     }
 }

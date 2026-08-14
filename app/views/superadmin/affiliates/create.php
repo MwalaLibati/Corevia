@@ -25,8 +25,18 @@
                 <div class="col-md-3"><label class="form-label">NRC Number</label><input name="nrc_number" class="form-control"></div>
                 <div class="col-md-3"><label class="form-label">TPIN</label><input name="tpin" class="form-control"></div>
                 <div class="col-md-4"><label class="form-label">Date of Birth / Incorporation</label><input type="date" name="date_of_birth" class="form-control"></div>
-                <div class="col-md-4"><label class="form-label">City</label><input name="city" class="form-control"></div>
-                <div class="col-md-4"><label class="form-label">Province</label><input name="province" class="form-control"></div>
+                <div class="col-md-4">
+                    <label class="form-label">Province</label>
+                    <select name="province" id="affiliateProvince" class="form-select">
+                        <option value="">Select province</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">City</label>
+                    <select name="city" id="affiliateCity" class="form-select" disabled>
+                        <option value="">Select province first</option>
+                    </select>
+                </div>
                 <div class="col-12"><label class="form-label">Address</label><textarea name="address" class="form-control" rows="2"></textarea></div>
             </div>
 
@@ -50,12 +60,81 @@
             <hr class="my-4">
             <div class="p-3 rounded border" style="background:#f8fafc">
                 <h6 class="fw-bold mb-2"><i class="bi bi-key me-1"></i>Temporary Login Password</h6>
-                <p class="text-muted small mb-3">Create the first password for the affiliate. They will be forced to change it on first login.</p>
+                <p class="text-muted small mb-3">Enter a one-time password or leave it blank and Corevia will generate one automatically. The affiliate will be forced to change it on first login.</p>
                 <div class="row g-3">
-                    <div class="col-md-6"><label class="form-label">Temporary Password</label><input type="password" name="password" class="form-control" required></div>
+                    <div class="col-md-7">
+                        <label class="form-label">Temporary Password</label>
+                        <div class="input-group">
+                            <input type="password" name="password" id="affiliatePassword" class="form-control" placeholder="Leave blank to auto-generate">
+                            <button type="button" class="btn btn-outline-secondary" id="toggleAffiliatePassword"><i class="bi bi-eye"></i></button>
+                            <button type="button" class="btn btn-outline-primary" id="generateAffiliatePassword"><i class="bi bi-magic me-1"></i>Generate</button>
+                        </div>
+                        <div class="form-text">Use at least 10 characters with uppercase, lowercase, number, and special character.</div>
+                    </div>
                 </div>
             </div>
             <div class="mt-4"><button class="btn text-white" style="background:#7c3aed">Create Affiliate</button></div>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var provinceSelect = document.getElementById('affiliateProvince');
+    var citySelect = document.getElementById('affiliateCity');
+    var passwordInput = document.getElementById('affiliatePassword');
+    var toggleButton = document.getElementById('toggleAffiliatePassword');
+    var generateButton = document.getElementById('generateAffiliatePassword');
+    var citiesByProvince = {
+        'Central': ['Kabwe', 'Kapiri Mposhi', 'Mkushi', 'Serenje', 'Chibombo', 'Mumbwa'],
+        'Copperbelt': ['Kitwe', 'Ndola', 'Chingola', 'Mufulira', 'Luanshya', 'Kalulushi', 'Chililabombwe', 'Lufwanyama', 'Mpongwe', 'Masaiti'],
+        'Eastern': ['Chipata', 'Petauke', 'Katete', 'Lundazi', 'Nyimba', 'Sinda'],
+        'Luapula': ['Mansa', 'Samfya', 'Nchelenge', 'Kawambwa', 'Mwense'],
+        'Lusaka': ['Lusaka', 'Kafue', 'Chongwe', 'Chilanga', 'Rufunsa'],
+        'Muchinga': ['Chinsali', 'Mpika', 'Nakonde', 'Isoka', 'Mafinga'],
+        'Northern': ['Kasama', 'Mbala', 'Mpulungu', 'Mporokoso', 'Luwingu'],
+        'North-Western': ['Solwezi', 'Mwinilunga', 'Kasempa', 'Zambezi', 'Kabompo'],
+        'Southern': ['Livingstone', 'Choma', 'Mazabuka', 'Monze', 'Kalomo', 'Siavonga'],
+        'Western': ['Mongu', 'Sesheke', 'Senanga', 'Kalabo', 'Kaoma']
+    };
+
+    Object.keys(citiesByProvince).forEach(function (province) {
+        provinceSelect.add(new Option(province, province));
+    });
+
+    function populateCities() {
+        var cities = citiesByProvince[provinceSelect.value] || [];
+        citySelect.innerHTML = '';
+        if (cities.length === 0) {
+            citySelect.add(new Option('Select province first', ''));
+            citySelect.disabled = true;
+            return;
+        }
+        citySelect.add(new Option('Select city', ''));
+        cities.forEach(function (city) {
+            citySelect.add(new Option(city, city));
+        });
+        citySelect.disabled = false;
+    }
+
+    function strongPassword() {
+        var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+        var specials = '!@#$%';
+        var password = 'Corevia@';
+        for (var i = 0; i < 6; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        password += specials.charAt(Math.floor(Math.random() * specials.length));
+        return password;
+    }
+
+    provinceSelect.addEventListener('change', populateCities);
+    generateButton.addEventListener('click', function () {
+        passwordInput.value = strongPassword();
+        passwordInput.type = 'text';
+    });
+    toggleButton.addEventListener('click', function () {
+        passwordInput.type = passwordInput.type === 'password' ? 'text' : 'password';
+    });
+});
+</script>

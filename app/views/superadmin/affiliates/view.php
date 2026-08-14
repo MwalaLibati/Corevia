@@ -6,6 +6,11 @@
     </div>
     <div class="d-flex gap-2">
         <a href="<?= e(base_url('superadmin/invoice/affiliateEdit/' . (string)$affiliate['id'])) ?>" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil-square me-1"></i>Edit Affiliate</a>
+        <form method="post" action="<?= e(base_url('superadmin/invoice/affiliateDelete/' . (string)$affiliate['id'])) ?>" data-affiliate-name="<?= e((string)$affiliate['full_name']) ?>" onsubmit="return confirmAffiliateDelete(this)">
+            <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+            <input type="hidden" name="confirm_name" value="">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete Affiliate</button>
+        </form>
         <a href="<?= e(base_url('superadmin/invoice/affiliates')) ?>" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
 </div>
@@ -23,6 +28,22 @@
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card h-100" style="--ent-stat-accent:<?= e($card[4]) ?>"><span class="stat-icon" style="background:<?= e($card[3]) ?>;color:<?= e($card[4]) ?>"><i class="bi <?= e($card[2]) ?>"></i></span><span class="stat-label"><?= e($card[0]) ?></span><div class="stat-value" style="font-size:1.25rem"><?= e($card[1]) ?></div></div></div>
     <?php endforeach; ?>
 </div>
+
+<script>
+function confirmAffiliateDelete(form) {
+    var affiliateName = form.getAttribute('data-affiliate-name') || '';
+    var typed = window.prompt('This will permanently delete the affiliate and related affiliate records. Type "' + affiliateName + '" to confirm.');
+    if (typed === null) {
+        return false;
+    }
+    if (typed !== affiliateName) {
+        alert('Affiliate was not deleted because the name did not match.');
+        return false;
+    }
+    form.querySelector('input[name="confirm_name"]').value = typed;
+    return true;
+}
+</script>
 
 <div class="row g-4">
     <div class="col-12">
