@@ -117,34 +117,6 @@
             });
         };
 
-        window.coreviaTypedConfirm = function(options, onConfirm) {
-            options = options || {};
-            Swal.fire({
-                title: options.title || 'Confirm Deletion',
-                html: options.html || '',
-                input: 'text',
-                inputPlaceholder: options.placeholder || '',
-                icon: options.icon || 'warning',
-                showCancelButton: true,
-                confirmButtonColor: options.confirmButtonColor || '#dc2626',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: options.confirmButtonText || 'Delete',
-                cancelButtonText: 'Cancel',
-                reverseButtons: true,
-                focusCancel: true,
-                inputValidator: function(value) {
-                    if ((value || '') !== (options.expected || '')) {
-                        return options.validationMessage || 'The confirmation text does not match.';
-                    }
-                    return null;
-                }
-            }).then(function(result) {
-                if (result.isConfirmed && typeof onConfirm === 'function') {
-                    onConfirm(result.value || '');
-                }
-            });
-        };
-
         function extractConfirmMessage(source) {
             const match = String(source || '').match(/confirm\((['"])(.*?)\1\)/);
             return match ? match[2] : 'Are you sure?';

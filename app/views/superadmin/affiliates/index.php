@@ -68,20 +68,23 @@
 <script>
 function confirmAffiliateDelete(form) {
     var affiliateName = form.getAttribute('data-affiliate-name') || '';
-    var safeAffiliateName = affiliateName.replace(/[&<>"']/g, function (ch) {
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
-    });
-    if (typeof window.coreviaTypedConfirm === 'function') {
-        window.coreviaTypedConfirm({
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
             title: 'Delete Affiliate',
-            html: '<p class="mb-2">This will permanently delete the affiliate and related affiliate records.</p><p class="mb-0">Type <strong>' + safeAffiliateName + '</strong> to confirm.</p>',
-            expected: affiliateName,
-            placeholder: affiliateName,
+            text: 'Are you sure you want to delete ' + affiliateName + '? This will permanently delete the affiliate and related affiliate records.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
             confirmButtonText: 'Delete Affiliate',
-            validationMessage: 'Type the affiliate name exactly to continue.'
-        }, function(typed) {
-            form.querySelector('input[name="confirm_name"]').value = typed;
-            form.submit();
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                form.querySelector('input[name="confirm_name"]').value = affiliateName;
+                form.submit();
+            }
         });
         return false;
     }

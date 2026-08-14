@@ -11,20 +11,23 @@
 <script>
 function confirmCompanyDelete(form) {
     var companyName = form.getAttribute('data-company-name') || '';
-    var safeCompanyName = companyName.replace(/[&<>"']/g, function (ch) {
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
-    });
-    if (typeof window.coreviaTypedConfirm === 'function') {
-        window.coreviaTypedConfirm({
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
             title: 'Delete Company',
-            html: '<p class="mb-2">This removes the company from active platform records.</p><p class="mb-0">Type <strong>' + safeCompanyName + '</strong> to confirm.</p>',
-            expected: companyName,
-            placeholder: companyName,
+            text: 'Are you sure you want to delete ' + companyName + '? This removes the company from active platform records.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
             confirmButtonText: 'Delete Company',
-            validationMessage: 'Type the company name exactly to continue.'
-        }, function(typed) {
-            form.querySelector('input[name="confirm_name"]').value = typed;
-            form.submit();
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                form.querySelector('input[name="confirm_name"]').value = companyName;
+                form.submit();
+            }
         });
         return false;
     }

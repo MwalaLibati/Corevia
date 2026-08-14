@@ -24,22 +24,48 @@
         <p class="text-muted mb-3" style="font-size:.86rem">
             This removes the company from active platform screens, disables company access, and cancels active subscriptions. Historical data is retained for recovery and audit.
         </p>
-        <form method="post" action="<?= e(base_url('superadmin/company/delete/' . (string)$company['id'])) ?>" class="row g-2 align-items-end">
+        <form method="post" action="<?= e(base_url('superadmin/company/delete/' . (string)$company['id'])) ?>" class="row g-2 align-items-end" data-company-name="<?= e((string)$company['name']) ?>" onsubmit="return confirmCompanyProfileDelete(this)">
             <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
-            <div class="col-md-5">
-                <label class="form-label fw-semibold">Type company name to confirm</label>
-                <input type="text" name="confirm_name" class="form-control" required placeholder="<?= e((string)$company['name']) ?>">
-            </div>
-            <div class="col-md-5">
+            <input type="hidden" name="confirm_name" value="">
+            <div class="col-md-10">
                 <label class="form-label fw-semibold">Reason</label>
                 <input type="text" name="deletion_reason" class="form-control" value="Deleted by platform admin">
             </div>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Delete this company from active platform records?')">Delete</button>
+                <button type="submit" class="btn btn-danger w-100">Delete</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+function confirmCompanyProfileDelete(form) {
+    var companyName = form.getAttribute('data-company-name') || '';
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Delete Company',
+            text: 'Are you sure you want to delete ' + companyName + '? This removes the company from active platform records.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Delete Company',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                form.querySelector('input[name="confirm_name"]').value = companyName;
+                form.submit();
+            }
+        });
+        return false;
+    }
+
+    form.querySelector('input[name="confirm_name"]').value = companyName;
+    return confirm('Delete this company from active platform records?');
+}
+</script>
 
 <!-- Stats -->
 <div class="row g-3 mb-4">
