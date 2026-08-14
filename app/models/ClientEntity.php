@@ -89,10 +89,11 @@ class ClientEntity extends Model
         ]);
     }
 
-    public function delete(int $entityId): void
+    public function delete(int $entityId): bool
     {
         $stmt = $this->db->prepare('DELETE FROM client_entities WHERE id = :id');
-        $stmt->execute(['id' => $entityId]);
+
+        return $stmt->execute(['id' => $entityId]);
     }
 
     public function generateNextCode(): string
