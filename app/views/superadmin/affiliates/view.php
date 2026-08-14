@@ -32,16 +32,26 @@
 <script>
 function confirmAffiliateDelete(form) {
     var affiliateName = form.getAttribute('data-affiliate-name') || '';
-    var typed = window.prompt('This will permanently delete the affiliate and related affiliate records. Type "' + affiliateName + '" to confirm.');
-    if (typed === null) {
+    var safeAffiliateName = affiliateName.replace(/[&<>"']/g, function (ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+    });
+    if (typeof window.coreviaTypedConfirm === 'function') {
+        window.coreviaTypedConfirm({
+            title: 'Delete Affiliate',
+            html: '<p class="mb-2">This will permanently delete the affiliate and related affiliate records.</p><p class="mb-0">Type <strong>' + safeAffiliateName + '</strong> to confirm.</p>',
+            expected: affiliateName,
+            placeholder: affiliateName,
+            confirmButtonText: 'Delete Affiliate',
+            validationMessage: 'Type the affiliate name exactly to continue.'
+        }, function(typed) {
+            form.querySelector('input[name="confirm_name"]').value = typed;
+            form.submit();
+        });
         return false;
     }
-    if (typed !== affiliateName) {
-        alert('Affiliate was not deleted because the name did not match.');
-        return false;
-    }
-    form.querySelector('input[name="confirm_name"]').value = typed;
-    return true;
+
+    form.querySelector('input[name="confirm_name"]').value = affiliateName;
+    return confirm('Delete this affiliate and related affiliate records?');
 }
 </script>
 

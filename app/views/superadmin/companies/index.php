@@ -9,13 +9,28 @@
 </div>
 
 <script>
-function confirmCompanyDelete(form, companyName) {
-    var typed = window.prompt('Type the company name exactly to delete it:\n\n' + companyName);
-    if (typed === null) {
+function confirmCompanyDelete(form) {
+    var companyName = form.getAttribute('data-company-name') || '';
+    var safeCompanyName = companyName.replace(/[&<>"']/g, function (ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+    });
+    if (typeof window.coreviaTypedConfirm === 'function') {
+        window.coreviaTypedConfirm({
+            title: 'Delete Company',
+            html: '<p class="mb-2">This removes the company from active platform records.</p><p class="mb-0">Type <strong>' + safeCompanyName + '</strong> to confirm.</p>',
+            expected: companyName,
+            placeholder: companyName,
+            confirmButtonText: 'Delete Company',
+            validationMessage: 'Type the company name exactly to continue.'
+        }, function(typed) {
+            form.querySelector('input[name="confirm_name"]').value = typed;
+            form.submit();
+        });
         return false;
     }
-    form.querySelector('input[name="confirm_name"]').value = typed;
-    return typed === companyName;
+
+    form.querySelector('input[name="confirm_name"]').value = companyName;
+    return confirm('Delete this company from active platform records?');
 }
 </script>
 
@@ -99,7 +114,8 @@ function confirmCompanyDelete(form, companyName) {
                             <form method="post"
                                   action="<?= e(base_url('superadmin/company/delete/'.$c['id'])) ?>"
                                   class="d-inline"
-                                  onsubmit="return confirmCompanyDelete(this, '<?= e((string)$c['name']) ?>')">
+                                  data-company-name="<?= e((string)$c['name']) ?>"
+                                  onsubmit="return confirmCompanyDelete(this)">
                                 <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
                                 <input type="hidden" name="confirm_name" value="">
                                 <input type="hidden" name="deletion_reason" value="Deleted from company list.">
