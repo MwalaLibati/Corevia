@@ -10,6 +10,8 @@ $eventTypes = $lifecycleEventTypes ?? [];
 $departmentOptions = $departments ?? [];
 $onboardingChecklist = $onboardingChecklist ?? [];
 $exitChecklist = $exitChecklist ?? [];
+$profileCompletion = $profileCompletion ?? ['score' => 0, 'done' => 0, 'total' => 0, 'checks' => [], 'missing' => []];
+$employeeDocuments = $employeeDocuments ?? [];
 $reminders = $lifecycleReminders ?? [];
 $disciplinaryRecords = $disciplinaryRecords ?? [];
 $finalDue = $finalDue ?? null;
@@ -63,6 +65,7 @@ $checklistStats = static function (array $items): array {
 };
 $onboardingStats = $checklistStats($onboardingChecklist);
 $exitStats = $checklistStats($exitChecklist);
+$profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
 ?>
 
 <style>
@@ -372,6 +375,40 @@ $exitStats = $checklistStats($exitChecklist);
                 <?= e(format_currency((float) ($gratuity['amount'] ?? 0))) ?>
             </div>
         </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4 employee-readiness-card">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
+            <div>
+                <h5 class="mb-1">Profile Completion</h5>
+                <p class="text-gray small mb-0">
+                    <?= e((string)($profileCompletion['done'] ?? 0)) ?> of <?= e((string)($profileCompletion['total'] ?? 0)) ?> master-data items completed
+                </p>
+            </div>
+            <span class="badge <?= $profileCompletionScore >= 100 ? 'bg-success' : 'bg-warning text-dark' ?>"><?= e((string)$profileCompletionScore) ?>%</span>
+        </div>
+        <div class="progress mb-3">
+            <div class="progress-bar" role="progressbar" style="width: <?= e((string)$profileCompletionScore) ?>%" aria-valuenow="<?= e((string)$profileCompletionScore) ?>" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <div class="row g-2">
+            <?php foreach (($profileCompletion['checks'] ?? []) as $label => $done): ?>
+                <div class="col-md-6">
+                    <div class="employee-check-row">
+                        <span class="employee-check-label">
+                            <span class="employee-check-badge <?= $done ? 'is-done' : '' ?>"><i class="bi <?= $done ? 'bi-check2' : 'bi-circle' ?>"></i></span>
+                            <?= e((string)$label) ?>
+                        </span>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php if (empty($employeeDocuments)): ?>
+            <div class="alert alert-light border mt-3 mb-0">
+                <i class="bi bi-info-circle me-1"></i>No employee documents are attached yet.
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 

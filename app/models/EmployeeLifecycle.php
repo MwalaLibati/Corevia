@@ -90,6 +90,43 @@ class EmployeeLifecycle extends Model
         return $stmt->fetchAll();
     }
 
+    public function remindersForEmployee(int $employeeId, int $days = 30): array
+    {
+        $cid = Tenant::id();
+        $stmt = $this->db->prepare(
+            "SELECT 'Probation Review' AS reminder_type, e.id AS employee_id, e.full_name, e.employee_number,
+                    e.probation_end_date AS due_date, e.designation
+             FROM employees e
+             WHERE e.id = :employee_id
+               AND e.company_id = :cid
+               AND e.lifecycle_status = 'Probation'
+               AND e.probation_end_date IS NOT NULL
+               AND e.probation_end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL :days DAY)
+             UNION ALL
+             SELECT 'Contract Expiry' AS reminder_type, e.id AS employee_id, e.full_name, e.employee_number,
+                    ec.end_date AS due_date, e.designation
+             FROM employee_contracts ec
+             JOIN employees e ON e.id = ec.employee_id
+             WHERE e.id = :employee_id2
+               AND e.company_id = :cid2
+               AND ec.status = 'Active'
+               AND ec.approval_status = 'Approved'
+               AND ec.end_date IS NOT NULL
+               AND ec.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL :days2 DAY)
+             ORDER BY due_date ASC"
+        );
+        $stmt->execute([
+            'employee_id' => $employeeId,
+            'cid' => $cid,
+            'days' => $days,
+            'employee_id2' => $employeeId,
+            'cid2' => $cid,
+            'days2' => $days,
+        ]);
+
+        return $stmt->fetchAll();
+    }
+
     public function record(int $employeeId, array $data): void
     {
         $employee = (new Employee())->findDetailed($employeeId);

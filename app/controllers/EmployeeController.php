@@ -78,6 +78,8 @@ class EmployeeController extends Controller
         $checklists = new EmployeeLifecycleChecklist();
         $letters = new EmployeeGeneratedLetter();
         $letterTemplates = new EmployeeLetterTemplate();
+        $documents = (new EmployeeDocument())->forEmployee($employeeId);
+        $lifecycleModel = new EmployeeLifecycle();
 
         $this->render('employees/profile', [
             'title' => 'Employee Profile',
@@ -90,11 +92,13 @@ class EmployeeController extends Controller
             'activeSalary' => $activeSalary,
             'activeAdvance' => (new SalaryAdvance())->activeForEmployee($employeeId),
             'gratuityEstimate' => $this->estimateGratuity($activeContract, $activeSalary, $gratuityPolicy),
-            'lifecycleHistory' => (new EmployeeLifecycle())->forEmployee($employeeId),
+            'lifecycleHistory' => $lifecycleModel->forEmployee($employeeId),
             'lifecycleEventTypes' => EmployeeLifecycle::EVENT_TYPES,
             'onboardingChecklist' => $checklists->forEmployee($employeeId, 'Onboarding'),
             'exitChecklist' => $checklists->forEmployee($employeeId, 'Exit'),
-            'lifecycleReminders' => (new EmployeeLifecycle())->reminders(45),
+            'profileCompletion' => $this->employeeProfileCompletion($employee, $documents, $activeContract, $activeSalary),
+            'employeeDocuments' => $documents,
+            'lifecycleReminders' => $lifecycleModel->remindersForEmployee($employeeId, 45),
             'disciplinaryRecords' => (new EmployeeDisciplinaryRecord())->forEmployee($employeeId),
             'finalDue' => (new EmployeeFinalDue())->latestForEmployee($employeeId),
             'generatedLetters' => $letters->forEmployee($employeeId),
@@ -108,6 +112,45 @@ class EmployeeController extends Controller
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),
         ]);
+    }
+
+    private function employeeProfileCompletion(array $employee, array $documents, ?array $activeContract, ?array $activeSalary): array
+    {
+        $documentTypes = array_map(static fn(array $doc): string => (string) ($doc['document_type'] ?? ''), $documents);
+        $hasDocument = static function (array $types) use ($documentTypes): bool {
+            foreach ($types as $type) {
+                if (in_array($type, $documentTypes, true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        $checks = [
+            'Primary contact details' => trim((string) ($employee['email'] ?? '')) !== '' && trim((string) ($employee['phone'] ?? '')) !== '',
+            'NRC / ID number captured' => trim((string) ($employee['nrc_number'] ?? '')) !== '',
+            'NAPSA number captured' => trim((string) ($employee['napsa_number'] ?? '')) !== '',
+            'TPIN captured' => trim((string) ($employee['tpin'] ?? '')) !== '',
+            'Bank account captured' => trim((string) ($employee['bank_name'] ?? '')) !== '' && trim((string) ($employee['bank_account_number'] ?? '')) !== '',
+            'Employment details assigned' => trim((string) ($employee['department_name'] ?? '')) !== '' && trim((string) ($employee['designation'] ?? '')) !== '',
+            'Salary structure assigned' => !empty($activeSalary),
+            'Approved contract available' => !empty($activeContract),
+            'Portal access issued' => (int) ($employee['portal_active'] ?? 0) === 1,
+            'NRC / ID document uploaded' => $hasDocument(['NRC / National ID', 'NRC', 'National ID', 'Passport']),
+            'Bank document uploaded' => $hasDocument(['Bank Statement', 'Bank Proof', 'Bank Confirmation']),
+        ];
+
+        $complete = count(array_filter($checks));
+        $total = max(1, count($checks));
+
+        return [
+            'score' => (int) round(($complete / $total) * 100),
+            'done' => $complete,
+            'total' => count($checks),
+            'checks' => $checks,
+            'missing' => array_keys(array_filter($checks, static fn(bool $done): bool => !$done)),
+        ];
     }
 
     public function profileChangeReview(string $employeeId = '0', string $requestId = '0'): void
