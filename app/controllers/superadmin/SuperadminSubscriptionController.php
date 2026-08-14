@@ -92,6 +92,9 @@ class SuperadminSubscriptionController extends Controller
         if (!in_array($cycle, ['Monthly', 'Annual'], true)) {
             $cycle = 'Annual';
         }
+        if (strcasecmp((string) $plan['name'], 'Trial') === 0) {
+            $rate = 0.0;
+        }
 
         $db = db();
         $db->beginTransaction();
@@ -202,9 +205,13 @@ class SuperadminSubscriptionController extends Controller
 
         $billingModel = $billingModel === 'flat' ? 'flat' : 'per_user';
         $rate = $rateOverride !== '' ? $this->money($rateOverride) : (float) $planRow['default_monthly_rate'];
+        $isTrialPlan = strcasecmp($plan, 'Trial') === 0;
+        if ($isTrialPlan) {
+            $rate = 0.0;
+        }
         $cycle = $cycle === 'Monthly' ? 'Monthly' : 'Annual';
         $months = $cycle === 'Monthly' ? 1 : 12;
-        $price = ($billingModel === 'flat' ? $rate : $rate * $empCount) * $months;
+        $price = $isTrialPlan ? 0.0 : ($billingModel === 'flat' ? $rate : $rate * $empCount) * $months;
         $endsAt = date('Y-m-d', strtotime($startsAt . " +$months months"));
 
         $db->prepare("UPDATE subscriptions SET status = 'Expired' WHERE company_id = :cid AND status = 'Active'")
@@ -256,7 +263,11 @@ class SuperadminSubscriptionController extends Controller
         $rate = (float) $sub['monthly_rate'];
         $months = $sub['billing_cycle'] === 'Monthly' ? 1 : 12;
         $billingModel = (string) ($sub['billing_model'] ?? 'per_user');
-        $price = ($billingModel === 'flat' ? $rate : $rate * $empCount) * $months;
+        $isTrialPlan = strcasecmp((string) $sub['plan'], 'Trial') === 0;
+        if ($isTrialPlan) {
+            $rate = 0.0;
+        }
+        $price = $isTrialPlan ? 0.0 : ($billingModel === 'flat' ? $rate : $rate * $empCount) * $months;
 
         $startBase = max(strtotime((string) $sub['ends_at']), strtotime('today'));
         $startsAt = date('Y-m-d', $startBase);
@@ -334,7 +345,7 @@ class SuperadminSubscriptionController extends Controller
 
         $revenueHistory = db()->query(
             "SELECT DATE_FORMAT(s.starts_at, '%b %Y') AS period,
-                    SUM(s.price) AS total,
+                    SUM(CASE WHEN LOWER(s.plan) = 'trial' THEN 0 ELSE s.price END) AS total,
                     COUNT(DISTINCT s.company_id) AS companies
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
@@ -359,7 +370,7 @@ class SuperadminSubscriptionController extends Controller
         $db = db();
 
         $activeRevenue = (float) $db->query(
-            "SELECT COALESCE(SUM(s.price), 0)
+            "SELECT COALESCE(SUM(CASE WHEN LOWER(s.plan) = 'trial' THEN 0 ELSE s.price END), 0)
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
              WHERE s.status = 'Active'
@@ -375,14 +386,14 @@ class SuperadminSubscriptionController extends Controller
         )->fetchColumn();
 
         $projectedAnnual = (float) $db->query(
-            "SELECT COALESCE(SUM(CASE WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END * 12), 0)
+            "SELECT COALESCE(SUM(CASE WHEN LOWER(s.plan) = 'trial' THEN 0 WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END * 12), 0)
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
              WHERE s.status = 'Active'
                AND c.deleted_at IS NULL"
         )->fetchColumn();
         $projectedMonthly = (float) $db->query(
-            "SELECT COALESCE(SUM(CASE WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END), 0)
+            "SELECT COALESCE(SUM(CASE WHEN LOWER(s.plan) = 'trial' THEN 0 WHEN s.billing_model = 'flat' THEN s.monthly_rate ELSE s.employee_count * s.monthly_rate END), 0)
              FROM subscriptions s
              JOIN companies c ON c.id = s.company_id
              WHERE s.status = 'Active'

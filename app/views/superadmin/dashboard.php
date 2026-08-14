@@ -90,8 +90,9 @@
                             $billableSeats = $emp + $admins;
                             $currency = (string) ($c['currency'] ?? 'ZMW');
                             $monthlyRate = (float) ($c['monthly_rate'] ?? 0);
-                            $monthlyBill = (string)($c['billing_model'] ?? 'per_user') === 'flat' ? $monthlyRate : $billableSeats * $monthlyRate;
-                            $bill = (float) ($c['sub_price'] ?? 0);
+                            $isTrialPlan = strcasecmp((string)($c['sub_plan'] ?? $c['subscription_plan'] ?? ''), 'Trial') === 0;
+                            $monthlyBill = $isTrialPlan ? 0.0 : ((string)($c['billing_model'] ?? 'per_user') === 'flat' ? $monthlyRate : $billableSeats * $monthlyRate);
+                            $bill = $isTrialPlan ? 0.0 : (float) ($c['sub_price'] ?? 0);
                             $totalMonthly += $monthlyBill;
                             $totalBill += $bill;
                             $totalEmpAll += $billableSeats;

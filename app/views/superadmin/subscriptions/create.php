@@ -141,6 +141,7 @@
     }
 
     function rate() {
+        if ((selectedPlan().value || '').toLowerCase() === 'trial') return 0;
         var override = parseFloat(monthlyRate.value || '');
         if (!isNaN(override)) return override;
         return parseFloat(selectedPlan().getAttribute('data-rate') || '0');
@@ -155,6 +156,8 @@
         var plan = selectedPlan();
         if (plan) {
             monthlyRate.placeholder = Number(plan.getAttribute('data-rate') || 0).toFixed(2);
+            monthlyRate.disabled = (plan.value || '').toLowerCase() === 'trial';
+            if (monthlyRate.disabled) monthlyRate.value = '';
             currencyLabel.textContent = currency();
             if (!cycleSelect.dataset.touched) {
                 cycleSelect.value = plan.getAttribute('data-cycle') || 'Annual';

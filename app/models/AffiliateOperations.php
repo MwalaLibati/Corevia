@@ -491,13 +491,14 @@ class AffiliateOperations extends Model
             if ($planId > 0) {
                 $plan = $this->plan($planId);
                 if ($plan) {
+                    $isTrialPlan = strcasecmp((string) $plan['name'], 'Trial') === 0;
                     $this->db->prepare(
                         "INSERT INTO subscriptions (company_id, plan, billing_model, price, employee_count, monthly_rate, currency, billing_cycle, starts_at, ends_at, status, notes, created_by)
                          VALUES (:company_id, :plan, 'per_employee', 0, 0, :rate, :currency, :cycle, CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 YEAR), 'Active', 'Converted from affiliate lead', :created_by)"
                     )->execute([
                         'company_id' => $companyId,
                         'plan' => (string) $plan['name'],
-                        'rate' => (float) $plan['default_monthly_rate'],
+                        'rate' => $isTrialPlan ? 0.0 : (float) $plan['default_monthly_rate'],
                         'currency' => (string) $plan['currency'],
                         'cycle' => (string) $plan['default_billing_cycle'],
                         'created_by' => $adminId ?: null,

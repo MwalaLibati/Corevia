@@ -39,8 +39,11 @@ foreach (($modules ?? []) as $key => $module) {
                         <label class="form-label fw-semibold">Default Monthly Rate</label>
                         <div class="input-group">
                             <span class="input-group-text"><?= e((string) $plan['currency']) ?></span>
-                            <input type="number" step="0.01" min="0" name="default_monthly_rate" class="form-control" value="<?= e(number_format((float) $plan['default_monthly_rate'], 2, '.', '')) ?>">
+                            <input type="number" step="0.01" min="0" name="default_monthly_rate" class="form-control" value="<?= e(number_format(strcasecmp((string) $plan['name'], 'Trial') === 0 ? 0.0 : (float) $plan['default_monthly_rate'], 2, '.', '')) ?>" <?= strcasecmp((string) $plan['name'], 'Trial') === 0 ? 'readonly' : '' ?>>
                         </div>
+                        <?php if (strcasecmp((string) $plan['name'], 'Trial') === 0): ?>
+                            <div class="form-text">Trial accounts are always billed at zero.</div>
+                        <?php endif; ?>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Default Billing Cycle</label>

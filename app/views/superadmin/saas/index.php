@@ -92,9 +92,10 @@ $plans = $plans ?? [];
                         <tbody>
                         <?php foreach ($usage as $row):
                             $billableSeats = (int)($row['employee_count'] ?? 0) + (int)($row['user_count'] ?? 0);
-                            $monthly = (string)($row['billing_model'] ?? 'per_user') === 'flat'
+                            $isTrialPlan = strcasecmp((string)($row['plan'] ?? $row['subscription_plan'] ?? ''), 'Trial') === 0;
+                            $monthly = $isTrialPlan ? 0.0 : ((string)($row['billing_model'] ?? 'per_user') === 'flat'
                                 ? (float)($row['monthly_rate'] ?? 0)
-                                : (float)($row['monthly_rate'] ?? 0) * $billableSeats;
+                                : (float)($row['monthly_rate'] ?? 0) * $billableSeats);
                         ?>
                         <tr>
                             <td><strong><?= e((string)$row['name']) ?></strong><div class="text-muted small"><?= e((string)($row['plan'] ?? $row['subscription_plan'] ?? 'No active plan')) ?></div></td>

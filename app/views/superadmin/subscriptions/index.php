@@ -77,8 +77,9 @@
                     $currentSeats = $currentEmp + $currentAdmins;
                     $monthlyRate = (float) $s['monthly_rate'];
                     $billingModel = (string) ($s['billing_model'] ?? 'per_user');
-                    $monthlyBill = $billingModel === 'flat' ? $monthlyRate : $billedEmp * $monthlyRate;
-                    $bill = (float) $s['price'];
+                    $isTrialPlan = strcasecmp((string)($s['plan'] ?? ''), 'Trial') === 0;
+                    $monthlyBill = $isTrialPlan ? 0.0 : ($billingModel === 'flat' ? $monthlyRate : $billedEmp * $monthlyRate);
+                    $bill = $isTrialPlan ? 0.0 : (float) $s['price'];
                     $daysLeft = (int) ceil((strtotime((string)$s['ends_at']) - time()) / 86400);
                     $statusColor = ['Active'=>'success','Expired'=>'danger','Cancelled'=>'secondary','Pending'=>'warning'][$s['status']] ?? 'secondary';
                     $isActive = $s['status'] === 'Active';

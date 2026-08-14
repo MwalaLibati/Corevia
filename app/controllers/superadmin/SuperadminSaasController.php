@@ -102,6 +102,9 @@ class SuperadminSaasController extends Controller
         if ($monthlyRate <= 0) {
             $monthlyRate = (float) $plan['default_monthly_rate'];
         }
+        if (strcasecmp($requestedPlan, 'Trial') === 0) {
+            $monthlyRate = 0.0;
+        }
         $billingCycle = (string) $this->input('billing_cycle', (string) $subscription['billing_cycle']);
         $billingCycle = $billingCycle === 'Monthly' ? 'Monthly' : 'Annual';
         $billingModel = (string) $this->input('billing_model', (string) ($subscription['billing_model'] ?? 'per_user'));
@@ -159,7 +162,9 @@ class SuperadminSaasController extends Controller
         $adminStmt->execute(['cid' => (int) $change['company_id']]);
         $billableSeats = $employeeCount + (int) $adminStmt->fetchColumn();
         $months = (string) $change['billing_cycle'] === 'Monthly' ? 1 : 12;
-        $price = ((string) $change['billing_model'] === 'flat' ? (float) $change['monthly_rate'] : (float) $change['monthly_rate'] * $billableSeats) * $months;
+        $isTrialPlan = strcasecmp((string) $change['requested_plan'], 'Trial') === 0;
+        $monthlyRate = $isTrialPlan ? 0.0 : (float) $change['monthly_rate'];
+        $price = $isTrialPlan ? 0.0 : ((string) $change['billing_model'] === 'flat' ? $monthlyRate : $monthlyRate * $billableSeats) * $months;
         $startsAt = (string) $change['effective_date'];
         $endsAt = date('Y-m-d', strtotime($startsAt . " +{$months} months"));
 
@@ -178,7 +183,7 @@ class SuperadminSaasController extends Controller
                 'billing_model' => (string) $change['billing_model'],
                 'price' => $price,
                 'employee_count' => $billableSeats,
-                'monthly_rate' => (float) $change['monthly_rate'],
+                'monthly_rate' => $monthlyRate,
                 'currency' => (string) ($targetPlan['currency'] ?? 'ZMW'),
                 'billing_cycle' => (string) $change['billing_cycle'],
                 'starts_at' => $startsAt,

@@ -134,6 +134,10 @@ class SuperadminCompanyController extends Controller
         $billingModel = $billingModel === 'flat' ? 'flat' : 'per_user';
         $billingCycle = $billingCycle === 'Monthly' ? 'Monthly' : 'Annual';
         $monthlyRate = $monthlyRateInput !== '' ? $this->money($monthlyRateInput) : (float) $planRow['default_monthly_rate'];
+        $isTrialPlan = strcasecmp($plan, 'Trial') === 0;
+        if ($isTrialPlan) {
+            $monthlyRate = 0.0;
+        }
 
         $db = db();
         $tempPassword = $oneTimePassword !== '' ? $oneTimePassword : $this->generateTemporaryPassword();
@@ -156,7 +160,7 @@ class SuperadminCompanyController extends Controller
 
             $initialBillableSeats = 1;
             $initialMonths = $billingCycle === 'Monthly' ? 1 : 12;
-            $initialPrice = ($billingModel === 'flat' ? $monthlyRate : $monthlyRate * $initialBillableSeats) * $initialMonths;
+            $initialPrice = $isTrialPlan ? 0.0 : ($billingModel === 'flat' ? $monthlyRate : $monthlyRate * $initialBillableSeats) * $initialMonths;
 
             $db->prepare(
                 "INSERT INTO subscriptions (company_id, plan, billing_model, price, employee_count, monthly_rate, currency, billing_cycle, starts_at, ends_at, status, notes)
@@ -171,7 +175,7 @@ class SuperadminCompanyController extends Controller
                 'currency' => (string) $planRow['currency'],
                 'cycle' => $billingCycle,
                 'end' => date('Y-m-d', strtotime($billingCycle === 'Monthly' ? '+1 month' : '+1 year')),
-                'notes' => $monthlyRateInput !== '' ? 'Negotiated onboarding rate.' : null,
+                'notes' => $isTrialPlan ? 'Trial account - no billing value.' : ($monthlyRateInput !== '' ? 'Negotiated onboarding rate.' : null),
             ]);
 
             $roleId = $this->ensureCompanySuperAdminRole($companyId);

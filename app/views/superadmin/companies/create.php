@@ -163,6 +163,8 @@ $selectedEntityId = (int)($old['client_entity_id'] ?? ($selectedClientEntityId ?
         var opt = planSelect.options[planSelect.selectedIndex];
         if (!opt) return;
         monthlyRate.placeholder = Number(opt.getAttribute('data-rate') || 0).toFixed(2);
+        monthlyRate.disabled = (opt.value || '').toLowerCase() === 'trial';
+        if (monthlyRate.disabled) monthlyRate.value = '';
         currencyLabel.textContent = opt.getAttribute('data-currency') || 'ZMW';
         if (!cycleSelect.dataset.touched) {
             cycleSelect.value = opt.getAttribute('data-cycle') || 'Annual';

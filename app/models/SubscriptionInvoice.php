@@ -99,10 +99,14 @@ class SubscriptionInvoice extends Model
         $billingModel = (string) ($sub['billing_model'] ?? 'per_user');
         $months = (string) ($sub['billing_cycle'] ?? 'Annual') === 'Monthly' ? 1 : 12;
         $rate = (float) ($sub['monthly_rate'] ?? 0);
+        $isTrialPlan = strcasecmp((string) ($sub['plan'] ?? ''), 'Trial') === 0;
+        if ($isTrialPlan) {
+            $rate = 0.0;
+        }
         $seatSummary = $this->billableSeatSummary((int) $sub['company_id']);
-        $total = $billingModel === 'flat'
+        $total = $isTrialPlan ? 0.0 : ($billingModel === 'flat'
             ? $rate * $months
-            : $rate * (int) $seatSummary['total'] * $months;
+            : $rate * (int) $seatSummary['total'] * $months);
         $description = sprintf(
             '%s subscription (%s to %s)',
             (string) ($sub['plan'] ?? 'Subscription'),
@@ -137,7 +141,15 @@ class SubscriptionInvoice extends Model
                  VALUES (:invoice_id, :description, :quantity, :unit_price, :line_total)"
             );
 
-            if ($billingModel === 'flat') {
+            if ($isTrialPlan) {
+                $lineInsert->execute([
+                    'invoice_id' => $invoiceId,
+                    'description' => $description . ' - trial account, no charge',
+                    'quantity' => 1,
+                    'unit_price' => 0,
+                    'line_total' => 0,
+                ]);
+            } elseif ($billingModel === 'flat') {
                 $lineInsert->execute([
                     'invoice_id' => $invoiceId,
                     'description' => $description . ' - flat platform fee',

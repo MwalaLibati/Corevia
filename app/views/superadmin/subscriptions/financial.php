@@ -81,8 +81,9 @@
                             $seats = $emp + $admins;
                             $model = (string) ($c['billing_model'] ?? 'per_user');
                             $rate = (float) ($c['monthly_rate'] ?? 0);
-                            $monthlyBill = $model === 'flat' ? $rate : $seats * $rate;
-                            $bill = (float) ($c['annual_bill'] ?? 0);
+                            $isTrialPlan = strcasecmp((string)($c['plan'] ?? ''), 'Trial') === 0;
+                            $monthlyBill = $isTrialPlan ? 0.0 : ($model === 'flat' ? $rate : $seats * $rate);
+                            $bill = $isTrialPlan ? 0.0 : (float) ($c['annual_bill'] ?? 0);
                             $grandBill += $bill;
                             $grandMonthly += $monthlyBill;
                             $grandEmp += $seats;
