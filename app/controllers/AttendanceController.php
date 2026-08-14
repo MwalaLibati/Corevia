@@ -221,6 +221,81 @@ class AttendanceController extends Controller
         redirect('attendance/index');
     }
 
+    public function import(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $this->render('attendance/import', [
+            'title' => 'Import Attendance',
+            'csrf' => Session::csrfToken(),
+            'flashSuccess' => Session::flash('success'),
+            'flashError' => Session::flash('error'),
+            'results' => $_SESSION['_attendance_import_results'] ?? null,
+        ]);
+
+        unset($_SESSION['_attendance_import_results']);
+    }
+
+    public function importStore(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('attendance/import');
+        }
+
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('attendance/import');
+        }
+
+        $file = $_FILES['attendance_csv'] ?? null;
+        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            Session::flash('error', 'Please choose an attendance CSV file to import.');
+            redirect('attendance/import');
+        }
+
+        $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!in_array($extension, ['csv', 'txt'], true)) {
+            Session::flash('error', 'Please upload the attendance template as CSV. Excel can open and save this template as CSV.');
+            redirect('attendance/import');
+        }
+
+        if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+            Session::flash('error', 'The uploaded file is too large. Please keep attendance imports below 5MB.');
+            redirect('attendance/import');
+        }
+
+        $overwrite = (string) $this->input('overwrite_existing', '') === '1';
+        $result = $this->importAttendanceFromCsv((string) $file['tmp_name'], $overwrite);
+        $_SESSION['_attendance_import_results'] = $result;
+
+        AuditLog::record('attendance_import', 'Imported attendance from CSV.', 'AttendanceRecord', null, 'admin', $result);
+        Session::flash(
+            'success',
+            'Attendance import finished: ' . (int) $result['created'] . ' created, '
+            . (int) $result['updated'] . ' updated, '
+            . (int) $result['skipped'] . ' skipped.'
+        );
+        redirect('attendance/import');
+    }
+
+    public function importTemplate(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="attendance-import-template.csv"');
+
+        $out = fopen('php://output', 'w');
+        fputcsv($out, ['employee_number', 'employee_name_reference', 'attendance_date', 'status', 'check_in', 'check_out', 'remarks']);
+        fclose($out);
+        exit;
+    }
+
     private function collectInput(): array
     {
         return [
@@ -436,6 +511,146 @@ class AttendanceController extends Controller
         $summary['hours'] = round($summary['hours'], 2);
         $summary['estimated_value'] = round($summary['estimated_value'], 2);
         return $summary;
+    }
+
+    private function importAttendanceFromCsv(string $path, bool $overwrite): array
+    {
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Could not open uploaded CSV file.']];
+        }
+
+        $headers = fgetcsv($handle);
+        if (!is_array($headers)) {
+            fclose($handle);
+            return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['CSV file is empty.']];
+        }
+
+        $headers = array_map(fn($header): string => $this->normalizeImportHeader((string) $header), $headers);
+        $required = ['employee_number', 'attendance_date', 'status'];
+        foreach ($required as $header) {
+            if (!in_array($header, $headers, true)) {
+                fclose($handle);
+                return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Missing required column: ' . $header . '.']];
+            }
+        }
+
+        $model = new AttendanceRecord();
+        $employeesByNumber = [];
+        foreach ($model->employees() as $employee) {
+            $number = strtoupper(trim((string) ($employee['employee_number'] ?? '')));
+            if ($number !== '') {
+                $employeesByNumber[$number] = $employee;
+            }
+        }
+
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        $line = 1;
+        $allowedStatus = ['Present', 'Absent', 'Late', 'Leave'];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $line++;
+            $data = [];
+            foreach ($headers as $index => $key) {
+                if ($key !== '') {
+                    $data[$key] = trim((string) ($row[$index] ?? ''));
+                }
+            }
+
+            if ($this->isEmptyImportRow($data) || str_contains(strtolower((string) ($data['employee_number'] ?? '')), 'employee numbers available')) {
+                continue;
+            }
+
+            $employeeNumber = strtoupper((string) ($data['employee_number'] ?? ''));
+            if ($employeeNumber === '' || !isset($employeesByNumber[$employeeNumber])) {
+                $errors[] = "Line {$line}: employee_number '{$employeeNumber}' was not found in this company.";
+                $skipped++;
+                continue;
+            }
+
+            $attendanceDate = $this->normalizeDate((string) ($data['attendance_date'] ?? ''));
+            if ($attendanceDate === null) {
+                $errors[] = "Line {$line}: attendance_date is required and must be a valid date.";
+                $skipped++;
+                continue;
+            }
+
+            $status = $this->normalizeAttendanceStatus((string) ($data['status'] ?? ''));
+            if (!in_array($status, $allowedStatus, true)) {
+                $errors[] = "Line {$line}: status must be Present, Late, Absent, or Leave.";
+                $skipped++;
+                continue;
+            }
+
+            $payload = [
+                'employee_id' => (int) $employeesByNumber[$employeeNumber]['id'],
+                'attendance_date' => $attendanceDate,
+                'check_in' => $this->normalizeTime((string) ($data['check_in'] ?? '')),
+                'check_out' => $this->normalizeTime((string) ($data['check_out'] ?? '')),
+                'status' => $status,
+                'remarks' => $this->normalizeNullableString((string) ($data['remarks'] ?? '')),
+            ];
+
+            try {
+                $existing = $model->findByEmployeeDate((int) $payload['employee_id'], $attendanceDate);
+                if ($existing && !$overwrite) {
+                    $errors[] = "Line {$line}: attendance already exists for {$employeeNumber} on {$attendanceDate}.";
+                    $skipped++;
+                    continue;
+                }
+
+                if ($existing) {
+                    $model->update((int) $existing['id'], $payload);
+                    AuditLog::recordChanges('attendance_import_update', 'Updated attendance from CSV.', 'AttendanceRecord', (int) $existing['id'], $existing, $payload);
+                    $updated++;
+                } else {
+                    $id = $model->insert($payload);
+                    AuditLog::record('attendance_import_create', 'Created attendance from CSV.', 'AttendanceRecord', $id, 'admin', ['line' => $line, 'employee_number' => $employeeNumber]);
+                    $created++;
+                }
+            } catch (Throwable $exception) {
+                $errors[] = "Line {$line}: " . $exception->getMessage();
+                $skipped++;
+            }
+        }
+
+        fclose($handle);
+
+        return ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    private function normalizeImportHeader(string $header): string
+    {
+        $header = preg_replace('/^\xEF\xBB\xBF/', '', trim($header)) ?? '';
+        $header = strtolower($header);
+
+        return trim((string) preg_replace('/[^a-z0-9]+/', '_', $header), '_');
+    }
+
+    private function normalizeAttendanceStatus(string $status): string
+    {
+        $status = strtolower(trim($status));
+        return match ($status) {
+            'present' => 'Present',
+            'absent' => 'Absent',
+            'late' => 'Late',
+            'leave', 'on_leave', 'on leave' => 'Leave',
+            default => '',
+        };
+    }
+
+    private function isEmptyImportRow(array $data): bool
+    {
+        foreach ($data as $value) {
+            if (trim((string) $value) !== '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function workedMinutes(array $record): int

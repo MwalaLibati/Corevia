@@ -141,4 +141,30 @@ class AttendanceRecord extends Model
 
         return (bool) $stmt->fetchColumn();
     }
+
+    public function findByEmployeeDate(int $employeeId, string $date): ?array
+    {
+        $cid = Tenant::id();
+        $sql = 'SELECT ar.*
+                FROM attendance_records ar
+                JOIN employees e ON e.id = ar.employee_id
+                WHERE ar.employee_id = :employee_id
+                  AND ar.attendance_date = :attendance_date'
+                . ($cid > 0 ? ' AND e.company_id = :cid' : '') . '
+                LIMIT 1';
+
+        $params = [
+            'employee_id' => $employeeId,
+            'attendance_date' => $date,
+        ];
+        if ($cid > 0) {
+            $params['cid'] = $cid;
+        }
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
 }

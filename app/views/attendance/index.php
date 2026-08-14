@@ -3,7 +3,10 @@
         <h2 class="text-dark">Attendance & Leave</h2>
         <p class="text-gray mb-0">Track attendance, leave balances, and approvals.</p>
     </div>
-    <a href="<?= e(base_url('attendance/create')) ?>" class="btn btn-primary">Add Attendance</a>
+    <div class="d-flex gap-2">
+        <a href="<?= e(base_url('attendance/import')) ?>" class="btn btn-outline-primary">Import from Excel</a>
+        <a href="<?= e(base_url('attendance/create')) ?>" class="btn btn-primary">Add Attendance</a>
+    </div>
 </div>
 
 <?php if (!empty($flashSuccess)): ?>
