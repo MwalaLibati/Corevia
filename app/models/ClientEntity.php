@@ -19,7 +19,7 @@ class ClientEntity extends Model
                     COUNT(c.id) AS company_count,
                     COALESCE(SUM(company_staff.employee_count), 0) AS employee_count
              FROM client_entities ce
-             LEFT JOIN companies c ON c.client_entity_id = ce.id
+             LEFT JOIN companies c ON c.client_entity_id = ce.id AND c.deleted_at IS NULL
              LEFT JOIN (
                 SELECT company_id, COUNT(*) AS employee_count
                 FROM employees
@@ -50,6 +50,7 @@ class ClientEntity extends Model
                     (SELECT COUNT(*) FROM branches b WHERE b.company_id = c.id AND b.is_active = 1) AS branch_count
              FROM companies c
              WHERE c.client_entity_id = :entity_id
+               AND c.deleted_at IS NULL
              ORDER BY c.name ASC"
         );
         $stmt->execute(['entity_id' => $entityId]);
@@ -59,10 +60,23 @@ class ClientEntity extends Model
 
     public function companyCount(int $entityId): int
     {
-        $stmt = $this->db->prepare('SELECT COUNT(*) FROM companies WHERE client_entity_id = :entity_id');
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM companies WHERE client_entity_id = :entity_id AND deleted_at IS NULL');
         $stmt->execute(['entity_id' => $entityId]);
 
         return (int) $stmt->fetchColumn();
+    }
+
+    public function detachCompany(int $entityId, int $companyId): bool
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE companies
+             SET client_entity_id = NULL
+             WHERE id = :company_id
+               AND client_entity_id = :entity_id'
+        );
+        $stmt->execute(['company_id' => $companyId, 'entity_id' => $entityId]);
+
+        return $stmt->rowCount() > 0;
     }
 
     public function findByName(string $name): ?array
@@ -132,14 +146,20 @@ class ClientEntity extends Model
         );
 
         $this->addColumnIfMissing('companies', 'client_entity_id', 'BIGINT UNSIGNED NULL AFTER id');
+        $this->addColumnIfMissing('companies', 'deleted_at', 'DATETIME NULL');
         $this->addIndexIfMissing('companies', 'idx_companies_client_entity_id', 'client_entity_id');
         $this->seedExistingCompanies();
     }
 
     private function seedExistingCompanies(): void
     {
+        $entityCount = (int) $this->db->query('SELECT COUNT(*) FROM client_entities')->fetchColumn();
+        if ($entityCount > 0) {
+            return;
+        }
+
         $companies = $this->db->query(
-            'SELECT id, name, email, phone FROM companies WHERE client_entity_id IS NULL ORDER BY id ASC'
+            'SELECT id, name, email, phone FROM companies WHERE client_entity_id IS NULL AND deleted_at IS NULL ORDER BY id ASC'
         )->fetchAll();
 
         foreach ($companies as $company) {

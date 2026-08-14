@@ -179,6 +179,40 @@ class SuperadminClientEntityController extends Controller
         redirect('superadmin/client-entity/index');
     }
 
+    public function detachCompany(string $entityId = '', string $companyId = ''): void
+    {
+        require_superadmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('superadmin/client-entity/view/' . (int) $entityId);
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/client-entity/view/' . (int) $entityId);
+        }
+
+        $entityIdInt = (int) $entityId;
+        $companyIdInt = (int) $companyId;
+        $model = new ClientEntity();
+        $entity = $model->find($entityIdInt);
+        if (!$entity) {
+            Session::flash('error', 'Client entity not found.');
+            redirect('superadmin/client-entity/index');
+        }
+
+        try {
+            if ($model->detachCompany($entityIdInt, $companyIdInt)) {
+                AuditLog::recordPlatform('company_detached', 'Detached company from client entity ' . (string) $entity['name'], 'ClientEntity', $entityIdInt, ['company_id' => $companyIdInt]);
+                Session::flash('success', 'Company relationship removed from this client entity.');
+            } else {
+                Session::flash('error', 'Company relationship could not be removed. It may already have been moved or deleted.');
+            }
+        } catch (Throwable $e) {
+            Session::flash('error', 'Company relationship could not be removed: ' . $e->getMessage());
+        }
+
+        redirect('superadmin/client-entity/view/' . $entityIdInt);
+    }
+
     private function collectInput(): array
     {
         $code = strtoupper(trim((string) $this->input('code', '')));

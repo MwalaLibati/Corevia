@@ -53,6 +53,32 @@ function confirmClientEntityDelete(form) {
 
     return companyCount === 0 && confirm('Delete this client entity?');
 }
+
+function confirmDetachCompany(form) {
+    var companyName = form.getAttribute('data-company-name') || 'this company';
+    var entityName = form.getAttribute('data-entity-name') || 'this client entity';
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Remove Relationship',
+            text: 'Remove ' + companyName + ' from ' + entityName + '? The company will not be deleted.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#7c3aed',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Remove Relationship',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                form.submit();
+            }
+        });
+        return false;
+    }
+
+    return confirm('Remove this company relationship?');
+}
 </script>
 
 <div class="row g-4">
@@ -101,7 +127,19 @@ function confirmClientEntityDelete(form) {
                                 <td class="text-center"><?= (int) ($company['branch_count'] ?? 0) ?></td>
                                 <td class="text-center"><?= (int) ($company['employee_count'] ?? 0) ?></td>
                                 <td><?= (int) ($company['is_active'] ?? 1) === 1 ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>' ?></td>
-                                <td class="text-end"><a href="<?= e(base_url('superadmin/company/view/' . (string) $company['id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a></td>
+                                <td class="text-end">
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <a href="<?= e(base_url('superadmin/company/view/' . (string) $company['id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a>
+                                        <form method="post"
+                                              action="<?= e(base_url('superadmin/client-entity/detachCompany/' . (string) $entity['id'] . '/' . (string) $company['id'])) ?>"
+                                              data-company-name="<?= e((string) $company['name']) ?>"
+                                              data-entity-name="<?= e((string) $entity['name']) ?>"
+                                              onsubmit="return confirmDetachCompany(this)">
+                                            <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                        </form>
+                                    </div>
+                                </td>
                             </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
