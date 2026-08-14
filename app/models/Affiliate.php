@@ -60,6 +60,8 @@ class Affiliate extends Model
         $columns = [
             'address' => 'ALTER TABLE affiliates ADD COLUMN address TEXT NULL',
             'affiliate_type' => "ALTER TABLE affiliates ADD COLUMN affiliate_type ENUM('Individual','Company','Consultant','Reseller','Agency') NOT NULL DEFAULT 'Individual'",
+            'nrc_number' => 'ALTER TABLE affiliates ADD COLUMN nrc_number VARCHAR(80) NULL',
+            'tpin' => 'ALTER TABLE affiliates ADD COLUMN tpin VARCHAR(80) NULL',
             'trading_name' => 'ALTER TABLE affiliates ADD COLUMN trading_name VARCHAR(190) NULL',
             'alternate_email' => 'ALTER TABLE affiliates ADD COLUMN alternate_email VARCHAR(190) NULL',
             'alternate_phone' => 'ALTER TABLE affiliates ADD COLUMN alternate_phone VARCHAR(80) NULL',
@@ -166,10 +168,13 @@ class Affiliate extends Model
             'approved_commission' => 0.0,
             'paid_commission' => 0.0,
             'current_year_commission' => 0.0,
+            'estimated_pipeline_value' => 0.0,
+            'due_followups' => 0,
+            'conversion_rate' => 0.0,
         ];
 
         if (!$this->tableReady()) {
-            return ['summary' => $summary, 'companies' => [], 'commissions' => [], 'monthly' => []];
+            return ['summary' => $summary, 'companies' => [], 'commissions' => [], 'monthly' => [], 'lead_stages' => [], 'due_followups' => []];
         }
 
         $stmt = $this->db->prepare(
@@ -187,7 +192,9 @@ class Affiliate extends Model
             $stmt = $this->db->prepare(
                 "SELECT COUNT(*) AS lead_count,
                         SUM(CASE WHEN stage NOT IN ('Won','Lost') THEN 1 ELSE 0 END) AS open_leads,
-                        SUM(CASE WHEN stage = 'Won' THEN 1 ELSE 0 END) AS won_leads
+                        SUM(CASE WHEN stage = 'Won' THEN 1 ELSE 0 END) AS won_leads,
+                        COALESCE(SUM(CASE WHEN stage NOT IN ('Won','Lost') THEN estimated_value ELSE 0 END), 0) AS estimated_pipeline_value,
+                        SUM(CASE WHEN stage NOT IN ('Won','Lost') AND next_follow_up IS NOT NULL AND next_follow_up <= CURDATE() THEN 1 ELSE 0 END) AS due_followups
                  FROM affiliate_leads
                  WHERE affiliate_id = :id"
             );
@@ -196,6 +203,11 @@ class Affiliate extends Model
             $summary['lead_count'] = (int) ($row['lead_count'] ?? 0);
             $summary['open_leads'] = (int) ($row['open_leads'] ?? 0);
             $summary['won_leads'] = (int) ($row['won_leads'] ?? 0);
+            $summary['estimated_pipeline_value'] = (float) ($row['estimated_pipeline_value'] ?? 0);
+            $summary['due_followups'] = (int) ($row['due_followups'] ?? 0);
+            $summary['conversion_rate'] = $summary['lead_count'] > 0
+                ? round(($summary['won_leads'] / max(1, $summary['lead_count'])) * 100, 1)
+                : 0.0;
         }
 
         $stmt = $this->db->prepare(
@@ -220,6 +232,8 @@ class Affiliate extends Model
             'commissions' => $this->commissions($affiliateId, 25),
             'monthly' => $this->monthlyTrend($affiliateId),
             'leads' => $this->leads($affiliateId, 8),
+            'lead_stages' => $this->leadStageSummary($affiliateId),
+            'due_followups' => $this->dueFollowUps($affiliateId),
         ];
     }
 
@@ -307,6 +321,48 @@ class Affiliate extends Model
              LEFT JOIN companies c ON c.id = al.converted_company_id
              WHERE al.affiliate_id = :id
              ORDER BY al.updated_at DESC, al.id DESC
+             LIMIT {$limit}"
+        );
+        $stmt->execute(['id' => $affiliateId]);
+
+        return $stmt->fetchAll();
+    }
+
+    public function leadStageSummary(int $affiliateId): array
+    {
+        if (!$this->tableExists('affiliate_leads')) {
+            return [];
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT stage,
+                    COUNT(*) AS total,
+                    COALESCE(SUM(estimated_value), 0) AS estimated_value
+             FROM affiliate_leads
+             WHERE affiliate_id = :id
+             GROUP BY stage
+             ORDER BY FIELD(stage,'New','Contacted','Demo Scheduled','Negotiating','Won','Lost')"
+        );
+        $stmt->execute(['id' => $affiliateId]);
+
+        return $stmt->fetchAll();
+    }
+
+    public function dueFollowUps(int $affiliateId, int $limit = 8): array
+    {
+        if (!$this->tableExists('affiliate_leads')) {
+            return [];
+        }
+
+        $limit = max(1, min(50, $limit));
+        $stmt = $this->db->prepare(
+            "SELECT *
+             FROM affiliate_leads
+             WHERE affiliate_id = :id
+               AND stage NOT IN ('Won','Lost')
+               AND next_follow_up IS NOT NULL
+               AND next_follow_up <= CURDATE()
+             ORDER BY next_follow_up ASC, id ASC
              LIMIT {$limit}"
         );
         $stmt->execute(['id' => $affiliateId]);

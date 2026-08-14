@@ -10,12 +10,17 @@ class AffiliateDashboardController extends Controller
         $affiliate = current_affiliate() ?? [];
         $model = new Affiliate();
         $model->ensureSchema();
+        $affiliateRecord = $model->find((int) ($affiliate['id'] ?? 0)) ?: $affiliate;
+        $documents = $model->documents((int) ($affiliate['id'] ?? 0));
+        $ops = new AffiliateOperations();
 
         $this->renderAffiliate('affiliate/dashboard', [
             'title' => 'Affiliate Dashboard',
-            'affiliate' => $model->find((int) ($affiliate['id'] ?? 0)) ?: $affiliate,
+            'affiliate' => $affiliateRecord,
             'ready' => $model->tableReady(),
             'dashboard' => $model->dashboard((int) ($affiliate['id'] ?? 0)),
+            'readiness' => $this->affiliateReadiness($affiliateRecord, $documents),
+            'payouts' => $ops->payoutBatches((int) ($affiliate['id'] ?? 0)),
         ]);
     }
 
@@ -169,11 +174,14 @@ class AffiliateDashboardController extends Controller
         $affiliate = current_affiliate() ?? [];
         $model = new Affiliate();
         $model->ensureSchema();
+        $affiliateRecord = $model->find((int) ($affiliate['id'] ?? 0)) ?: $affiliate;
+        $documents = $model->documents((int) ($affiliate['id'] ?? 0));
 
         $this->renderAffiliate('affiliate/profile', [
             'title' => 'My Affiliate Profile',
-            'affiliate' => $model->find((int) ($affiliate['id'] ?? 0)) ?: $affiliate,
-            'documents' => $model->documents((int) ($affiliate['id'] ?? 0)),
+            'affiliate' => $affiliateRecord,
+            'documents' => $documents,
+            'readiness' => $this->affiliateReadiness($affiliateRecord, $documents),
             'csrf' => Session::csrfToken(),
             'flash' => Session::flash('success'),
             'flashErr' => Session::flash('error'),
@@ -203,6 +211,8 @@ class AffiliateDashboardController extends Controller
              SET alternate_email = :alternate_email,
                  alternate_phone = :alternate_phone,
                  trading_name = :trading_name,
+                 nrc_number = :nrc_number,
+                 tpin = :tpin,
                  address = :address,
                  city = :city,
                  province = :province,
@@ -218,6 +228,8 @@ class AffiliateDashboardController extends Controller
             'alternate_email' => $email ?: null,
             'alternate_phone' => trim((string) ($_POST['alternate_phone'] ?? '')) ?: null,
             'trading_name' => trim((string) ($_POST['trading_name'] ?? '')) ?: null,
+            'nrc_number' => trim((string) ($_POST['nrc_number'] ?? '')) ?: null,
+            'tpin' => trim((string) ($_POST['tpin'] ?? '')) ?: null,
             'address' => trim((string) ($_POST['address'] ?? '')) ?: null,
             'city' => trim((string) ($_POST['city'] ?? '')) ?: null,
             'province' => trim((string) ($_POST['province'] ?? '')) ?: null,
@@ -287,5 +299,29 @@ class AffiliateDashboardController extends Controller
         }
 
         redirect('affiliate/dashboard/profile');
+    }
+
+    private function affiliateReadiness(array $affiliate, array $documents): array
+    {
+        $documentTypes = array_map(static fn(array $doc): string => (string) ($doc['document_type'] ?? ''), $documents);
+        $checks = [
+            'Primary contact details' => trim((string) ($affiliate['email'] ?? '')) !== '' && trim((string) ($affiliate['phone'] ?? '')) !== '',
+            'NRC and TPN captured' => trim((string) ($affiliate['nrc_number'] ?? '')) !== '' && trim((string) ($affiliate['tpin'] ?? '')) !== '',
+            'Physical address' => trim((string) ($affiliate['address'] ?? '')) !== '' && trim((string) ($affiliate['city'] ?? '')) !== '',
+            'Payout method selected' => trim((string) ($affiliate['payout_method'] ?? '')) !== '',
+            'Bank or mobile money details' => trim((string) ($affiliate['bank_account_number'] ?? '')) !== '' || trim((string) ($affiliate['mobile_money_number'] ?? '')) !== '',
+            'NRC document uploaded' => in_array('NRC', $documentTypes, true),
+            'TPIN document uploaded' => in_array('TPIN', $documentTypes, true),
+            'Affiliate agreement uploaded' => in_array('Affiliate Agreement', $documentTypes, true),
+        ];
+
+        $complete = count(array_filter($checks));
+        $total = max(1, count($checks));
+
+        return [
+            'score' => (int) round(($complete / $total) * 100),
+            'checks' => $checks,
+            'missing' => array_keys(array_filter($checks, static fn(bool $done): bool => !$done)),
+        ];
     }
 }
