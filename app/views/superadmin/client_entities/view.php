@@ -10,12 +10,50 @@
         <a href="<?= e(base_url('superadmin/company/create?client_entity_id=' . (string) $entity['id'])) ?>" class="btn btn-sm" style="background:#7c3aed;color:#fff">
             <i class="bi bi-building-add me-1"></i>Add Company
         </a>
+        <form method="post"
+              action="<?= e(base_url('superadmin/client-entity/delete/' . (string) $entity['id'])) ?>"
+              data-entity-name="<?= e((string) $entity['name']) ?>"
+              data-company-count="<?= count($companies ?? []) ?>"
+              onsubmit="return confirmClientEntityDelete(this)">
+            <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
         <a href="<?= e(base_url('superadmin/client-entity/index')) ?>" class="btn btn-sm btn-outline-secondary">Back</a>
     </div>
 </div>
 
 <?php if (!empty($flashSuccess)): ?><div class="alert alert-success"><?= e((string) $flashSuccess) ?></div><?php endif; ?>
 <?php if (!empty($flashError)): ?><div class="alert alert-danger"><?= e((string) $flashError) ?></div><?php endif; ?>
+
+<script>
+function confirmClientEntityDelete(form) {
+    var entityName = form.getAttribute('data-entity-name') || 'this client entity';
+    var companyCount = parseInt(form.getAttribute('data-company-count') || '0', 10);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Delete Client Entity',
+            text: companyCount > 0
+                ? entityName + ' has attached companies. You must move or delete those companies before deleting the entity.'
+                : 'Are you sure you want to delete ' + entityName + '?',
+            icon: companyCount > 0 ? 'info' : 'warning',
+            showCancelButton: companyCount === 0,
+            confirmButtonColor: companyCount > 0 ? '#7c3aed' : '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: companyCount > 0 ? 'Understood' : 'Delete Entity',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed && companyCount === 0) {
+                form.submit();
+            }
+        });
+        return false;
+    }
+
+    return companyCount === 0 && confirm('Delete this client entity?');
+}
+</script>
 
 <div class="row g-4">
     <div class="col-md-4">

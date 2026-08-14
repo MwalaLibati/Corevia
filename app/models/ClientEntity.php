@@ -57,6 +57,14 @@ class ClientEntity extends Model
         return $stmt->fetchAll();
     }
 
+    public function companyCount(int $entityId): int
+    {
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM companies WHERE client_entity_id = :entity_id');
+        $stmt->execute(['entity_id' => $entityId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function findByName(string $name): ?array
     {
         $stmt = $this->db->prepare('SELECT * FROM client_entities WHERE name = :name LIMIT 1');
@@ -79,6 +87,12 @@ class ClientEntity extends Model
             'code' => $this->generateNextCode(),
             'is_active' => 1,
         ]);
+    }
+
+    public function delete(int $entityId): void
+    {
+        $stmt = $this->db->prepare('DELETE FROM client_entities WHERE id = :id');
+        $stmt->execute(['id' => $entityId]);
     }
 
     public function generateNextCode(): string

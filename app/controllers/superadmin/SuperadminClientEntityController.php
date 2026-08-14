@@ -143,6 +143,42 @@ class SuperadminClientEntityController extends Controller
         ]);
     }
 
+    public function delete(string $id): void
+    {
+        require_superadmin();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('superadmin/client-entity/index');
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid token.');
+            redirect('superadmin/client-entity/index');
+        }
+
+        $entityId = (int) $id;
+        $model = new ClientEntity();
+        $entity = $model->find($entityId);
+        if (!$entity) {
+            Session::flash('error', 'Client entity not found.');
+            redirect('superadmin/client-entity/index');
+        }
+
+        if ($model->companyCount($entityId) > 0) {
+            Session::flash('error', 'Client entity cannot be deleted while companies are still attached. Move or delete the companies first.');
+            redirect('superadmin/client-entity/view/' . $entityId);
+        }
+
+        try {
+            $model->delete($entityId);
+            AuditLog::recordPlatform('deleted', 'Deleted client entity ' . (string) $entity['name'], 'ClientEntity', $entityId);
+            Session::flash('success', 'Client entity deleted successfully.');
+        } catch (Throwable $e) {
+            Session::flash('error', 'Client entity could not be deleted: ' . $e->getMessage());
+            redirect('superadmin/client-entity/view/' . $entityId);
+        }
+
+        redirect('superadmin/client-entity/index');
+    }
+
     private function collectInput(): array
     {
         $code = strtoupper(trim((string) $this->input('code', '')));

@@ -11,6 +11,36 @@
 <?php if (!empty($flashSuccess)): ?><div class="alert alert-success"><?= e((string) $flashSuccess) ?></div><?php endif; ?>
 <?php if (!empty($flashError)): ?><div class="alert alert-danger"><?= e((string) $flashError) ?></div><?php endif; ?>
 
+<script>
+function confirmClientEntityDelete(form) {
+    var entityName = form.getAttribute('data-entity-name') || 'this client entity';
+    var companyCount = parseInt(form.getAttribute('data-company-count') || '0', 10);
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Delete Client Entity',
+            text: companyCount > 0
+                ? entityName + ' has attached companies. You must move or delete those companies before deleting the entity.'
+                : 'Are you sure you want to delete ' + entityName + '?',
+            icon: companyCount > 0 ? 'info' : 'warning',
+            showCancelButton: companyCount === 0,
+            confirmButtonColor: companyCount > 0 ? '#7c3aed' : '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: companyCount > 0 ? 'Understood' : 'Delete Entity',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true
+        }).then(function(result) {
+            if (result.isConfirmed && companyCount === 0) {
+                form.submit();
+            }
+        });
+        return false;
+    }
+
+    return companyCount === 0 && confirm('Delete this client entity?');
+}
+</script>
+
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -53,6 +83,14 @@
                             <div class="d-flex gap-1">
                                 <a href="<?= e(base_url('superadmin/client-entity/view/' . (string) $entity['id'])) ?>" class="btn btn-xs btn-outline-primary" style="font-size:.72rem;padding:2px 8px" title="View"><i class="bi bi-eye"></i></a>
                                 <a href="<?= e(base_url('superadmin/client-entity/edit/' . (string) $entity['id'])) ?>" class="btn btn-xs btn-outline-secondary" style="font-size:.72rem;padding:2px 8px" title="Edit"><i class="bi bi-pencil"></i></a>
+                                <form method="post"
+                                      action="<?= e(base_url('superadmin/client-entity/delete/' . (string) $entity['id'])) ?>"
+                                      data-entity-name="<?= e((string) $entity['name']) ?>"
+                                      data-company-count="<?= (int) ($entity['company_count'] ?? 0) ?>"
+                                      onsubmit="return confirmClientEntityDelete(this)">
+                                    <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                                    <button type="submit" class="btn btn-xs btn-outline-danger" style="font-size:.72rem;padding:2px 8px" title="Delete"><i class="bi bi-trash"></i></button>
+                                </form>
                             </div>
                         </td>
                     </tr>
