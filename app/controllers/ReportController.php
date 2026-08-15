@@ -120,6 +120,43 @@ class ReportController extends Controller
         );
     }
 
+    public function schedulingReports(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
+
+        $month = $this->reportMonth((string) $this->input('month', date('Y-m')));
+        $activeReport = strtolower(trim((string) $this->input('report', 'coverage')));
+        $reports = $this->schedulingReportDefinitions();
+        if (!isset($reports[$activeReport])) {
+            $activeReport = 'coverage';
+        }
+
+        $payloads = [];
+        foreach (array_keys($reports) as $key) {
+            $payloads[$key] = $this->schedulingReportPayload($key, $month);
+        }
+
+        $export = strtolower((string) ($this->input('export', '') ?? ''));
+        if (in_array($export, ['csv', 'xls', 'pdf'], true)) {
+            $payload = $payloads[$activeReport];
+            if ($export === 'pdf') {
+                $this->renderReportPrint($payload['title'], $payload['description'], $payload['headers'], $payload['rows']);
+                return;
+            }
+            $this->streamReportExport($activeReport . '-scheduling-' . $month . '.' . $export, $payload['headers'], $payload['rows'], $export);
+            return;
+        }
+
+        $this->render('reports/scheduling', [
+            'title' => 'Scheduling Reports',
+            'month' => $month,
+            'activeReport' => $activeReport,
+            'reports' => $reports,
+            'payloads' => $payloads,
+        ]);
+    }
+
     public function departmentCost(): void
     {
         require_auth();
@@ -768,6 +805,192 @@ class ReportController extends Controller
         $stmt = db()->prepare($sql);
         $stmt->execute(['cid' => Tenant::id()] + $params);
         return $stmt->fetchAll();
+    }
+
+    private function reportMonth(string $month): string
+    {
+        $month = trim($month);
+        return preg_match('/^\d{4}-\d{2}$/', $month) ? $month : date('Y-m');
+    }
+
+    private function schedulingReportDefinitions(): array
+    {
+        return [
+            'coverage' => ['title' => 'Shift Coverage', 'icon' => 'bi-calendar-week', 'description' => 'Scheduled employees by date, shift, and expected hours.'],
+            'employee' => ['title' => 'Employee Schedule', 'icon' => 'bi-person-lines-fill', 'description' => 'Full monthly roster per employee, including rest days.'],
+            'exceptions' => ['title' => 'Schedule Exceptions', 'icon' => 'bi-calendar2-plus', 'description' => 'Date-specific changes such as shift changes, rest days, leave, and public holidays.'],
+            'requests' => ['title' => 'Change Requests', 'icon' => 'bi-inbox', 'description' => 'Employee schedule change requests and review outcomes.'],
+            'impact' => ['title' => 'Payroll Impact', 'icon' => 'bi-cash-coin', 'description' => 'Attendance versus schedule impact for worked hours, short hours, late time, and overtime.'],
+            'overtime' => ['title' => 'Overtime', 'icon' => 'bi-clock-history', 'description' => 'Scheduled-attendance overtime exceptions for payroll review.'],
+            'absence' => ['title' => 'Absence & Late Coming', 'icon' => 'bi-exclamation-triangle', 'description' => 'Absences, late arrivals, early departures, and short-hour records.'],
+            'readiness' => ['title' => 'Payroll Readiness', 'icon' => 'bi-clipboard-check', 'description' => 'Pre-payroll checks for missing schedules, missing attendance, and pending schedule requests.'],
+        ];
+    }
+
+    private function schedulingReportPayload(string $report, string $month): array
+    {
+        $schedule = new Schedule();
+        $definitions = $this->schedulingReportDefinitions();
+        $definition = $definitions[$report] ?? $definitions['coverage'];
+
+        if ($report === 'coverage') {
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Pattern', 'Shift', 'Time', 'Expected Hours'], array_map(static function (array $row): array {
+                $employee = $row['employee'] ?? [];
+                $item = $row['schedule'] ?? [];
+                return [
+                    (string) ($row['date'] ?? ''),
+                    (string) ($employee['employee_number'] ?? ''),
+                    (string) ($employee['full_name'] ?? ''),
+                    (string) ($item['pattern_name'] ?? ''),
+                    (string) ($item['shift_name'] ?? ''),
+                    substr((string) ($item['start_time'] ?? ''), 0, 5) . ' - ' . substr((string) ($item['end_time'] ?? ''), 0, 5),
+                    (float) ($item['expected_hours'] ?? 0),
+                ];
+            }, $schedule->roster($month, 0, 0)));
+        }
+
+        if ($report === 'employee') {
+            $rows = [];
+            foreach ($schedule->employees() as $employee) {
+                foreach ($schedule->employeeRoster((int) $employee['id'], $month) as $row) {
+                    $item = $row['schedule'] ?? [];
+                    $rows[] = [
+                        (string) ($row['date'] ?? ''),
+                        (string) ($employee['employee_number'] ?? ''),
+                        (string) ($employee['full_name'] ?? ''),
+                        (string) ($item['pattern_name'] ?? 'No assignment'),
+                        !empty($item['shift_id']) ? (string) ($item['shift_name'] ?? '') : 'Rest day',
+                        (float) ($item['expected_hours'] ?? 0),
+                    ];
+                }
+            }
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Pattern', 'Shift / Rest Day', 'Expected Hours'], $rows);
+        }
+
+        if ($report === 'exceptions') {
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Type', 'Shift', 'Time', 'Notes'], array_map(static fn(array $row): array => [
+                (string) ($row['exception_date'] ?? ''),
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['full_name'] ?? ''),
+                (string) ($row['exception_type'] ?? ''),
+                (string) ($row['shift_name'] ?? 'No shift'),
+                substr((string) ($row['start_time'] ?? ''), 0, 5) . ' - ' . substr((string) ($row['end_time'] ?? ''), 0, 5),
+                (string) ($row['notes'] ?? ''),
+            ], $schedule->exceptions($month)));
+        }
+
+        if ($report === 'requests') {
+            $requests = array_filter($schedule->changeRequests(), static fn(array $row): bool => substr((string) ($row['requested_date'] ?? ''), 0, 7) === $month);
+            return $this->scheduledPayload($definition, ['Requested Date', 'Employee #', 'Employee', 'Current Shift', 'Requested Shift', 'Status', 'Reason', 'Reviewed By', 'Reviewed At'], array_map(static fn(array $row): array => [
+                (string) ($row['requested_date'] ?? ''),
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['full_name'] ?? ''),
+                (string) ($row['current_shift_label'] ?? ''),
+                (string) ($row['requested_shift_name'] ?? 'Rest day / no shift'),
+                (string) ($row['status'] ?? ''),
+                (string) ($row['reason'] ?? ''),
+                (string) ($row['reviewed_by_name'] ?? ''),
+                (string) ($row['reviewed_at'] ?? ''),
+            ], $requests));
+        }
+
+        $variance = $schedule->varianceRows($month);
+        if ($report === 'impact') {
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Attendance', 'Schedule Status', 'Expected Hours', 'Worked Hours', 'Variance Hours', 'Late Minutes', 'Early Minutes', 'Overtime Hours'], array_map(static fn(array $row): array => [
+                (string) ($row['attendance_date'] ?? ''),
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['full_name'] ?? ''),
+                (string) ($row['attendance_status'] ?? ''),
+                (string) ($row['schedule_status'] ?? ''),
+                (float) ($row['expected_hours'] ?? 0),
+                (float) ($row['worked_hours'] ?? 0),
+                round((float) ($row['worked_hours'] ?? 0) - (float) ($row['expected_hours'] ?? 0), 2),
+                (int) ($row['late_minutes'] ?? 0),
+                (int) ($row['early_minutes'] ?? 0),
+                (float) ($row['overtime_hours'] ?? 0),
+            ], $variance));
+        }
+
+        if ($report === 'overtime') {
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Shift', 'Worked Hours', 'Overtime Hours', 'Schedule Status'], array_map(static fn(array $row): array => [
+                (string) ($row['attendance_date'] ?? ''),
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['full_name'] ?? ''),
+                (string) ($row['shift'] ?? ''),
+                (float) ($row['worked_hours'] ?? 0),
+                (float) ($row['overtime_hours'] ?? 0),
+                (string) ($row['schedule_status'] ?? ''),
+            ], array_filter($variance, static fn(array $row): bool => (float) ($row['overtime_hours'] ?? 0) > 0)));
+        }
+
+        if ($report === 'absence') {
+            return $this->scheduledPayload($definition, ['Date', 'Employee #', 'Employee', 'Attendance', 'Schedule Status', 'Late Minutes', 'Early Minutes', 'Expected Hours', 'Worked Hours'], array_map(static fn(array $row): array => [
+                (string) ($row['attendance_date'] ?? ''),
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['full_name'] ?? ''),
+                (string) ($row['attendance_status'] ?? ''),
+                (string) ($row['schedule_status'] ?? ''),
+                (int) ($row['late_minutes'] ?? 0),
+                (int) ($row['early_minutes'] ?? 0),
+                (float) ($row['expected_hours'] ?? 0),
+                (float) ($row['worked_hours'] ?? 0),
+            ], array_filter($variance, static fn(array $row): bool => in_array((string) ($row['attendance_status'] ?? ''), ['Absent', 'Late'], true) || (int) ($row['late_minutes'] ?? 0) > 0 || (int) ($row['early_minutes'] ?? 0) > 0)));
+        }
+
+        $pendingRequests = [];
+        foreach ($schedule->changeRequests('Pending') as $request) {
+            if (substr((string) ($request['requested_date'] ?? ''), 0, 7) === $month) {
+                $pendingRequests[(int) $request['employee_id']] = ($pendingRequests[(int) $request['employee_id']] ?? 0) + 1;
+            }
+        }
+        $attendanceCounts = $this->attendanceCountsForMonth($month);
+        $rows = [];
+        foreach ($schedule->employees() as $employee) {
+            $rosterRows = $schedule->employeeRoster((int) $employee['id'], $month);
+            $scheduledDays = count(array_filter($rosterRows, static fn(array $row): bool => !empty($row['schedule']['shift_id'])));
+            $attendanceCount = (int) ($attendanceCounts[(int) $employee['id']] ?? 0);
+            $pending = (int) ($pendingRequests[(int) $employee['id']] ?? 0);
+            $issues = [];
+            if ($scheduledDays === 0) { $issues[] = 'No schedule assigned'; }
+            if ($scheduledDays > 0 && $attendanceCount === 0) { $issues[] = 'No attendance captured'; }
+            if ($pending > 0) { $issues[] = $pending . ' pending schedule request(s)'; }
+            $rows[] = [
+                (string) ($employee['employee_number'] ?? ''),
+                (string) ($employee['full_name'] ?? ''),
+                $scheduledDays,
+                $attendanceCount,
+                $pending,
+                empty($issues) ? 'Ready' : 'Needs Review',
+                implode('; ', $issues),
+            ];
+        }
+        return $this->scheduledPayload($definition, ['Employee #', 'Employee', 'Scheduled Days', 'Attendance Records', 'Pending Requests', 'Readiness Status', 'Issues'], $rows);
+    }
+
+    private function scheduledPayload(array $definition, array $headers, array $rows): array
+    {
+        return [
+            'title' => (string) $definition['title'],
+            'description' => (string) $definition['description'],
+            'headers' => $headers,
+            'rows' => array_values($rows),
+        ];
+    }
+
+    private function attendanceCountsForMonth(string $month): array
+    {
+        $stmt = db()->prepare(
+            "SELECT employee_id, COUNT(*) AS record_count
+             FROM attendance_records
+             WHERE company_id = :cid AND DATE_FORMAT(attendance_date, '%Y-%m') = :month
+             GROUP BY employee_id"
+        );
+        $stmt->execute(['cid' => Tenant::id(), 'month' => $month]);
+        $counts = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $counts[(int) $row['employee_id']] = (int) $row['record_count'];
+        }
+        return $counts;
     }
 
     private function statutoryPayrollRuns(): array

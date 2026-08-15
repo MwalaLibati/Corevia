@@ -544,14 +544,17 @@ class Schedule extends Model
         ];
     }
 
-    public function roster(string $month): array
+    public function roster(string $month, int $employeeLimit = 12, int $rowLimit = 80): array
     {
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
             $month = date('Y-m');
         }
         $start = $month . '-01';
         $end = date('Y-m-t', strtotime($start));
-        $employees = array_slice($this->employees(), 0, 12);
+        $employees = $this->employees();
+        if ($employeeLimit > 0) {
+            $employees = array_slice($employees, 0, $employeeLimit);
+        }
         $rows = [];
         foreach ($employees as $employee) {
             for ($ts = strtotime($start); $ts <= strtotime($end); $ts = strtotime('+1 day', $ts)) {
@@ -562,7 +565,7 @@ class Schedule extends Model
                 }
             }
         }
-        return array_slice($rows, 0, 80);
+        return $rowLimit > 0 ? array_slice($rows, 0, $rowLimit) : $rows;
     }
 
     public function employeeRoster(int $employeeId, string $month): array

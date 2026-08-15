@@ -43,6 +43,7 @@ $reports = [
     ['icon'=>'bi-graph-up-arrow',   'color'=>'primary', 'title'=>'Payroll Cost Trend',   'desc'=>'Monthly movement for gross payroll cost, deductions, and net pay.', 'url'=>'report/payrollCostTrend'],
     ['icon'=>'bi-receipt',         'color'=>'primary', 'title'=>'Payroll Summary',      'desc'=>'Monthly gross, deductions, and net pay per run.',                'url'=>'report/payrollSummary'],
     ['icon'=>'bi-buildings',       'color'=>'primary', 'title'=>'Department Cost',       'desc'=>'Department-wise payroll cost distribution.',                     'url'=>'report/departmentCost'],
+    ['icon'=>'bi-calendar-check',  'color'=>'info',    'title'=>'Scheduling Reports',    'desc'=>'Coverage, exceptions, requests, overtime, and payroll readiness.', 'url'=>'report/schedulingReports'],
     ['icon'=>'bi-calendar3-range', 'color'=>'info',    'title'=>'Schedule Variance',     'desc'=>'Expected shifts compared with actual attendance and overtime.',   'url'=>'report/scheduleVariance'],
     ['icon'=>'bi-people',          'color'=>'success', 'title'=>'Headcount Trend',       'desc'=>'Joiners, leavers, and estimated active headcount by month.',       'url'=>'report/headcountTrend'],
     ['icon'=>'bi-percent',         'color'=>'primary', 'title'=>'Statutory Report',      'desc'=>'PAYE, NAPSA, NHIMA-ready deduction breakdown.',                  'url'=>'report/statutory'],
