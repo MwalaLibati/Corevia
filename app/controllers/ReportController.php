@@ -980,10 +980,11 @@ class ReportController extends Controller
     private function attendanceCountsForMonth(string $month): array
     {
         $stmt = db()->prepare(
-            "SELECT employee_id, COUNT(*) AS record_count
-             FROM attendance_records
-             WHERE company_id = :cid AND DATE_FORMAT(attendance_date, '%Y-%m') = :month
-             GROUP BY employee_id"
+            "SELECT ar.employee_id, COUNT(*) AS record_count
+             FROM attendance_records ar
+             JOIN employees e ON e.id = ar.employee_id
+             WHERE e.company_id = :cid AND DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month
+             GROUP BY ar.employee_id"
         );
         $stmt->execute(['cid' => Tenant::id(), 'month' => $month]);
         $counts = [];
