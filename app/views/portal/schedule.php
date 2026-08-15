@@ -5,7 +5,44 @@ $fmtTime = static fn($time): string => $time ? substr((string)$time, 0, 5) : '-'
 $scheduled = array_values(array_filter($rows, static fn($row): bool => !empty($row['schedule']['shift_id'])));
 $restDays = count($rows) - count($scheduled);
 $expectedHours = array_sum(array_map(static fn($row): float => (float)($row['schedule']['expected_hours'] ?? 0), $scheduled));
+$rowsByDate = [];
+foreach ($rows as $row) {
+    $rowsByDate[(string)$row['date']] = $row;
+}
+$monthStart = $month . '-01';
+$daysInMonth = (int) date('t', strtotime($monthStart));
+$firstDow = (int) date('N', strtotime($monthStart));
+$calendarCells = [];
+for ($blank = 1; $blank < $firstDow; $blank++) {
+    $calendarCells[] = null;
+}
+for ($day = 1; $day <= $daysInMonth; $day++) {
+    $date = $month . '-' . str_pad((string)$day, 2, '0', STR_PAD_LEFT);
+    $calendarCells[] = $rowsByDate[$date] ?? ['date' => $date, 'schedule' => null];
+}
+while (count($calendarCells) % 7 !== 0) {
+    $calendarCells[] = null;
+}
 ?>
+
+<style>
+.portal-schedule-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:#dbe3ef;border:1px solid #dbe3ef;border-radius:12px;overflow:hidden}
+.portal-schedule-day-head{background:#f8fafc;padding:10px;text-align:center;font-weight:700;color:#52627a;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+.portal-schedule-cell{background:#fff;min-height:118px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.portal-schedule-cell.is-empty{background:#f8fafc}
+.portal-schedule-cell.is-rest{background:#f9fafb}
+.portal-schedule-date{font-weight:800;color:#0f172a}
+.portal-schedule-shift{border-left:4px solid #2563eb;background:#eff6ff;border-radius:8px;padding:8px}
+.portal-schedule-shift strong{display:block;font-size:.86rem;color:#0f172a}
+.portal-schedule-shift span{display:block;font-size:.76rem;color:#52627a}
+.portal-schedule-rest{border-left:4px solid #94a3b8;background:#f1f5f9;border-radius:8px;padding:8px;font-size:.8rem;color:#475569;font-weight:700}
+@media(max-width:767.98px){
+    .portal-schedule-calendar{display:block;border-radius:10px;background:transparent;border:0}
+    .portal-schedule-day-head{display:none}
+    .portal-schedule-cell{min-height:auto;border:1px solid #dbe3ef;border-radius:10px;margin-bottom:8px}
+    .portal-schedule-cell.is-empty{display:none}
+}
+</style>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
     <div>
@@ -23,6 +60,46 @@ $expectedHours = array_sum(array_map(static fn($row): float => (float)($row['sch
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card h-100"><span class="stat-label">Expected Hours</span><div class="stat-value"><?= e(number_format((float)$expectedHours, 2)) ?></div><div class="small text-muted">From assigned shifts</div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card h-100"><span class="stat-label">Rest Days</span><div class="stat-value"><?= $restDays ?></div><div class="small text-muted">Days without assigned shift</div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card h-100"><span class="stat-label">Schedule Status</span><div class="stat-value" style="font-size:1.05rem"><?= count($scheduled) > 0 ? 'Assigned' : 'Not set' ?></div><div class="small text-muted">Contact HR for changes</div></div></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="bi bi-calendar-week me-2 text-primary"></i>Calendar View</h6>
+                <div class="small text-muted">Your expected shifts shown by day.</div>
+            </div>
+            <span class="badge bg-light text-dark border"><?= e(date('F Y', strtotime($monthStart))) ?></span>
+        </div>
+
+        <div class="portal-schedule-calendar">
+            <?php foreach (['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $dayName): ?>
+                <div class="portal-schedule-day-head"><?= e($dayName) ?></div>
+            <?php endforeach; ?>
+            <?php foreach ($calendarCells as $cell): ?>
+                <?php if ($cell === null): ?>
+                    <div class="portal-schedule-cell is-empty"></div>
+                    <?php continue; ?>
+                <?php endif; ?>
+                <?php $schedule = $cell['schedule'] ?? null; $hasShift = !empty($schedule['shift_id']); ?>
+                <div class="portal-schedule-cell <?= $hasShift ? '' : 'is-rest' ?>">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="portal-schedule-date"><?= e(date('j', strtotime((string)$cell['date']))) ?></span>
+                        <span class="small text-muted"><?= e(date('D', strtotime((string)$cell['date']))) ?></span>
+                    </div>
+                    <?php if ($hasShift): ?>
+                        <div class="portal-schedule-shift">
+                            <strong><?= e((string)$schedule['shift_name']) ?></strong>
+                            <span><?= e($fmtTime($schedule['start_time'])) ?> - <?= e($fmtTime($schedule['end_time'])) ?></span>
+                            <span><?= e(number_format((float)($schedule['expected_hours'] ?? 0), 2)) ?> expected hrs</span>
+                        </div>
+                    <?php else: ?>
+                        <div class="portal-schedule-rest"><?= e((string)($schedule['pattern_name'] ?? 'Rest day')) ?></div>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
 </div>
 
 <div class="card border-0 shadow-sm">
