@@ -223,6 +223,12 @@ class AttendancePayrollRule extends Model
         }
 
         $salaryModel = new EmployeeSalary();
+        $scheduleModel = null;
+        try {
+            $scheduleModel = new Schedule();
+        } catch (Throwable $exception) {
+            error_log('Attendance payroll schedule context unavailable: ' . $exception->getMessage());
+        }
         $recordsByEmployee = $this->attendanceRecordsByEmployee($periodStart, $periodEnd);
         $byEmployee = [];
         $totals = ['earnings' => 0.0, 'deductions' => 0.0];
@@ -246,7 +252,7 @@ class AttendancePayrollRule extends Model
             $dailyRate = round(((float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays), 4);
             $hourlyRate = round(((float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours), 4);
             $shiftRate = round(((float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate), 4);
-            $summary = $this->summarizeRecords($records, $rule);
+            $summary = $this->summarizeRecords($records, $rule, $scheduleModel);
             $inputs = [];
             $deductAttendanceVariance = !in_array($paySource, ['Attendance Hours', 'Days Worked', 'Shifts Worked'], true);
 
@@ -358,7 +364,7 @@ class AttendancePayrollRule extends Model
         return $rows;
     }
 
-    private function summarizeRecords(array $records, array $rule): array
+    private function summarizeRecords(array $records, array $rule, ?Schedule $scheduleModel = null): array
     {
         $summary = [
             'records' => count($records),
@@ -388,9 +394,34 @@ class AttendancePayrollRule extends Model
                 continue;
             }
 
-            $summary['present_days']++;
             $worked = $this->workedMinutes($record);
+            $summary['present_days']++;
             $summary['worked_minutes'] += $worked;
+
+            $scheduleCompare = null;
+            try {
+                $scheduleCompare = $scheduleModel ? $scheduleModel->compareAttendance($record) : null;
+            } catch (Throwable) {
+                $scheduleCompare = null;
+            }
+
+            if ($scheduleCompare !== null && ($scheduleCompare['schedule'] ?? null) !== null) {
+                $schedule = $scheduleCompare['schedule'];
+                $expectedMinutes = !empty($schedule['expected_hours']) ? (int) round((float) $schedule['expected_hours'] * 60) : $standardMinutes;
+                $isRestDay = (string) ($scheduleCompare['status'] ?? '') === 'Rest Day';
+                if ($isRestDay) {
+                    $summary['weekend_days']++;
+                    $summary['weekend_overtime_minutes'] += $worked;
+                } else {
+                    $summary['overtime_minutes'] += (int) ($scheduleCompare['overtime_minutes'] ?? 0);
+                    if ($worked > 0 && $worked < $expectedMinutes) {
+                        $summary['undertime_minutes'] += $expectedMinutes - $worked;
+                    }
+                }
+                $summary['late_minutes'] += (int) ($scheduleCompare['late_minutes'] ?? 0);
+                continue;
+            }
+
             $isWeekend = in_array((int) date('N', strtotime((string) ($record['attendance_date'] ?? date('Y-m-d')))), [6, 7], true);
             if ($isWeekend) {
                 $summary['weekend_days']++;

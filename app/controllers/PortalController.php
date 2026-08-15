@@ -866,6 +866,21 @@ class PortalController extends Controller
         ]);
     }
 
+    public function schedule(): void
+    {
+        require_employee_auth();
+        $emp = current_employee();
+        $empId = (int) $emp['id'];
+        $month = $this->normalizePortalMonth((string) $this->input('month', date('Y-m')));
+        $schedule = new Schedule();
+
+        $this->renderPortal('portal/schedule', [
+            'emp' => $emp,
+            'month' => $month,
+            'rows' => $schedule->employeeRoster($empId, $month),
+        ]);
+    }
+
     public function salaryAdvanceApply(): void
     {
         require_employee_auth();
@@ -1486,6 +1501,7 @@ class PortalController extends Controller
     {
         $salaryModel = null;
         $ruleModel = null;
+        $scheduleModel = null;
         try {
             $salaryModel = new EmployeeSalary();
         } catch (Throwable $exception) {
@@ -1495,6 +1511,11 @@ class PortalController extends Controller
             $ruleModel = new AttendancePayrollRule();
         } catch (Throwable $exception) {
             error_log('Portal attendance payroll rule enrichment unavailable: ' . $exception->getMessage());
+        }
+        try {
+            $scheduleModel = new Schedule();
+        } catch (Throwable $exception) {
+            error_log('Portal attendance schedule enrichment unavailable: ' . $exception->getMessage());
         }
         $salaryCache = [];
         $ruleCache = [];
@@ -1532,6 +1553,15 @@ class PortalController extends Controller
             } catch (Throwable $exception) {
                 error_log('Portal attendance value calculation failed: ' . $exception->getMessage());
                 $record['_attendance_calc'] = $this->portalTimeOnlyCalculation($record);
+            }
+
+            try {
+                $record['_schedule_compare'] = $scheduleModel
+                    ? $scheduleModel->compareAttendance($record)
+                    : ['status' => 'Unscheduled', 'label' => 'No schedule', 'late_minutes' => 0, 'early_minutes' => 0, 'overtime_minutes' => 0];
+            } catch (Throwable $exception) {
+                error_log('Portal attendance schedule comparison failed: ' . $exception->getMessage());
+                $record['_schedule_compare'] = ['status' => 'Unscheduled', 'label' => 'No schedule', 'late_minutes' => 0, 'early_minutes' => 0, 'overtime_minutes' => 0];
             }
         }
         unset($record);
@@ -1620,11 +1650,19 @@ class PortalController extends Controller
 
     private function portalAttendanceSummary(array $records): array
     {
-        $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'late' => 0, 'absent' => 0, 'leave' => 0];
+        $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'late' => 0, 'absent' => 0, 'leave' => 0, 'scheduled_late' => 0, 'early_departures' => 0, 'overtime_hours' => 0.0];
         foreach ($records as $record) {
             $calc = $record['_attendance_calc'] ?? [];
+            $schedule = $record['_schedule_compare'] ?? [];
             $summary['hours'] += (float) ($calc['hours'] ?? 0);
             $summary['estimated_value'] += (float) ($calc['amount'] ?? 0);
+            $summary['overtime_hours'] += round(((int) ($schedule['overtime_minutes'] ?? 0)) / 60, 2);
+            if ((int) ($schedule['late_minutes'] ?? 0) > 0) {
+                $summary['scheduled_late']++;
+            }
+            if ((int) ($schedule['early_minutes'] ?? 0) > 0) {
+                $summary['early_departures']++;
+            }
             $status = strtolower((string) ($record['status'] ?? ''));
             if (isset($summary[$status])) {
                 $summary[$status]++;
@@ -1632,6 +1670,7 @@ class PortalController extends Controller
         }
         $summary['hours'] = round($summary['hours'], 2);
         $summary['estimated_value'] = round($summary['estimated_value'], 2);
+        $summary['overtime_hours'] = round($summary['overtime_hours'], 2);
         return $summary;
     }
 

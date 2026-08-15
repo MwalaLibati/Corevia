@@ -373,6 +373,73 @@ class Schedule extends Model
         return array_slice($rows, 0, 80);
     }
 
+    public function employeeRoster(int $employeeId, string $month): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+        $employee = $this->employee($employeeId);
+        if (!$employee) {
+            return [];
+        }
+        $start = $month . '-01';
+        $end = date('Y-m-t', strtotime($start));
+        $rows = [];
+        for ($ts = strtotime($start); $ts <= strtotime($end); $ts = strtotime('+1 day', $ts)) {
+            $date = date('Y-m-d', $ts);
+            $schedule = $this->scheduleForEmployeeDate($employeeId, $date);
+            $rows[] = ['employee' => $employee, 'date' => $date, 'schedule' => $schedule];
+        }
+        return $rows;
+    }
+
+    public function varianceRows(string $month, int $employeeId = 0): array
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+        $params = ['cid' => Tenant::id(), 'month' => $month];
+        $employeeFilter = '';
+        if ($employeeId > 0) {
+            $employeeFilter = ' AND ar.employee_id = :employee_id';
+            $params['employee_id'] = $employeeId;
+        }
+        $stmt = $this->db->prepare(
+            "SELECT ar.*, e.employee_number, e.full_name
+             FROM attendance_records ar
+             JOIN employees e ON e.id = ar.employee_id
+             WHERE e.company_id = :cid
+               AND DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month
+               {$employeeFilter}
+             ORDER BY ar.attendance_date DESC, e.full_name ASC"
+        );
+        $stmt->execute($params);
+
+        $rows = [];
+        foreach ($stmt->fetchAll() as $record) {
+            $compare = $this->compareAttendance($record);
+            $workedMinutes = $this->workedMinutes($record);
+            $expectedMinutes = 0;
+            if (!empty($compare['schedule']['expected_hours'])) {
+                $expectedMinutes = (int) round((float) $compare['schedule']['expected_hours'] * 60);
+            }
+            $rows[] = [
+                'attendance_date' => $record['attendance_date'],
+                'employee_number' => $record['employee_number'],
+                'full_name' => $record['full_name'],
+                'attendance_status' => $record['status'],
+                'schedule_status' => $compare['status'],
+                'shift' => $compare['label'],
+                'expected_hours' => round($expectedMinutes / 60, 2),
+                'worked_hours' => round($workedMinutes / 60, 2),
+                'late_minutes' => (int) $compare['late_minutes'],
+                'early_minutes' => (int) $compare['early_minutes'],
+                'overtime_hours' => round(((int) $compare['overtime_minutes']) / 60, 2),
+            ];
+        }
+        return $rows;
+    }
+
     public function deleteShift(int $id): bool
     {
         $stmt = $this->db->prepare('UPDATE shifts SET is_active = 0 WHERE id = :id AND company_id = :cid');
@@ -416,6 +483,19 @@ class Schedule extends Model
              LIMIT 1'
         );
         $stmt->execute(['cid' => Tenant::id(), 'employee_id' => $employeeId, 'date' => $date]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    private function employee(int $employeeId): ?array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, employee_number, full_name
+             FROM employees
+             WHERE id = :id AND company_id = :cid
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $employeeId, 'cid' => Tenant::id()]);
         $row = $stmt->fetch();
         return $row ?: null;
     }

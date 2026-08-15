@@ -21,6 +21,7 @@
             <li class="menu-item"><a href="<?= e(base_url('portal/payslips')) ?>"><span class="nav-icon"><i class="bi bi-receipt"></i></span><span class="nav-text">My Payslips</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/contract')) ?>"><span class="nav-icon"><i class="bi bi-file-earmark-text"></i></span><span class="nav-text">My Contract</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/leave')) ?>"><span class="nav-icon"><i class="bi bi-calendar-heart"></i></span><span class="nav-text">My Leave</span></a></li>
+            <li class="menu-item"><a href="<?= e(base_url('portal/schedule')) ?>"><span class="nav-icon"><i class="bi bi-calendar3-range"></i></span><span class="nav-text">My Schedule</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/attendance')) ?>"><span class="nav-icon"><i class="bi bi-clock-history"></i></span><span class="nav-text">My Attendance</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/salaryAdvance')) ?>"><span class="nav-icon"><i class="bi bi-cash-coin"></i></span><span class="nav-text">Salary Advance</span></a></li>
             <li class="menu-item"><a href="<?= e(base_url('portal/documents')) ?>"><span class="nav-icon"><i class="bi bi-folder"></i></span><span class="nav-text">My Documents</span></a></li>

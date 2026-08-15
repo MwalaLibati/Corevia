@@ -88,6 +88,38 @@ class ReportController extends Controller
         ]);
     }
 
+    public function scheduleVariance(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
+
+        $month = trim((string) $this->input('month', date('Y-m')));
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+
+        $rows = (new Schedule())->varianceRows($month);
+        $this->renderAnalyticsReport(
+            'Schedule Variance Report',
+            'Compares employee attendance against assigned shifts for late arrivals, early departures, short hours, and overtime.',
+            'schedule-variance',
+            ['Date', 'Employee #', 'Employee', 'Attendance', 'Schedule Status', 'Shift', 'Expected Hours', 'Worked Hours', 'Late Minutes', 'Early Minutes', 'Overtime Hours'],
+            array_map(static fn(array $r): array => [
+                $r['attendance_date'],
+                $r['employee_number'],
+                $r['full_name'],
+                $r['attendance_status'],
+                $r['schedule_status'],
+                $r['shift'],
+                (float) $r['expected_hours'],
+                (float) $r['worked_hours'],
+                (int) $r['late_minutes'],
+                (int) $r['early_minutes'],
+                (float) $r['overtime_hours'],
+            ], $rows)
+        );
+    }
+
     public function departmentCost(): void
     {
         require_auth();
