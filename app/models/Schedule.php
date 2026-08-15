@@ -97,6 +97,40 @@ class Schedule extends Model
                 KEY idx_schedule_exception_shift (shift_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS schedule_publication_logs (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                company_id BIGINT UNSIGNED NOT NULL,
+                schedule_month CHAR(7) NOT NULL,
+                published_by BIGINT UNSIGNED NULL,
+                published_at DATETIME NOT NULL,
+                notes TEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_schedule_publish_month (company_id, schedule_month),
+                KEY idx_schedule_publish_company (company_id, published_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
+
+        $this->db->exec(
+            "CREATE TABLE IF NOT EXISTS schedule_change_requests (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                company_id BIGINT UNSIGNED NOT NULL,
+                employee_id BIGINT UNSIGNED NOT NULL,
+                requested_date DATE NOT NULL,
+                requested_shift_id BIGINT UNSIGNED NULL,
+                current_shift_label VARCHAR(190) NULL,
+                reason TEXT NULL,
+                status ENUM('Pending','Approved','Rejected','Cancelled') NOT NULL DEFAULT 'Pending',
+                reviewed_by BIGINT UNSIGNED NULL,
+                reviewed_at DATETIME NULL,
+                review_notes TEXT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                KEY idx_schedule_change_company_status (company_id, status, requested_date),
+                KEY idx_schedule_change_employee (employee_id, requested_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+        );
     }
 
     public function shifts(bool $activeOnly = false): array
@@ -163,6 +197,79 @@ class Schedule extends Model
              ORDER BY esa.is_active DESC, e.full_name ASC, esa.effective_from DESC'
         );
         $stmt->execute(['cid' => Tenant::id()]);
+        return $stmt->fetchAll();
+    }
+
+    public function publications(): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT spl.*, u.full_name AS published_by_name
+             FROM schedule_publication_logs spl
+             LEFT JOIN users u ON u.id = spl.published_by
+             WHERE spl.company_id = :cid
+             ORDER BY spl.schedule_month DESC
+             LIMIT 12'
+        );
+        $stmt->execute(['cid' => Tenant::id()]);
+        return $stmt->fetchAll();
+    }
+
+    public function changeRequests(string $status = ''): array
+    {
+        $where = 'scr.company_id = :cid';
+        $params = ['cid' => Tenant::id()];
+        if ($status !== '') {
+            $where .= ' AND scr.status = :status';
+            $params['status'] = $status;
+        }
+        $stmt = $this->db->prepare(
+            "SELECT scr.*, e.employee_number, e.full_name, s.name AS requested_shift_name,
+                    s.start_time AS requested_start_time, s.end_time AS requested_end_time,
+                    u.full_name AS reviewed_by_name
+             FROM schedule_change_requests scr
+             JOIN employees e ON e.id = scr.employee_id
+             LEFT JOIN shifts s ON s.id = scr.requested_shift_id
+             LEFT JOIN users u ON u.id = scr.reviewed_by
+             WHERE {$where}
+             ORDER BY FIELD(scr.status, 'Pending','Approved','Rejected','Cancelled'), scr.requested_date DESC, scr.id DESC"
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function employeeChangeRequests(int $employeeId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT scr.*, s.name AS requested_shift_name, s.start_time AS requested_start_time,
+                    s.end_time AS requested_end_time, u.full_name AS reviewed_by_name
+             FROM schedule_change_requests scr
+             LEFT JOIN shifts s ON s.id = scr.requested_shift_id
+             LEFT JOIN users u ON u.id = scr.reviewed_by
+             WHERE scr.company_id = :cid AND scr.employee_id = :employee_id
+             ORDER BY scr.created_at DESC, scr.id DESC
+             LIMIT 12"
+        );
+        $stmt->execute(['cid' => Tenant::id(), 'employee_id' => $employeeId]);
+        return $stmt->fetchAll();
+    }
+
+    public function exceptions(string $month = ''): array
+    {
+        $where = 'se.company_id = :cid';
+        $params = ['cid' => Tenant::id()];
+        if (preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $where .= " AND DATE_FORMAT(se.exception_date, '%Y-%m') = :month";
+            $params['month'] = $month;
+        }
+        $stmt = $this->db->prepare(
+            "SELECT se.*, e.employee_number, e.full_name, s.name AS shift_name, s.start_time, s.end_time
+             FROM schedule_exceptions se
+             JOIN employees e ON e.id = se.employee_id
+             LEFT JOIN shifts s ON s.id = se.shift_id
+             WHERE {$where}
+             ORDER BY se.exception_date DESC, e.full_name ASC"
+        );
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 
@@ -275,6 +382,91 @@ class Schedule extends Model
             'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
         ]);
         return (int) $this->db->lastInsertId();
+    }
+
+    public function createException(array $data): int
+    {
+        $stmt = $this->db->prepare(
+            'INSERT INTO schedule_exceptions (company_id, employee_id, exception_date, shift_id, exception_type, notes)
+             VALUES (:company_id, :employee_id, :exception_date, :shift_id, :exception_type, :notes)
+             ON DUPLICATE KEY UPDATE shift_id = VALUES(shift_id), exception_type = VALUES(exception_type), notes = VALUES(notes)'
+        );
+        $stmt->execute([
+            'company_id' => Tenant::id(),
+            'employee_id' => (int) $data['employee_id'],
+            'exception_date' => (string) $data['exception_date'],
+            'shift_id' => (int) ($data['shift_id'] ?? 0) > 0 ? (int) $data['shift_id'] : null,
+            'exception_type' => (string) ($data['exception_type'] ?? 'Shift Change'),
+            'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
+        ]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function publishMonth(string $month, int $userId, string $notes = ''): void
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $month = date('Y-m');
+        }
+        $stmt = $this->db->prepare(
+            'INSERT INTO schedule_publication_logs (company_id, schedule_month, published_by, published_at, notes)
+             VALUES (:cid, :month, :published_by, NOW(), :notes)
+             ON DUPLICATE KEY UPDATE published_by = VALUES(published_by), published_at = NOW(), notes = VALUES(notes)'
+        );
+        $stmt->execute([
+            'cid' => Tenant::id(),
+            'month' => $month,
+            'published_by' => $userId > 0 ? $userId : null,
+            'notes' => trim($notes) ?: null,
+        ]);
+    }
+
+    public function submitChangeRequest(int $employeeId, string $date, int $shiftId, string $reason): int
+    {
+        $current = $this->scheduleForEmployeeDate($employeeId, $date);
+        $stmt = $this->db->prepare(
+            'INSERT INTO schedule_change_requests
+             (company_id, employee_id, requested_date, requested_shift_id, current_shift_label, reason, status)
+             VALUES (:company_id, :employee_id, :requested_date, :requested_shift_id, :current_shift_label, :reason, "Pending")'
+        );
+        $stmt->execute([
+            'company_id' => Tenant::id(),
+            'employee_id' => $employeeId,
+            'requested_date' => $date,
+            'requested_shift_id' => $shiftId > 0 ? $shiftId : null,
+            'current_shift_label' => $current ? (string) ($current['shift_name'] ?? $current['pattern_name'] ?? 'No schedule') : 'No schedule',
+            'reason' => trim($reason) ?: null,
+        ]);
+        return (int) $this->db->lastInsertId();
+    }
+
+    public function reviewChangeRequest(int $id, string $action, int $userId, string $notes = ''): void
+    {
+        $request = $this->changeRequest($id);
+        if (!$request || (string) $request['status'] !== 'Pending') {
+            throw new RuntimeException('Schedule change request not found or already actioned.');
+        }
+        $status = $action === 'approve' ? 'Approved' : 'Rejected';
+        if ($status === 'Approved') {
+            $this->createException([
+                'employee_id' => (int) $request['employee_id'],
+                'exception_date' => (string) $request['requested_date'],
+                'shift_id' => (int) ($request['requested_shift_id'] ?? 0),
+                'exception_type' => (int) ($request['requested_shift_id'] ?? 0) > 0 ? 'Shift Change' : 'Rest Day',
+                'notes' => trim($notes) ?: 'Approved employee schedule change request #' . $id,
+            ]);
+        }
+        $stmt = $this->db->prepare(
+            'UPDATE schedule_change_requests
+             SET status = :status, reviewed_by = :reviewed_by, reviewed_at = NOW(), review_notes = :notes
+             WHERE id = :id AND company_id = :cid'
+        );
+        $stmt->execute([
+            'status' => $status,
+            'reviewed_by' => $userId > 0 ? $userId : null,
+            'notes' => trim($notes) ?: null,
+            'id' => $id,
+            'cid' => Tenant::id(),
+        ]);
     }
 
     public function scheduleForEmployeeDate(int $employeeId, string $date): ?array
@@ -496,6 +688,14 @@ class Schedule extends Model
              LIMIT 1'
         );
         $stmt->execute(['id' => $employeeId, 'cid' => Tenant::id()]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    private function changeRequest(int $id): ?array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM schedule_change_requests WHERE id = :id AND company_id = :cid LIMIT 1');
+        $stmt->execute(['id' => $id, 'cid' => Tenant::id()]);
         $row = $stmt->fetch();
         return $row ?: null;
     }

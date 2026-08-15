@@ -20,6 +20,9 @@ class SchedulingController extends Controller
             'activeShifts' => $model->shifts(true),
             'patterns' => $model->patterns(),
             'assignments' => $model->assignments(),
+            'exceptions' => $model->exceptions($month),
+            'publications' => $model->publications(),
+            'changeRequests' => $model->changeRequests(),
             'employees' => $model->employees(),
             'roster' => $model->roster($month),
             'month' => $month,
@@ -176,6 +179,82 @@ class SchedulingController extends Controller
         (new Schedule())->deleteAssignment((int) $id);
         Session::flash('success', 'Schedule assignment archived.');
         redirect('scheduling/index');
+    }
+
+    public function storeException(): void
+    {
+        $this->guardPost('scheduling/index?tab=operations');
+        $type = (string) $this->input('exception_type', 'Shift Change');
+        $allowedTypes = ['Shift Change', 'Rest Day', 'Public Holiday', 'Leave', 'Unscheduled Work'];
+        if (!in_array($type, $allowedTypes, true)) {
+            $type = 'Shift Change';
+        }
+
+        $data = [
+            'employee_id' => (int) $this->input('employee_id', 0),
+            'exception_date' => (string) $this->input('exception_date', date('Y-m-d')),
+            'shift_id' => (int) $this->input('shift_id', 0),
+            'exception_type' => $type,
+            'notes' => (string) $this->input('notes', ''),
+        ];
+
+        if ($data['employee_id'] <= 0 || !$this->validDate($data['exception_date'])) {
+            Session::flash('error', 'Employee and exception date are required.');
+            redirect('scheduling/index?tab=operations');
+        }
+
+        try {
+            $id = (new Schedule())->createException($data);
+            AuditLog::record('schedule_exception_save', 'Saved schedule exception for employee #' . $data['employee_id'] . ' on ' . $data['exception_date'] . '.', 'ScheduleException', $id);
+            Session::flash('success', 'Schedule exception saved.');
+        } catch (Throwable $exception) {
+            Session::flash('error', 'Schedule exception could not be saved: ' . $exception->getMessage());
+        }
+
+        redirect('scheduling/index?tab=operations');
+    }
+
+    public function publish(): void
+    {
+        $this->guardPost('scheduling/index?tab=operations');
+        $month = $this->normalizeMonth((string) $this->input('schedule_month', date('Y-m')));
+        $notes = trim((string) $this->input('notes', ''));
+        $userId = (int) (current_user()['id'] ?? 0);
+
+        try {
+            (new Schedule())->publishMonth($month, $userId, $notes);
+            $label = date('F Y', strtotime($month . '-01'));
+            try {
+                (new Notification())->createBroadcast('Schedule for ' . $label . ' has been published. Please review the roster.', 'info', 'scheduling/index?tab=roster&month=' . $month);
+            } catch (Throwable $notificationError) {
+                error_log('Schedule publish notification failed: ' . $notificationError->getMessage());
+            }
+            AuditLog::record('schedule_publish', 'Published schedule for ' . $label . '.', 'SchedulePublication');
+            Session::flash('success', 'Schedule published for ' . $label . '.');
+        } catch (Throwable $exception) {
+            Session::flash('error', 'Schedule could not be published: ' . $exception->getMessage());
+        }
+
+        redirect('scheduling/index?tab=operations');
+    }
+
+    public function reviewRequest(string $id): void
+    {
+        $this->guardPost('scheduling/index?tab=operations');
+        $action = strtolower((string) $this->input('action', 'reject'));
+        if (!in_array($action, ['approve', 'reject'], true)) {
+            $action = 'reject';
+        }
+
+        try {
+            (new Schedule())->reviewChangeRequest((int) $id, $action, (int) (current_user()['id'] ?? 0), trim((string) $this->input('review_notes', '')));
+            AuditLog::record('schedule_request_' . $action, ucfirst($action) . 'd schedule change request #' . (int) $id . '.', 'ScheduleChangeRequest', (int) $id);
+            Session::flash('success', 'Schedule change request ' . ($action === 'approve' ? 'approved' : 'rejected') . '.');
+        } catch (Throwable $exception) {
+            Session::flash('error', 'Schedule change request could not be reviewed: ' . $exception->getMessage());
+        }
+
+        redirect('scheduling/index?tab=operations');
     }
 
     private function guardPost(string $redirect): void

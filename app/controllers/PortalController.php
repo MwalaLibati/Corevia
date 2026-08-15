@@ -878,7 +878,54 @@ class PortalController extends Controller
             'emp' => $emp,
             'month' => $month,
             'rows' => $schedule->employeeRoster($empId, $month),
+            'activeShifts' => $schedule->shifts(true),
+            'requests' => $schedule->employeeChangeRequests($empId),
+            'csrf' => Session::csrfToken(),
+            'flashSuccess' => Session::flash('success'),
+            'flashError' => Session::flash('error'),
         ]);
+    }
+
+    public function requestScheduleChange(): void
+    {
+        require_employee_auth();
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('portal/schedule');
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('portal/schedule');
+        }
+
+        $emp = current_employee();
+        $empId = (int) $emp['id'];
+        $date = $this->normalizeDate((string) $this->input('requested_date', ''));
+        $shiftId = (int) $this->input('requested_shift_id', 0);
+        $reason = trim((string) $this->input('reason', ''));
+
+        if ($date === null || $reason === '') {
+            Session::flash('error', 'Please select a date and explain the schedule change you need.');
+            redirect('portal/schedule');
+        }
+
+        try {
+            $id = (new Schedule())->submitChangeRequest($empId, $date, $shiftId, $reason);
+            try {
+                (new Notification())->createBroadcast(
+                    (string) ($emp['full_name'] ?? 'An employee') . ' requested a schedule change for ' . $date . '.',
+                    'warning',
+                    'scheduling/index?tab=operations'
+                );
+            } catch (Throwable $notificationError) {
+                error_log('Schedule request notification failed: ' . $notificationError->getMessage());
+            }
+            AuditLog::record('portal_schedule_change_request', 'Employee #' . $empId . ' requested a schedule change for ' . $date . '.', 'ScheduleChangeRequest', $id, 'employee');
+            Session::flash('success', 'Schedule change request submitted for HR review.');
+        } catch (Throwable $exception) {
+            Session::flash('error', 'Schedule change request could not be submitted: ' . $exception->getMessage());
+        }
+
+        redirect('portal/schedule?month=' . substr($date, 0, 7));
     }
 
     public function salaryAdvanceApply(): void

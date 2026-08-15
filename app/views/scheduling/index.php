@@ -40,6 +40,11 @@ $activeAssignmentCount = count(array_filter($assignments ?? [], static fn($a): b
                 </button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="operations-tab" data-bs-toggle="tab" data-bs-target="#operations-pane" type="button" role="tab" aria-controls="operations-pane" aria-selected="false">
+                    <i class="bi bi-calendar2-plus me-1"></i> Exceptions & Requests
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster-pane" type="button" role="tab" aria-controls="roster-pane" aria-selected="false">
                     <i class="bi bi-calendar3-range me-1"></i> Roster Preview
                 </button>
@@ -210,6 +215,133 @@ $activeAssignmentCount = count(array_filter($assignments ?? [], static fn($a): b
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="operations-pane" role="tabpanel" aria-labelledby="operations-tab" tabindex="0">
+                <div class="row g-4 mb-4">
+                    <div class="col-xl-4">
+                        <h5 class="mb-3">Add Schedule Exception</h5>
+                        <form method="post" action="<?= e(base_url('scheduling/storeException')) ?>" class="row g-3">
+                            <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                            <div class="col-12">
+                                <label class="form-label">Employee</label>
+                                <select name="employee_id" class="form-select" required>
+                                    <option value="">Select employee</option>
+                                    <?php foreach (($employees ?? []) as $employee): ?>
+                                        <option value="<?= (int)$employee['id'] ?>"><?= e((string)$employee['employee_number']) ?> - <?= e((string)$employee['full_name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6"><label class="form-label">Date</label><input type="date" name="exception_date" class="form-control" value="<?= e(date('Y-m-d')) ?>" required></div>
+                            <div class="col-md-6">
+                                <label class="form-label">Exception Type</label>
+                                <select name="exception_type" class="form-select">
+                                    <?php foreach (['Shift Change','Rest Day','Public Holiday','Leave','Unscheduled Work'] as $type): ?>
+                                        <option value="<?= e($type) ?>"><?= e($type) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Shift</label>
+                                <select name="shift_id" class="form-select">
+                                    <option value="0">No shift / rest day</option>
+                                    <?php foreach (($activeShifts ?? []) as $shift): ?>
+                                        <option value="<?= (int)$shift['id'] ?>"><?= e((string)$shift['name']) ?> (<?= e($fmtTime($shift['start_time'])) ?>-<?= e($fmtTime($shift['end_time'])) ?>)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" rows="2" class="form-control" placeholder="Reason for the exception"></textarea></div>
+                            <div class="col-12"><button class="btn btn-primary w-100">Save Exception</button></div>
+                        </form>
+                    </div>
+
+                    <div class="col-xl-8">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                            <div>
+                                <h5 class="mb-1">Publish Monthly Schedule</h5>
+                                <div class="small text-muted">Mark a roster month as published once HR has reviewed assignments and exceptions.</div>
+                            </div>
+                            <form method="post" action="<?= e(base_url('scheduling/publish')) ?>" class="d-flex gap-2 align-items-end">
+                                <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                                <div><label class="form-label">Month</label><input type="month" name="schedule_month" class="form-control" value="<?= e((string)$month) ?>"></div>
+                                <div><label class="form-label">Notes</label><input name="notes" class="form-control" placeholder="Optional note"></div>
+                                <button class="btn btn-success">Publish</button>
+                            </form>
+                        </div>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-striped align-middle">
+                                <thead><tr><th>Month</th><th>Published By</th><th>Published At</th><th>Notes</th></tr></thead>
+                                <tbody>
+                                <?php if (empty($publications)): ?>
+                                    <tr><td colspan="4" class="text-center text-muted py-4">No published schedules yet.</td></tr>
+                                <?php else: foreach ($publications as $publication): ?>
+                                    <tr>
+                                        <td><strong><?= e((string)$publication['schedule_month']) ?></strong></td>
+                                        <td><?= e((string)($publication['published_by_name'] ?? '-')) ?></td>
+                                        <td><?= e((string)$publication['published_at']) ?></td>
+                                        <td><?= e((string)($publication['notes'] ?? '-')) ?></td>
+                                    </tr>
+                                <?php endforeach; endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h5 class="mb-3">Employee Change Requests</h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped align-middle">
+                                <thead><tr><th>Employee</th><th>Date</th><th>Current</th><th>Requested</th><th>Status</th><th class="text-end">Review</th></tr></thead>
+                                <tbody>
+                                <?php if (empty($changeRequests)): ?>
+                                    <tr><td colspan="6" class="text-center text-muted py-4">No schedule change requests yet.</td></tr>
+                                <?php else: foreach ($changeRequests as $request): ?>
+                                    <tr>
+                                        <td><strong><?= e((string)$request['full_name']) ?></strong><div class="small text-muted"><?= e((string)$request['employee_number']) ?></div></td>
+                                        <td><?= e((string)$request['requested_date']) ?></td>
+                                        <td><?= e((string)($request['current_shift_label'] ?? 'No schedule')) ?></td>
+                                        <td><?= e((string)($request['requested_shift_name'] ?? 'Rest day / no shift')) ?><div class="small text-muted"><?= e((string)($request['reason'] ?? '')) ?></div></td>
+                                        <td><span class="badge bg-<?= (string)$request['status'] === 'Pending' ? 'warning' : ((string)$request['status'] === 'Approved' ? 'success' : 'secondary') ?>"><?= e((string)$request['status']) ?></span></td>
+                                        <td class="text-end">
+                                            <?php if ((string)$request['status'] === 'Pending'): ?>
+                                                <form method="post" action="<?= e(base_url('scheduling/reviewRequest/' . (string)$request['id'])) ?>" class="d-flex gap-2 justify-content-end">
+                                                    <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
+                                                    <input name="review_notes" class="form-control form-control-sm" style="max-width:180px" placeholder="Notes">
+                                                    <button class="btn btn-sm btn-success" name="action" value="approve">Approve</button>
+                                                    <button class="btn btn-sm btn-outline-danger" name="action" value="reject">Reject</button>
+                                                </form>
+                                            <?php else: ?>
+                                                <span class="small text-muted"><?= e((string)($request['reviewed_by_name'] ?? 'Reviewed')) ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        <h5 class="mb-0">Exceptions for <?= e((string)$month) ?></h5>
+                        <span class="badge bg-light text-dark"><?= count($exceptions ?? []) ?> exception(s)</span>
+                    </div>
+                    <table class="table table-striped align-middle">
+                        <thead><tr><th>Date</th><th>Employee</th><th>Type</th><th>Shift</th><th>Notes</th></tr></thead>
+                        <tbody>
+                        <?php if (empty($exceptions)): ?>
+                            <tr><td colspan="5" class="text-center text-muted py-4">No exceptions for this month.</td></tr>
+                        <?php else: foreach ($exceptions as $exception): ?>
+                            <tr>
+                                <td><?= e((string)$exception['exception_date']) ?></td>
+                                <td><strong><?= e((string)$exception['full_name']) ?></strong><div class="small text-muted"><?= e((string)$exception['employee_number']) ?></div></td>
+                                <td><span class="badge bg-light text-dark border"><?= e((string)$exception['exception_type']) ?></span></td>
+                                <td><?= e((string)($exception['shift_name'] ?? 'No shift')) ?><div class="small text-muted"><?= e($fmtTime($exception['start_time'] ?? null)) ?>-<?= e($fmtTime($exception['end_time'] ?? null)) ?></div></td>
+                                <td><?= e((string)($exception['notes'] ?? '-')) ?></td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
