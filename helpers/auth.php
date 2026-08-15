@@ -105,6 +105,7 @@ function module_catalog(): array
         'contracts' => ['label' => 'Contracts', 'icon' => 'bi-file-earmark-text', 'url' => 'contract/index', 'section' => 'Contracts', 'routes' => ['contract']],
         'contract_templates' => ['label' => 'Contract Templates', 'icon' => 'bi-file-earmark-code', 'url' => 'contract_template/index', 'section' => 'Contracts', 'routes' => ['contract-template', 'contract_template']],
         'attendance' => ['label' => 'Attendance', 'icon' => 'bi-calendar2-check', 'url' => 'attendance/index', 'section' => 'Leave & Attendance', 'routes' => ['attendance']],
+        'scheduling' => ['label' => 'Scheduling', 'icon' => 'bi-calendar3-range', 'url' => 'scheduling/index', 'section' => 'Leave & Attendance', 'routes' => ['scheduling']],
         'leave' => ['label' => 'Leave Management', 'icon' => 'bi-calendar-heart', 'url' => 'leave/index', 'section' => 'Leave & Attendance', 'routes' => ['leave']],
         'leave_types' => ['label' => 'Leave Types', 'icon' => 'bi-calendar2-week', 'url' => 'leave-type/index', 'section' => 'Leave & Attendance', 'routes' => ['leave-type']],
         'salary' => ['label' => 'Salary Structures', 'icon' => 'bi-cash-stack', 'url' => 'salary/index', 'section' => 'Payroll', 'routes' => ['salary', 'salary-change']],
@@ -206,6 +207,9 @@ function user_allowed_modules(?array $user = null): array
             if (in_array('attendance', $roleModules, true) && !in_array('attendance_payroll', $roleModules, true)) {
                 $roleModules[] = 'attendance_payroll';
             }
+            if (in_array('attendance', $roleModules, true) && !in_array('scheduling', $roleModules, true)) {
+                $roleModules[] = 'scheduling';
+            }
         } catch (Throwable) {
             $roleModules = $catalogKeys;
         }
@@ -254,6 +258,9 @@ function company_subscription_modules(): array
         }
         if (in_array('attendance', $modules, true) && !in_array('attendance_payroll', $modules, true)) {
             $modules[] = 'attendance_payroll';
+        }
+        if (in_array('attendance', $modules, true) && !in_array('scheduling', $modules, true)) {
+            $modules[] = 'scheduling';
         }
         return $modules;
     } catch (Throwable) {

@@ -363,6 +363,7 @@ class AttendanceController extends Controller
     {
         $salaryModel = null;
         $ruleModel = null;
+        $scheduleModel = null;
         try {
             $salaryModel = new EmployeeSalary();
         } catch (Throwable $exception) {
@@ -372,6 +373,11 @@ class AttendanceController extends Controller
             $ruleModel = new AttendancePayrollRule();
         } catch (Throwable $exception) {
             error_log('Attendance payroll rule enrichment unavailable: ' . $exception->getMessage());
+        }
+        try {
+            $scheduleModel = new Schedule();
+        } catch (Throwable $exception) {
+            error_log('Attendance schedule enrichment unavailable: ' . $exception->getMessage());
         }
         $salaryCache = [];
         $ruleCache = [];
@@ -410,6 +416,15 @@ class AttendanceController extends Controller
             } catch (Throwable $exception) {
                 error_log('Attendance value calculation failed: ' . $exception->getMessage());
                 $record['_attendance_calc'] = $this->timeOnlyCalculation($record);
+            }
+
+            try {
+                $record['_schedule_compare'] = $scheduleModel
+                    ? $scheduleModel->compareAttendance($record)
+                    : ['status' => 'Unscheduled', 'label' => 'No schedule', 'late_minutes' => 0, 'early_minutes' => 0, 'overtime_minutes' => 0];
+            } catch (Throwable $exception) {
+                error_log('Attendance schedule comparison failed: ' . $exception->getMessage());
+                $record['_schedule_compare'] = ['status' => 'Unscheduled', 'label' => 'No schedule', 'late_minutes' => 0, 'early_minutes' => 0, 'overtime_minutes' => 0];
             }
         }
         unset($record);
@@ -498,11 +513,19 @@ class AttendanceController extends Controller
 
     private function attendanceSummary(array $records): array
     {
-        $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'absent' => 0, 'leave' => 0, 'late' => 0];
+        $summary = ['records' => count($records), 'hours' => 0.0, 'estimated_value' => 0.0, 'present' => 0, 'absent' => 0, 'leave' => 0, 'late' => 0, 'scheduled_late' => 0, 'early_departures' => 0, 'overtime_hours' => 0.0];
         foreach ($records as $record) {
             $calc = $record['_attendance_calc'] ?? [];
+            $schedule = $record['_schedule_compare'] ?? [];
             $summary['hours'] += (float) ($calc['hours'] ?? 0);
             $summary['estimated_value'] += (float) ($calc['amount'] ?? 0);
+            $summary['overtime_hours'] += round(((int) ($schedule['overtime_minutes'] ?? 0)) / 60, 2);
+            if ((int) ($schedule['late_minutes'] ?? 0) > 0) {
+                $summary['scheduled_late']++;
+            }
+            if ((int) ($schedule['early_minutes'] ?? 0) > 0) {
+                $summary['early_departures']++;
+            }
             $status = strtolower((string) ($record['status'] ?? ''));
             if (isset($summary[$status])) {
                 $summary[$status]++;
@@ -510,6 +533,7 @@ class AttendanceController extends Controller
         }
         $summary['hours'] = round($summary['hours'], 2);
         $summary['estimated_value'] = round($summary['estimated_value'], 2);
+        $summary['overtime_hours'] = round($summary['overtime_hours'], 2);
         return $summary;
     }
 

@@ -26,7 +26,7 @@ $money = static function (float $amount): string {
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Records</span><div class="stat-value"><?= e((string) ($summary['records'] ?? 0)) ?></div><div class="small text-muted">For selected filter</div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Hours Worked</span><div class="stat-value"><?= e(number_format((float) ($summary['hours'] ?? 0), 2)) ?></div><div class="small text-muted">From check-in/check-out</div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Estimated Attendance Value</span><div class="stat-value" style="font-size:1.2rem"><?= e($money((float) ($summary['estimated_value'] ?? 0))) ?></div><div class="small text-muted">For attendance-based staff</div></div></div>
-    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Attendance Mix</span><div class="stat-value" style="font-size:1.05rem"><?= e((string) ($summary['present'] ?? 0)) ?> present</div><div class="small text-muted"><?= e((string) ($summary['late'] ?? 0)) ?> late | <?= e((string) ($summary['absent'] ?? 0)) ?> absent</div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Schedule Exceptions</span><div class="stat-value" style="font-size:1.05rem"><?= e((string) ($summary['scheduled_late'] ?? 0)) ?> late</div><div class="small text-muted"><?= e((string) ($summary['early_departures'] ?? 0)) ?> early | <?= e(number_format((float)($summary['overtime_hours'] ?? 0), 2)) ?> OT hrs</div></div></div>
 </div>
 
 <div class="card border-0 shadow-sm mb-4">
@@ -69,6 +69,7 @@ $money = static function (float $amount): string {
                     <th>Status</th>
                     <th>Check In</th>
                     <th>Check Out</th>
+                    <th>Schedule</th>
                     <th>Hours</th>
                     <th>Estimated Value</th>
                     <th class="text-end">Actions</th>
@@ -76,16 +77,26 @@ $money = static function (float $amount): string {
             </thead>
             <tbody>
             <?php if (empty($records)): ?>
-                <tr><td colspan="8" class="text-center text-gray">No attendance records found.</td></tr>
+                <tr><td colspan="9" class="text-center text-gray">No attendance records found.</td></tr>
             <?php else: ?>
                 <?php foreach ($records as $record): ?>
                     <?php $calc = $record['_attendance_calc'] ?? ['hours' => 0, 'amount' => 0, 'label' => 'Time only']; ?>
+                    <?php $schedule = $record['_schedule_compare'] ?? ['status' => 'Unscheduled', 'label' => 'No schedule', 'late_minutes' => 0, 'early_minutes' => 0, 'overtime_minutes' => 0]; ?>
                     <tr>
                         <td><?= e((string) ($record['attendance_date'] ?? '')) ?></td>
                         <td><?= e((string) ($record['employee_name'] ?? '')) ?></td>
                         <td><?= e((string) ($record['status'] ?? '')) ?></td>
                         <td><?= e((string) ($record['check_in'] ?? '-')) ?></td>
                         <td><?= e((string) ($record['check_out'] ?? '-')) ?></td>
+                        <td>
+                            <div class="fw-semibold"><?= e((string)($schedule['label'] ?? 'No schedule')) ?></div>
+                            <div class="small text-muted">
+                                <?= e((string)($schedule['status'] ?? 'Unscheduled')) ?>
+                                <?php if ((int)($schedule['late_minutes'] ?? 0) > 0): ?> | Late <?= (int)$schedule['late_minutes'] ?>m<?php endif; ?>
+                                <?php if ((int)($schedule['early_minutes'] ?? 0) > 0): ?> | Early <?= (int)$schedule['early_minutes'] ?>m<?php endif; ?>
+                                <?php if ((int)($schedule['overtime_minutes'] ?? 0) > 0): ?> | OT <?= number_format(((int)$schedule['overtime_minutes']) / 60, 2) ?>h<?php endif; ?>
+                            </div>
+                        </td>
                         <td><strong><?= e(number_format((float) ($calc['hours'] ?? 0), 2)) ?></strong> hrs</td>
                         <td>
                             <div class="fw-semibold"><?= e($money((float) ($calc['amount'] ?? 0))) ?></div>
