@@ -137,6 +137,17 @@
         <form method="post" action="<?= e(base_url('settings/updatePayrollPolicy')) ?>" class="row g-3 align-items-end">
             <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
             <div class="col-md-3">
+                <label class="form-label">Payroll Currency</label>
+                <?php $selectedCurrency = strtoupper((string) ($payrollCurrency ?? 'ZMW')); ?>
+                <select name="payroll_currency" class="form-select">
+                    <?php foreach (($currencyOptions ?? []) as $code => $currency): ?>
+                        <option value="<?= e((string) $code) ?>" <?= $selectedCurrency === (string) $code ? 'selected' : '' ?>>
+                            <?= e((string) $code) ?> - <?= e((string) ($currency['name'] ?? $code)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">Contract Gratuity Rate (%)</label>
                 <input type="number" name="gratuity_rate_percent" class="form-control" min="0" max="100" step="0.01" value="<?= e((string) ($gratuityRate ?? 5)) ?>">
             </div>
@@ -157,7 +168,7 @@
                 <input type="text" name="gratuity_payment_timing" class="form-control" value="<?= e((string) ($gratuityPaymentTiming ?? 'End of contract')) ?>">
             </div>
             <div class="col-md-9">
-                <small class="text-gray">Example: 5% of basic annual salary earned for each year served, payable at the end of contract after 2 years.</small>
+                <small class="text-gray">Currency affects payroll, payslips, employee profiles, reports, and document amounts. Example: 5% of basic annual salary earned for each year served, payable at the end of contract after 2 years.</small>
             </div>
             <div class="col-md-3">
                 <button type="submit" class="btn btn-primary">Save Payroll Policy</button>

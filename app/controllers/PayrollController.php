@@ -493,7 +493,7 @@ class PayrollController extends Controller
         header('Expires: 0');
 
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Employee No.', 'Full Name', 'Department', 'Bank Name', 'Account Number', 'Net Pay (ZMW)', 'Pay Period']);
+        fputcsv($out, ['Employee No.', 'Full Name', 'Department', 'Bank Name', 'Account Number', 'Net Pay (' . app_currency_code() . ')', 'Pay Period']);
 
         foreach ($items as $item) {
             fputcsv($out, [

@@ -27,9 +27,9 @@
                 <?php foreach ($payslips as $slip): ?>
                     <tr>
                         <td><strong><?= e((string)($slip['pay_period'] ?? $slip['run_date'])) ?></strong></td>
-                        <td class="text-end">ZMW <?= number_format((float)($slip['gross_pay'] ?? 0), 2) ?></td>
-                        <td class="text-end text-danger">- ZMW <?= number_format((float)($slip['total_deductions'] ?? 0), 2) ?></td>
-                        <td class="text-end fw-bold text-success">ZMW <?= number_format((float)($slip['net_pay'] ?? 0), 2) ?></td>
+                        <td class="text-end"><?= e(format_currency((float)($slip['gross_pay'] ?? 0))) ?></td>
+                        <td class="text-end text-danger">- <?= e(format_currency((float)($slip['total_deductions'] ?? 0))) ?></td>
+                        <td class="text-end fw-bold text-success"><?= e(format_currency((float)($slip['net_pay'] ?? 0))) ?></td>
                         <td class="text-center">
                             <?php
                             $paid = (float) ($slip['paid_amount'] ?? 0);

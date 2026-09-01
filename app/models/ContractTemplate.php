@@ -414,7 +414,7 @@ class ContractTemplate extends Model
             'salary_grade'     => (string) ($employee['grade_level'] ?? ''),
             'standard_basic_salary' => $this->moneyOrBlank($standardBasic),
             'agreed_basic_salary' => $this->moneyOrBlank($basicSalary),
-            'salary_variance'  => $salaryVariance === 0.0 ? 'ZMW 0.00' : (($salaryVariance > 0 ? '+' : '-') . $this->moneyOrBlank(abs($salaryVariance))),
+            'salary_variance'  => $salaryVariance === 0.0 ? format_currency(0.0) : (($salaryVariance > 0 ? '+' : '-') . $this->moneyOrBlank(abs($salaryVariance))),
             'basic_salary'     => $this->moneyOrBlank($basicSalary),
             'housing_allowance'=> $this->moneyOrBlank($housingAllowance),
             'transport_allowance' => $this->moneyOrBlank($transportAllowance),
@@ -508,7 +508,7 @@ class ContractTemplate extends Model
 
     private function moneyOrBlank(float $amount): string
     {
-        return $amount > 0 ? 'ZMW ' . number_format($amount, 2) : '';
+        return $amount > 0 ? format_currency($amount) : '';
     }
 
     private function dateOrBlank(string $date): string

@@ -35,19 +35,19 @@ foreach ($rows as $r) { $totals['amount'] += (float)$r['amount']; $totals['outst
     <div class="col-6 col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:#7c3aed">
             <div class="stat-label">Total Advanced</div>
-            <div class="stat-value" style="font-size:1rem">ZMW <?= number_format($totals['amount'], 2) ?></div>
+            <div class="stat-value" style="font-size:1rem"><?= e(format_currency((float)$totals['amount'])) ?></div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:#d97706">
             <div class="stat-label">Outstanding Balance</div>
-            <div class="stat-value" style="font-size:1rem">ZMW <?= number_format($totals['outstanding'], 2) ?></div>
+            <div class="stat-value" style="font-size:1rem"><?= e(format_currency((float)$totals['outstanding'])) ?></div>
         </div>
     </div>
     <div class="col-6 col-md-3">
         <div class="ent-stat-card" style="--ent-stat-accent:#16a34a">
             <div class="stat-label">Recovered</div>
-            <div class="stat-value" style="font-size:1rem">ZMW <?= number_format($totals['amount'] - $totals['outstanding'], 2) ?></div>
+            <div class="stat-value" style="font-size:1rem"><?= e(format_currency((float)($totals['amount'] - $totals['outstanding']))) ?></div>
         </div>
     </div>
 </div>
@@ -81,10 +81,10 @@ foreach ($rows as $r) { $totals['amount'] += (float)$r['amount']; $totals['outst
                         <div class="text-muted" style="font-size:.76rem"><?= e((string)$r['employee_number']) ?></div>
                     </td>
                     <td><?= e((string)$r['department_name']) ?></td>
-                    <td class="text-end">ZMW <?= number_format((float)$r['amount'],2) ?></td>
-                    <td class="text-end">ZMW <?= number_format((float)$r['monthly_deduction'],2) ?></td>
+                    <td class="text-end"><?= e(format_currency((float)$r['amount'])) ?></td>
+                    <td class="text-end"><?= e(format_currency((float)$r['monthly_deduction'])) ?></td>
                     <td class="text-end fw-semibold <?= (float)$r['outstanding_balance'] > 0 ? 'text-danger' : '' ?>">
-                        ZMW <?= number_format((float)$r['outstanding_balance'],2) ?>
+                        <?= e(format_currency((float)$r['outstanding_balance'])) ?>
                     </td>
                     <td><?= e((string)$r['start_date']) ?></td>
                     <td class="text-center"><span class="badge bg-<?= $sc ?>"><?= e((string)$r['status']) ?></span></td>

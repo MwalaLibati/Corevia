@@ -382,7 +382,7 @@ $dashboardCards = [
                     </div>
                     <div class="flex-grow-1 overflow-hidden">
                         <div class="fw-semibold text-truncate" style="font-size:.82rem"><?= e((string)$adv['full_name']) ?></div>
-                        <div class="text-muted" style="font-size:.74rem">ZMW <?= number_format((float)$adv['amount'],2) ?> &bull; <?= number_format((float)$adv['monthly_deduction'],2) ?>/mo</div>
+                        <div class="text-muted" style="font-size:.74rem"><?= e(format_currency((float)$adv['amount'])) ?> &bull; <?= e(format_currency((float)$adv['monthly_deduction'])) ?>/mo</div>
                     </div>
                     <a href="<?= e(base_url('salary-advance/index')) ?>" class="btn btn-xs btn-outline-danger" style="font-size:.72rem;padding:2px 7px">Review</a>
                 </div>
@@ -441,7 +441,7 @@ document.addEventListener('DOMContentLoaded', function(){
             data: {
                 labels: <?= $trendLabels ?>,
                 datasets: [{
-                    label: 'Net Payroll (ZMW)',
+                    label: 'Net Payroll (<?= e(app_currency_code()) ?>)',
                     data: <?= $trendValues ?>,
                     borderColor: '#1d4ed8',
                     backgroundColor: 'rgba(29,78,216,.08)',
@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function(){
             options: Object.assign({}, chartDefaults, {
                 plugins: { legend: { display: false } },
                 scales: {
-                    y: { ticks: { callback: function(v){ return 'ZMW ' + Number(v).toLocaleString(); }, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+                    y: { ticks: { callback: function(v){ return '<?= e(app_currency_code()) ?> ' + Number(v).toLocaleString(); }, font: { size: 11 } }, grid: { color: 'rgba(0,0,0,.05)' } },
                     x: { ticks: { font: { size: 11 } }, grid: { display: false } }
                 }
             })

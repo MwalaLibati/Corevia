@@ -19,9 +19,9 @@
     <i class="bi bi-info-circle-fill fs-5 mt-1 flex-shrink-0"></i>
     <div>
         <strong>You have an active salary advance.</strong><br>
-        <span>Amount: <strong>ZMW <?= number_format((float)$activeAdvance['amount'], 2) ?></strong> &bull;
-        Monthly Deduction: <strong>ZMW <?= number_format((float)$activeAdvance['monthly_deduction'], 2) ?></strong> &bull;
-        Outstanding: <strong>ZMW <?= number_format((float)$activeAdvance['outstanding_balance'], 2) ?></strong></span>
+        <span>Amount: <strong><?= e(format_currency((float)$activeAdvance['amount'])) ?></strong> &bull;
+        Monthly Deduction: <strong><?= e(format_currency((float)$activeAdvance['monthly_deduction'])) ?></strong> &bull;
+        Outstanding: <strong><?= e(format_currency((float)$activeAdvance['outstanding_balance'])) ?></strong></span>
     </div>
 </div>
 <?php elseif ($pendingAdvance): ?>
@@ -29,7 +29,7 @@
     <i class="bi bi-hourglass-split fs-5 mt-1 flex-shrink-0"></i>
     <div>
         <strong>Your advance request is pending approval.</strong><br>
-        Amount requested: <strong>ZMW <?= number_format((float)$pendingAdvance['amount'], 2) ?></strong>
+        Amount requested: <strong><?= e(format_currency((float)$pendingAdvance['amount'])) ?></strong>
         — submitted <?= e(date('d M Y', strtotime((string)$pendingAdvance['created_at']))) ?>
     </div>
 </div>
@@ -45,12 +45,12 @@
                 <input type="hidden" name="_csrf" value="<?= e((string)$csrf) ?>">
 
                 <div class="col-md-4">
-                    <label class="form-label">Amount Requested (ZMW) *</label>
+                    <label class="form-label">Amount Requested (<?= e(app_currency_code()) ?>) *</label>
                     <input type="number" name="amount" class="form-control" required min="100" step="0.01"
                            placeholder="e.g. 2000.00">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label">Preferred Monthly Repayment (ZMW) *</label>
+                    <label class="form-label">Preferred Monthly Repayment (<?= e(app_currency_code()) ?>) *</label>
                     <input type="number" name="monthly_deduction" class="form-control" required min="50" step="0.01"
                            placeholder="e.g. 500.00">
                 </div>
@@ -98,9 +98,9 @@
                     $sc = ['Pending'=>'warning text-dark','Active'=>'primary','Completed'=>'success','Cancelled'=>'secondary'][$a['status']] ?? 'secondary';
                 ?>
                 <tr>
-                    <td>ZMW <?= number_format((float)$a['amount'], 2) ?></td>
-                    <td>ZMW <?= number_format((float)$a['monthly_deduction'], 2) ?></td>
-                    <td>ZMW <?= number_format((float)$a['outstanding_balance'], 2) ?></td>
+                    <td><?= e(format_currency((float)$a['amount'])) ?></td>
+                    <td><?= e(format_currency((float)$a['monthly_deduction'])) ?></td>
+                    <td><?= e(format_currency((float)$a['outstanding_balance'])) ?></td>
                     <td><?= e((string)$a['start_date']) ?></td>
                     <td class="text-center"><span class="badge bg-<?= $sc ?>"><?= e((string)$a['status']) ?></span></td>
                     <td><?= e((string)($a['approved_by_name'] ?? '—')) ?></td>

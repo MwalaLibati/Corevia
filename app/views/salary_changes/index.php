@@ -39,15 +39,15 @@
                             </td>
                             <td><?= e((string)$request['salary_structure_name']) ?></td>
                             <td>
-                                <div class="fw-semibold">ZMW <?= e(number_format($agreedBasic, 2)) ?></div>
-                                <div class="small text-gray">Standard: ZMW <?= e(number_format($standardBasic, 2)) ?></div>
+                                <div class="fw-semibold"><?= e(format_currency($agreedBasic)) ?></div>
+                                <div class="small text-gray">Standard: <?= e(format_currency($standardBasic)) ?></div>
                                 <div class="small text-gray">Source: <?= e((string) ($request['basic_pay_source'] ?? 'Fixed Salary')) ?></div>
                                 <?php if (!empty($request['hourly_rate'])): ?><div class="small text-gray">Hourly: <?= e(format_currency((float) $request['hourly_rate'])) ?></div><?php endif; ?>
                                 <?php if (!empty($request['daily_rate'])): ?><div class="small text-gray">Daily: <?= e(format_currency((float) $request['daily_rate'])) ?></div><?php endif; ?>
                                 <?php if (!empty($request['shift_rate'])): ?><div class="small text-gray">Shift: <?= e(format_currency((float) $request['shift_rate'])) ?></div><?php endif; ?>
                                 <?php if ($variance !== 0.0): ?>
                                     <div class="small <?= $variance > 0 ? 'text-success' : 'text-danger' ?>">
-                                        <?= e(($variance > 0 ? '+' : '') . 'ZMW ' . number_format($variance, 2)) ?>
+                                        <?= e(($variance > 0 ? '+' : '') . format_currency($variance)) ?>
                                     </div>
                                 <?php endif; ?>
                             </td>

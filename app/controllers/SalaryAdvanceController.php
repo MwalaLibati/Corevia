@@ -89,7 +89,7 @@ class SalaryAdvanceController extends Controller
         $model = new SalaryAdvance();
         $advanceId = $model->insert($data);
         WorkflowEvent::record('salary_advance', 'SalaryAdvance', $advanceId, null, 'Pending', 'advance_request', 'Salary advance submitted for approval.');
-        AuditLog::record('advance_create', "Salary advance of ZMW {$data['amount']} requested for employee #{$data['employee_id']}.", 'SalaryAdvance', $advanceId);
+        AuditLog::record('advance_create', 'Salary advance of ' . format_currency((float) $data['amount']) . " requested for employee #{$data['employee_id']}.", 'SalaryAdvance', $advanceId);
         unset($_SESSION['_old_advance']);
         Session::flash('success', 'Salary advance submitted for approval.');
         redirect('salary-advance/index');

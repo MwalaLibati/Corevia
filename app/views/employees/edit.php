@@ -302,8 +302,8 @@ $oldInput = !empty($old) ? $old : $employee;
                 <span class="fw-semibold"><?= e((string) ($activeSalaryAssignment['structure_name'] ?? '')) ?></span>
                 <small class="text-gray d-block">Effective: <?= e((string) ($activeSalaryAssignment['effective_date'] ?? '')) ?></small>
                 <small class="text-gray d-block">
-                    Standard basic: ZMW <?= e(number_format((float) ($activeSalaryAssignment['structure_basic_pay'] ?? 0), 2)) ?>
-                    · Agreed basic: ZMW <?= e(number_format((float) ($activeSalaryAssignment['basic_pay'] ?? 0), 2)) ?>
+                    Standard basic: <?= e(format_currency((float) ($activeSalaryAssignment['structure_basic_pay'] ?? 0))) ?>
+                    · Agreed basic: <?= e(format_currency((float) ($activeSalaryAssignment['basic_pay'] ?? 0))) ?>
                 </small>
             <?php else: ?>
                 <span class="text-gray">No active salary structure assigned.</span>
@@ -361,19 +361,19 @@ $oldInput = !empty($old) ? $old : $employee;
             <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Attendance Hours">
                 <label class="form-label">Hourly Rate</label>
                 <input type="number" step="0.0001" min="0" name="hourly_rate" class="form-control" value="<?= e((string) ($salaryInput['hourly_rate'] ?? ($activeSalaryAssignment['hourly_rate'] ?? ''))) ?>" placeholder="For approved-hours pay">
-                <small class="text-gray">Example: approved hours x ZMW 25.00.</small>
+                <small class="text-gray">Example: approved hours x <?= e(format_currency(25.00)) ?>.</small>
             </div>
 
             <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Days Worked">
                 <label class="form-label">Daily Rate</label>
                 <input type="number" step="0.0001" min="0" name="daily_rate" class="form-control" value="<?= e((string) ($salaryInput['daily_rate'] ?? ($activeSalaryAssignment['daily_rate'] ?? ''))) ?>" placeholder="For days-worked pay">
-                <small class="text-gray">Example: approved work days x ZMW 240.00.</small>
+                <small class="text-gray">Example: approved work days x <?= e(format_currency(240.00)) ?>.</small>
             </div>
 
             <div class="col-md-4 js-pay-rate-wrap" data-pay-source-wrap="Shifts Worked">
                 <label class="form-label">Shift Rate</label>
                 <input type="number" step="0.0001" min="0" name="shift_rate" class="form-control" value="<?= e((string) ($salaryInput['shift_rate'] ?? ($activeSalaryAssignment['shift_rate'] ?? ''))) ?>" placeholder="For shifts-worked pay">
-                <small class="text-gray">Example: approved shifts x ZMW 180.00.</small>
+                <small class="text-gray">Example: approved shifts x <?= e(format_currency(180.00)) ?>.</small>
             </div>
 
             <div class="col-md-4">
@@ -468,13 +468,13 @@ $oldInput = !empty($old) ? $old : $employee;
                             $agreedBasic = (float) ($assignment['basic_pay'] ?? $standardBasic);
                             $variance = $agreedBasic - $standardBasic;
                             ?>
-                            <td>ZMW <?= e(number_format($standardBasic, 2)) ?></td>
+                            <td><?= e(format_currency($standardBasic)) ?></td>
                             <td>
-                                ZMW <?= e(number_format($agreedBasic, 2)) ?>
+                                <?= e(format_currency($agreedBasic)) ?>
                                 <div class="text-gray small"><?= e((string) ($assignment['basic_pay_source'] ?? 'Fixed Salary')) ?></div>
                             </td>
                             <td class="<?= $variance === 0.0 ? 'text-gray' : ($variance > 0 ? 'text-success' : 'text-danger') ?>">
-                                <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . 'ZMW ' . number_format($variance, 2)) ?>
+                                <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . format_currency($variance)) ?>
                             </td>
                             <td><?= e((string) ($assignment['effective_date'] ?? '')) ?></td>
                             <td><?= (int) ($assignment['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive' ?></td>

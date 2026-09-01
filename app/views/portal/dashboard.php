@@ -5,7 +5,7 @@ $empDesig       = (string) ($emp['designation'] ?? '');
 $empNo          = (string) ($emp['employee_number'] ?? '');
 $firstName      = explode(' ', $empName)[0] ?: 'there';
 $contractStatus = $contract ? (string) ($contract['status'] ?? 'Active') : 'No contract';
-$latestNet      = $latestPayslip ? number_format((float) ($latestPayslip['net_pay'] ?? 0), 2) : '-';
+$latestNet      = $latestPayslip ? format_currency((float) ($latestPayslip['net_pay'] ?? 0)) : '-';
 $latestPeriod   = $latestPayslip ? (string) ($latestPayslip['pay_period'] ?? $latestPayslip['run_date'] ?? '-') : 'No payslip released';
 $napsaTotals    = $napsaTotals ?? ['employee' => 0.0, 'employer' => 0.0, 'total' => 0.0];
 $gratuity       = $gratuityEstimate ?? ['accrued_amount' => 0.0, 'eligible' => false, 'years' => 0.0, 'rate' => 0.0];
@@ -46,7 +46,7 @@ $statCard = static function (string $label, string $value, string $subtext, stri
     <?php
     $statCard(
         'Latest Net Pay',
-        'ZMW ' . e($latestNet),
+        e($latestNet),
         $latestPeriod,
         'bi-cash-stack',
         '#16a34a',
@@ -73,8 +73,8 @@ $statCard = static function (string $label, string $value, string $subtext, stri
 
     $statCard(
         'Total NAPSA Contributed',
-        'ZMW ' . e(number_format((float) ($napsaTotals['total'] ?? 0), 2)),
-        'Employee: ZMW ' . number_format((float) ($napsaTotals['employee'] ?? 0), 2) . ' | Employer: ZMW ' . number_format((float) ($napsaTotals['employer'] ?? 0), 2),
+        e(format_currency((float) ($napsaTotals['total'] ?? 0))),
+        'Employee: ' . format_currency((float) ($napsaTotals['employee'] ?? 0)) . ' | Employer: ' . format_currency((float) ($napsaTotals['employer'] ?? 0)),
         'bi-shield-check',
         '#7c3aed',
         '#ede9fe'
@@ -83,7 +83,7 @@ $statCard = static function (string $label, string $value, string $subtext, stri
     if (!empty($showGratuityCard)) {
         $statCard(
             'Accumulated Gratuity',
-            'ZMW ' . e(number_format((float) ($gratuity['accrued_amount'] ?? 0), 2)),
+            e(format_currency((float) ($gratuity['accrued_amount'] ?? 0))),
             ((float) ($gratuity['rate'] ?? 0)) . '% over ' . number_format((float) ($gratuity['years'] ?? 0), 2) . ' year(s)' . (!empty($gratuity['eligible']) ? ' | Qualified' : ' | Accruing'),
             'bi-safe2',
             '#ca8a04',
@@ -134,15 +134,15 @@ $statCard = static function (string $label, string $value, string $subtext, stri
 <?php if ($activeAdvance): ?>
 <div class="alert alert-info d-flex align-items-center gap-3 mb-4 py-2">
     <i class="bi bi-cash-coin fs-5 flex-shrink-0"></i>
-    <div>Active advance: <strong>ZMW <?= number_format((float)$activeAdvance['amount'], 2) ?></strong> &bull;
-    Outstanding: <strong>ZMW <?= number_format((float)$activeAdvance['outstanding_balance'], 2) ?></strong> &bull;
-    Monthly: <strong>ZMW <?= number_format((float)$activeAdvance['monthly_deduction'], 2) ?></strong></div>
+    <div>Active advance: <strong><?= e(format_currency((float)$activeAdvance['amount'])) ?></strong> &bull;
+    Outstanding: <strong><?= e(format_currency((float)$activeAdvance['outstanding_balance'])) ?></strong> &bull;
+    Monthly: <strong><?= e(format_currency((float)$activeAdvance['monthly_deduction'])) ?></strong></div>
     <a href="<?= e(base_url('portal/salaryAdvance')) ?>" class="btn btn-sm btn-outline-info ms-auto">View</a>
 </div>
 <?php elseif ($pendingAdvance): ?>
 <div class="alert alert-warning d-flex align-items-center gap-3 mb-4 py-2">
     <i class="bi bi-hourglass-split fs-5 flex-shrink-0"></i>
-    <div>Advance request of <strong>ZMW <?= number_format((float)$pendingAdvance['amount'], 2) ?></strong> is pending Finance approval.</div>
+    <div>Advance request of <strong><?= e(format_currency((float)$pendingAdvance['amount'])) ?></strong> is pending Finance approval.</div>
     <a href="<?= e(base_url('portal/salaryAdvance')) ?>" class="btn btn-sm btn-outline-warning ms-auto">View</a>
 </div>
 <?php endif; ?>
@@ -169,9 +169,9 @@ $statCard = static function (string $label, string $value, string $subtext, stri
                 <?php if ($latestPayslip): ?>
                     <table class="table table-sm mb-3 no-pagination">
                         <tr><td class="text-muted ps-0">Period</td><td class="fw-semibold"><?= e((string)($latestPayslip['pay_period'] ?? $latestPayslip['run_date'])) ?></td></tr>
-                        <tr><td class="text-muted ps-0">Gross</td><td>ZMW <?= number_format((float)($latestPayslip['gross_pay'] ?? 0), 2) ?></td></tr>
-                        <tr><td class="text-muted ps-0">Deductions</td><td class="text-danger">-ZMW <?= number_format((float)($latestPayslip['total_deductions'] ?? 0), 2) ?></td></tr>
-                        <tr class="table-success"><td class="fw-bold ps-0">Net Pay</td><td class="fw-bold">ZMW <?= number_format((float)($latestPayslip['net_pay'] ?? 0), 2) ?></td></tr>
+                        <tr><td class="text-muted ps-0">Gross</td><td><?= e(format_currency((float)($latestPayslip['gross_pay'] ?? 0))) ?></td></tr>
+                        <tr><td class="text-muted ps-0">Deductions</td><td class="text-danger">-<?= e(format_currency((float)($latestPayslip['total_deductions'] ?? 0))) ?></td></tr>
+                        <tr class="table-success"><td class="fw-bold ps-0">Net Pay</td><td class="fw-bold"><?= e(format_currency((float)($latestPayslip['net_pay'] ?? 0))) ?></td></tr>
                     </table>
                     <button type="button"
                             class="btn btn-sm btn-success w-100 mt-auto js-payslip-preview"
@@ -202,7 +202,7 @@ $statCard = static function (string $label, string $value, string $subtext, stri
                 <div class="mb-3">
                     <div class="text-muted small">Accumulated to date</div>
                     <div class="fw-bold" style="font-size:1.55rem;color:#111827">
-                        <?= empty($showGratuityCard) ? 'Not applicable' : 'ZMW ' . number_format((float) ($gratuity['accrued_amount'] ?? 0), 2) ?>
+                        <?= empty($showGratuityCard) ? 'Not applicable' : e(format_currency((float) ($gratuity['accrued_amount'] ?? 0))) ?>
                     </div>
                 </div>
 
@@ -225,7 +225,7 @@ $statCard = static function (string $label, string $value, string $subtext, stri
                     <?php if (empty($showGratuityCard)): ?>
                         Gratuity is normally shown for fixed-term contract employees.
                     <?php else: ?>
-                        Payable amount: <strong>ZMW <?= number_format((float) ($gratuity['amount'] ?? 0), 2) ?></strong>.
+                        Payable amount: <strong><?= e(format_currency((float) ($gratuity['amount'] ?? 0))) ?></strong>.
                         <?= !empty($gratuity['payment_timing']) ? 'Timing: ' . e((string) $gratuity['payment_timing']) . '.' : '' ?>
                     <?php endif; ?>
                 </div>
@@ -249,7 +249,7 @@ $statCard = static function (string $label, string $value, string $subtext, stri
                             <tr>
                                 <td class="ps-0"><?= e((string)$d['deduction_name']) ?></td>
                                 <td class="text-end pe-0">
-                                    <?= $calculationType === 'Percent' ? number_format((float)$d['amount'], 1).'%' : 'ZMW '.number_format((float)$d['amount'], 2) ?>
+                                    <?= $calculationType === 'Percent' ? number_format((float)$d['amount'], 1).'%' : e(format_currency((float)$d['amount'])) ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

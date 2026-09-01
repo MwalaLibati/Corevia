@@ -245,8 +245,8 @@ class PortalController extends Controller
             $items[] = [
                 'type' => 'Salary Advance',
                 'icon' => 'bi-cash-coin',
-                'title' => 'ZMW ' . number_format((float) ($row['amount'] ?? 0), 2),
-                'details' => 'Monthly deduction: ZMW ' . number_format((float) ($row['monthly_deduction'] ?? 0), 2),
+                'title' => format_currency((float) ($row['amount'] ?? 0)),
+                'details' => 'Monthly deduction: ' . format_currency((float) ($row['monthly_deduction'] ?? 0)),
                 'status' => (string) ($row['status'] ?? 'Pending'),
                 'submitted_at' => (string) ($row['created_at'] ?? ''),
                 'updated_at' => (string) ($row['updated_at'] ?? ''),
@@ -971,12 +971,12 @@ class PortalController extends Controller
             'status'              => 'Pending',
         ]);
 
-        AuditLog::record('portal_advance_apply', "Employee #{$empId} requested a salary advance of ZMW {$amount}.", 'SalaryAdvance', null, 'employee', [
+        AuditLog::record('portal_advance_apply', 'Employee #' . $empId . ' requested a salary advance of ' . format_currency($amount) . '.', 'SalaryAdvance', null, 'employee', [
             'amount' => $amount,
             'monthly_deduction' => $monthly,
             'start_date' => $startDate,
         ]);
-        Session::flash('success', "Advance request of ZMW " . number_format($amount, 2) . " submitted. Awaiting Finance approval.");
+        Session::flash('success', 'Advance request of ' . format_currency($amount) . ' submitted. Awaiting Finance approval.');
         redirect('portal/salaryAdvance');
     }
 

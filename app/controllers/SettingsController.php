@@ -20,6 +20,8 @@ class SettingsController extends Controller
         $gratuityQualifyingYears = $model->numericValue('gratuity_qualifying_years', 2.0);
         $gratuityBasis = $model->value('gratuity_basis', 'annual_basic_earned');
         $gratuityPaymentTiming = $model->value('gratuity_payment_timing', 'End of contract');
+        $currencyOptions = function_exists('corevia_currency_options') ? corevia_currency_options() : [];
+        $payrollCurrency = $model->value('payroll_currency', 'ZMW');
         $documentSettings = [
             'document_letterhead_footer' => $model->value('document_letterhead_footer', ''),
             'document_default_signatory_name' => $model->value('document_default_signatory_name', ''),
@@ -44,6 +46,8 @@ class SettingsController extends Controller
             'gratuityQualifyingYears' => $gratuityQualifyingYears,
             'gratuityBasis' => $gratuityBasis,
             'gratuityPaymentTiming' => $gratuityPaymentTiming,
+            'currencyOptions' => $currencyOptions,
+            'payrollCurrency' => $payrollCurrency,
             'documentSettings' => $documentSettings,
             'statutorySettings' => $statutorySettings,
             'search' => $search,
@@ -366,9 +370,17 @@ class SettingsController extends Controller
             $paymentTiming = 'End of contract';
         }
 
+        $currency = strtoupper(trim((string) $this->input('payroll_currency', 'ZMW')));
+        $currencyOptions = function_exists('corevia_currency_options') ? corevia_currency_options() : [];
+        if (!isset($currencyOptions[$currency])) {
+            Session::flash('error', 'Please select a supported payroll currency.');
+            redirect('settings/index');
+        }
+
         $settingModel = new Setting();
         $formatNumber = static fn(float $value): string => rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
 
+        $settingModel->upsert('payroll_currency', $currency);
         $settingModel->upsert('gratuity_rate_percent', $formatNumber($rateValue));
         $settingModel->upsert('gratuity_qualifying_years', $formatNumber($yearsValue));
         $settingModel->upsert('gratuity_basis', $basis);

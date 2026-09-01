@@ -26,13 +26,13 @@
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Advance Amount (ZMW) *</label>
+                <label class="form-label">Advance Amount (<?= e(app_currency_code()) ?>) *</label>
                 <input type="number" step="0.01" min="1" name="amount" id="amount" class="form-control"
                        value="<?= e((string)($old['amount'] ?? '')) ?>" required>
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Monthly Deduction (ZMW) *</label>
+                <label class="form-label">Monthly Deduction (<?= e(app_currency_code()) ?>) *</label>
                 <input type="number" step="0.01" min="1" name="monthly_deduction" id="monthly" class="form-control"
                        value="<?= e((string)($old['monthly_deduction'] ?? '')) ?>" required>
             </div>
