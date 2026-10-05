@@ -13,14 +13,40 @@
     $attendanceEnabled = !empty($attendancePreview['enabled']);
     $attendanceTotals = $attendancePreview['totals'] ?? ['earnings' => 0, 'deductions' => 0];
     $attendanceRule = $attendancePreview['rule'] ?? [];
+    $currencySummary = $preview['currency_summary'] ?? [];
 ?>
 
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Employees</span><div class="stat-value"><?= e((string) ($preview['employees'] ?? 0)) ?></div></div></div>
-    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Gross</span><div class="stat-value" style="font-size:1.25rem"><?= e(format_currency((float) ($preview['gross'] ?? 0))) ?></div></div></div>
-    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Deductions</span><div class="stat-value" style="font-size:1.25rem"><?= e(format_currency((float) ($preview['deductions'] ?? 0))) ?></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Gross (<?= e(app_currency_code()) ?> reporting)</span><div class="stat-value" style="font-size:1.25rem"><?= e(format_currency((float) ($preview['gross'] ?? 0))) ?></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Deductions (<?= e(app_currency_code()) ?> reporting)</span><div class="stat-value" style="font-size:1.25rem"><?= e(format_currency((float) ($preview['deductions'] ?? 0))) ?></div></div></div>
     <div class="col-sm-6 col-xl-3"><div class="ent-stat-card"><span class="stat-label">Employer Contributions</span><div class="stat-value" style="font-size:1.25rem"><?= e(format_currency($employerTotal)) ?></div></div></div>
 </div>
+
+<?php if (count($currencySummary) > 1 || (count($currencySummary) === 1 && !isset($currencySummary[app_currency_code()]))): ?>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="mb-3"><i class="bi bi-currency-exchange me-2 text-primary"></i>Multi-Currency Payroll Summary</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Currency</th><th>Employees</th><th>Gross</th><th>Deductions</th><th>Net</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($currencySummary as $currency => $summary): ?>
+                        <tr>
+                            <td class="fw-semibold"><?= e((string) $currency) ?></td>
+                            <td><?= e((string) ($summary['employees'] ?? 0)) ?></td>
+                            <td><?= e(format_currency((float) ($summary['gross'] ?? 0), (string) $currency)) ?></td>
+                            <td><?= e(format_currency((float) ($summary['deductions'] ?? 0), (string) $currency)) ?></td>
+                            <td><?= e(format_currency((float) ($summary['net'] ?? 0), (string) $currency)) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-gray small mb-0 mt-2">Run totals above are converted to <?= e(app_currency_code()) ?> using each employee salary assignment exchange rate.</p>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body d-flex align-items-center justify-content-between flex-wrap gap-3">
@@ -85,6 +111,7 @@
                         <tr><td colspan="6" class="text-center text-gray">No employees employed during this period with an effective salary assignment were found.</td></tr>
                     <?php else: ?>
                         <?php foreach ($items as $item): ?>
+                            <?php $itemCurrency = (string) ($item['currency_code'] ?? app_currency_code()); ?>
                             <tr>
                                 <td>
                                     <div class="fw-semibold"><?= e((string) ($item['employee_name'] ?? '')) ?></div>
@@ -94,9 +121,18 @@
                                     <div class="fw-semibold"><?= e((string)($item['eligible_days'] ?? 0)) ?> / <?= e((string)($item['period_days'] ?? 0)) ?> days</div>
                                     <div class="text-gray small"><?= e((string)($item['proration_mode'] ?? 'Full Month')) ?> · <?= e(number_format((float)($item['proration_factor'] ?? 1) * 100, 2)) ?>%</div>
                                 </td>
-                                <td><?= e(format_currency((float) ($item['gross_pay'] ?? 0))) ?></td>
-                                <td><?= e(format_currency((float) ($item['total_deductions'] ?? 0))) ?></td>
-                                <td><?= e(format_currency((float) ($item['net_pay'] ?? 0))) ?></td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['gross_pay'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['gross_pay_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['total_deductions'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['total_deductions_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['net_pay'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['net_pay_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if (!empty($item['basic_pay_explanation'])): ?>
                                         <div class="small mb-2">
@@ -114,7 +150,7 @@
                                             <div class="small">
                                                 <span class="badge bg-success-subtle text-success border">attendance earning</span>
                                                 <?= e((string) ($line['name'] ?? '')) ?>:
-                                                <?= e(format_currency((float) ($line['amount'] ?? 0))) ?>
+                                                <?= e(format_currency((float) ($line['amount'] ?? 0), $itemCurrency)) ?>
                                             </div>
                                         <?php endif; ?>
                                     <?php endforeach; ?>
@@ -122,7 +158,7 @@
                                         <div class="small">
                                             <span class="badge bg-light text-dark border"><?= e((string) ($line['category'] ?? '')) ?></span>
                                             <?= e((string) ($line['name'] ?? '')) ?>:
-                                            <?= e(format_currency((float) ($line['amount'] ?? 0))) ?>
+                                            <?= e(format_currency((float) ($line['amount'] ?? 0), $itemCurrency)) ?>
                                         </div>
                                     <?php endforeach; ?>
                                 </td>

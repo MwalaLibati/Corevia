@@ -65,6 +65,8 @@ class SalaryChangeController extends Controller
                     'hourly_rate' => $request['hourly_rate'] !== null ? (float) $request['hourly_rate'] : null,
                     'daily_rate' => $request['daily_rate'] !== null ? (float) $request['daily_rate'] : null,
                     'shift_rate' => $request['shift_rate'] !== null ? (float) $request['shift_rate'] : null,
+                    'currency_code' => (string) ($request['currency_code'] ?? app_currency_code()),
+                    'exchange_rate_to_company' => (float) ($request['exchange_rate_to_company'] ?? 1),
                     'override_reason' => $request['override_reason'] ?? null,
                 ]);
                 $model->update($requestId, ['status' => 'Applied', 'admin_approved_by' => $userId]);

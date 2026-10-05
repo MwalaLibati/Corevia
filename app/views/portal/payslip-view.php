@@ -15,7 +15,7 @@ foreach (($earnings ?? []) as $earningLine) {
 $company    = current_company() ?? [];
 $companyName = (string)($company['name'] ?? app_product_name());
 $companyLogo = company_logo_url($company);
-$currencyCode = app_currency_code();
+$currencyCode = (string)($slip['currency_code'] ?? app_currency_code());
 ?>
 
 <div class="portal-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -72,13 +72,13 @@ $currencyCode = app_currency_code();
         </thead>
         <tbody>
             <?php if (!empty($earnings)): foreach ($earnings as $earning): ?>
-            <tr><td colspan="2"><?= e((string)$earning['label']) ?></td><td class="text-end"><?= e(format_currency((float)$earning['amount'])) ?></td></tr>
+            <tr><td colspan="2"><?= e((string)$earning['label']) ?></td><td class="text-end"><?= e(format_currency((float)$earning['amount'], $currencyCode)) ?></td></tr>
             <?php endforeach; else: ?>
-            <tr><td colspan="2">Earnings</td><td class="text-end"><?= e(format_currency($grossPay)) ?></td></tr>
+            <tr><td colspan="2">Earnings</td><td class="text-end"><?= e(format_currency($grossPay, $currencyCode)) ?></td></tr>
             <?php endif; ?>
             <tr class="portal-payslip-total">
                 <td colspan="2"><strong>Total Gross Pay</strong></td>
-                <td class="text-end"><strong><?= e(format_currency($grossPay)) ?></strong></td>
+                <td class="text-end"><strong><?= e(format_currency($grossPay, $currencyCode)) ?></strong></td>
             </tr>
         </tbody>
     </table>
@@ -98,13 +98,13 @@ $currencyCode = app_currency_code();
             <?php foreach ($deductions as $d): ?>
             <tr>
                 <td><?= e((string)($d['label'] ?? 'Deduction')) ?></td>
-                <td class="text-end"><?= e(format_currency((float)$d['amount'])) ?></td>
+                <td class="text-end"><?= e(format_currency((float)$d['amount'], $currencyCode)) ?></td>
             </tr>
             <?php endforeach; ?>
         <?php endif; ?>
             <tr class="portal-payslip-total">
                 <td><strong>Total Deductions</strong></td>
-                <td class="text-end text-danger"><strong><?= e(format_currency($totalDed)) ?></strong></td>
+                <td class="text-end text-danger"><strong><?= e(format_currency($totalDed, $currencyCode)) ?></strong></td>
             </tr>
         </tbody>
     </table>
@@ -112,7 +112,7 @@ $currencyCode = app_currency_code();
     <!-- Net pay -->
     <div style="background:var(--portal-green);color:#fff;border-radius:6px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;font-size:1rem">
         <span style="font-weight:700">NET PAY</span>
-        <span style="font-size:1.3rem;font-weight:800"><?= e(format_currency($netPay)) ?></span>
+        <span style="font-size:1.3rem;font-weight:800"><?= e(format_currency($netPay, $currencyCode)) ?></span>
     </div>
 
     <div class="text-muted text-center mt-4" style="font-size:.74rem">

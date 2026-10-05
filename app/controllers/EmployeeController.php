@@ -610,6 +610,11 @@ class EmployeeController extends Controller
         $hourlyRate = $this->normalizeNullableMoney((string) $this->input('hourly_rate', ''));
         $dailyRate = $this->normalizeNullableMoney((string) $this->input('daily_rate', ''));
         $shiftRate = $this->normalizeNullableMoney((string) $this->input('shift_rate', ''));
+        $salaryCurrency = $this->validCurrencyCode((string) $this->input('currency_code', app_currency_code()));
+        $exchangeRate = $this->normalizeNullableMoney((string) $this->input('exchange_rate_to_company', ''));
+        if ($salaryCurrency === app_currency_code()) {
+            $exchangeRate = 1.0;
+        }
         $overrideReason = trim((string) $this->input('override_reason', ''));
 
         $_SESSION['_old_salary_assignment_input'] = [
@@ -623,11 +628,17 @@ class EmployeeController extends Controller
             'hourly_rate' => $hourlyRate,
             'daily_rate' => $dailyRate,
             'shift_rate' => $shiftRate,
+            'currency_code' => $salaryCurrency,
+            'exchange_rate_to_company' => $exchangeRate,
             'override_reason' => $overrideReason,
         ];
 
         if ($salaryStructureId <= 0 || $effectiveDate === null) {
             Session::flash('error', 'Salary structure and effective date are required.');
+            redirect('employee/edit/' . $employeeId);
+        }
+        if ($salaryCurrency !== app_currency_code() && ($exchangeRate === null || $exchangeRate <= 0)) {
+            Session::flash('error', 'Enter the exchange rate from ' . $salaryCurrency . ' to ' . app_currency_code() . ' for this salary assignment.');
             redirect('employee/edit/' . $employeeId);
         }
 
@@ -656,6 +667,8 @@ class EmployeeController extends Controller
                 'hourly_rate' => $hourlyRate,
                 'daily_rate' => $dailyRate,
                 'shift_rate' => $shiftRate,
+                'currency_code' => $salaryCurrency,
+                'exchange_rate_to_company' => $exchangeRate ?? 1.0,
                 'override_reason' => $overrideReason !== '' ? $overrideReason : null,
                 'status' => 'Pending Finance Review',
                 'reason' => trim((string) $this->input('reason', '')),
@@ -673,6 +686,8 @@ class EmployeeController extends Controller
                 'hourly_rate' => $hourlyRate,
                 'daily_rate' => $dailyRate,
                 'shift_rate' => $shiftRate,
+                'currency_code' => $salaryCurrency,
+                'exchange_rate_to_company' => $exchangeRate ?? 1.0,
                 'override_reason' => $overrideReason !== '' ? $overrideReason : null,
             ]);
             unset($_SESSION['_old_salary_assignment_input']);
@@ -1239,6 +1254,13 @@ class EmployeeController extends Controller
     {
         $allowed = ['Fixed Salary', 'Attendance Hours', 'Days Worked', 'Shifts Worked'];
         return in_array($source, $allowed, true) ? $source : 'Fixed Salary';
+    }
+
+    private function validCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        $options = function_exists('corevia_currency_options') ? corevia_currency_options() : [];
+        return isset($options[$currency]) ? $currency : app_currency_code();
     }
 
     private function normalizeNullableMoney(string $value): ?float

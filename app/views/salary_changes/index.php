@@ -31,6 +31,7 @@
                         $standardBasic = (float) ($request['structure_basic_pay'] ?? 0);
                         $agreedBasic = $request['actual_basic_pay'] !== null ? (float) $request['actual_basic_pay'] : $standardBasic;
                         $variance = $agreedBasic - $standardBasic;
+                        $salaryCurrency = (string) ($request['currency_code'] ?? app_currency_code());
                         ?>
                         <tr>
                             <td>
@@ -39,15 +40,21 @@
                             </td>
                             <td><?= e((string)$request['salary_structure_name']) ?></td>
                             <td>
-                                <div class="fw-semibold"><?= e(format_currency($agreedBasic)) ?></div>
-                                <div class="small text-gray">Standard: <?= e(format_currency($standardBasic)) ?></div>
+                                <div class="fw-semibold"><?= e(format_currency($agreedBasic, $salaryCurrency)) ?></div>
+                                <div class="small text-gray">Standard: <?= e(format_currency($standardBasic, $salaryCurrency)) ?></div>
+                                <div class="small text-gray">
+                                    Currency: <?= e($salaryCurrency) ?>
+                                    <?php if ($salaryCurrency !== app_currency_code()): ?>
+                                        · Rate to <?= e(app_currency_code()) ?>: <?= e(number_format((float) ($request['exchange_rate_to_company'] ?? 1), 6)) ?>
+                                    <?php endif; ?>
+                                </div>
                                 <div class="small text-gray">Source: <?= e((string) ($request['basic_pay_source'] ?? 'Fixed Salary')) ?></div>
-                                <?php if (!empty($request['hourly_rate'])): ?><div class="small text-gray">Hourly: <?= e(format_currency((float) $request['hourly_rate'])) ?></div><?php endif; ?>
-                                <?php if (!empty($request['daily_rate'])): ?><div class="small text-gray">Daily: <?= e(format_currency((float) $request['daily_rate'])) ?></div><?php endif; ?>
-                                <?php if (!empty($request['shift_rate'])): ?><div class="small text-gray">Shift: <?= e(format_currency((float) $request['shift_rate'])) ?></div><?php endif; ?>
+                                <?php if (!empty($request['hourly_rate'])): ?><div class="small text-gray">Hourly: <?= e(format_currency((float) $request['hourly_rate'], $salaryCurrency)) ?></div><?php endif; ?>
+                                <?php if (!empty($request['daily_rate'])): ?><div class="small text-gray">Daily: <?= e(format_currency((float) $request['daily_rate'], $salaryCurrency)) ?></div><?php endif; ?>
+                                <?php if (!empty($request['shift_rate'])): ?><div class="small text-gray">Shift: <?= e(format_currency((float) $request['shift_rate'], $salaryCurrency)) ?></div><?php endif; ?>
                                 <?php if ($variance !== 0.0): ?>
                                     <div class="small <?= $variance > 0 ? 'text-success' : 'text-danger' ?>">
-                                        <?= e(($variance > 0 ? '+' : '') . format_currency($variance)) ?>
+                                        <?= e(($variance > 0 ? '+' : '') . format_currency($variance, $salaryCurrency)) ?>
                                     </div>
                                 <?php endif; ?>
                             </td>

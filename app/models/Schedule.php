@@ -131,6 +131,47 @@ class Schedule extends Model
                 KEY idx_schedule_change_employee (employee_id, requested_date)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
         );
+
+        $this->ensureColumn('shifts', 'break_minutes', 'INT NOT NULL DEFAULT 0');
+        $this->ensureColumn('shifts', 'grace_minutes', 'INT NOT NULL DEFAULT 0');
+        $this->ensureColumn('shifts', 'expected_hours', 'DECIMAL(6,2) NOT NULL DEFAULT 8.00');
+        $this->ensureColumn('shifts', 'overtime_after_hours', 'DECIMAL(6,2) NULL');
+        $this->ensureColumn('shifts', 'color', 'VARCHAR(20) NULL');
+        $this->ensureColumn('shifts', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+        $this->ensureColumn('shifts', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->ensureColumn('work_patterns', 'description', 'TEXT NULL');
+        $this->ensureColumn('work_patterns', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+        $this->ensureColumn('work_patterns', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->ensureColumn('work_pattern_days', 'is_working_day', 'TINYINT(1) NOT NULL DEFAULT 1');
+        $this->ensureColumn('work_pattern_days', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->ensureColumn('employee_schedule_assignments', 'effective_to', 'DATE NULL');
+        $this->ensureColumn('employee_schedule_assignments', 'is_active', 'TINYINT(1) NOT NULL DEFAULT 1');
+        $this->ensureColumn('employee_schedule_assignments', 'notes', 'TEXT NULL');
+        $this->ensureColumn('employee_schedule_assignments', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->ensureColumn('schedule_exceptions', 'shift_id', 'BIGINT UNSIGNED NULL');
+        $this->ensureColumn('schedule_exceptions', 'exception_type', "ENUM('Shift Change','Rest Day','Public Holiday','Leave','Unscheduled Work') NOT NULL DEFAULT 'Shift Change'");
+        $this->ensureColumn('schedule_exceptions', 'notes', 'TEXT NULL');
+        $this->ensureColumn('schedule_exceptions', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->ensureColumn('schedule_publication_logs', 'schedule_month', "CHAR(7) NOT NULL DEFAULT ''");
+        $this->ensureColumn('schedule_publication_logs', 'published_by', 'BIGINT UNSIGNED NULL');
+        $this->ensureColumn('schedule_publication_logs', 'published_at', 'DATETIME NULL');
+        $this->ensureColumn('schedule_publication_logs', 'notes', 'TEXT NULL');
+
+        $this->ensureColumn('schedule_change_requests', 'requested_shift_id', 'BIGINT UNSIGNED NULL');
+        $this->ensureColumn('schedule_change_requests', 'current_shift_label', 'VARCHAR(190) NULL');
+        $this->ensureColumn('schedule_change_requests', 'reason', 'TEXT NULL');
+        $this->ensureColumn('schedule_change_requests', 'status', "ENUM('Pending','Approved','Rejected','Cancelled') NOT NULL DEFAULT 'Pending'");
+        $this->ensureColumn('schedule_change_requests', 'reviewed_by', 'BIGINT UNSIGNED NULL');
+        $this->ensureColumn('schedule_change_requests', 'reviewed_at', 'DATETIME NULL');
+        $this->ensureColumn('schedule_change_requests', 'review_notes', 'TEXT NULL');
+        $this->ensureColumn('schedule_change_requests', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+
+        $this->backfillShiftExpectedHours();
     }
 
     public function shifts(bool $activeOnly = false): array
@@ -728,5 +769,45 @@ class Schedule extends Model
     {
         $parts = explode(':', $time);
         return ((int) ($parts[0] ?? 0) * 60) + (int) ($parts[1] ?? 0);
+    }
+
+    private function ensureColumn(string $table, string $column, string $definition): void
+    {
+        if ($this->columnExists($table, $column)) {
+            return;
+        }
+
+        $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => $table, 'column' => $column]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function backfillShiftExpectedHours(): void
+    {
+        $this->db->exec(
+            "UPDATE shifts
+             SET expected_hours = ROUND(
+                 GREATEST(
+                     0,
+                     (CASE
+                         WHEN TIME_TO_SEC(end_time) <= TIME_TO_SEC(start_time)
+                         THEN TIME_TO_SEC(end_time) + 86400 - TIME_TO_SEC(start_time)
+                         ELSE TIME_TO_SEC(end_time) - TIME_TO_SEC(start_time)
+                      END) / 3600 - (COALESCE(break_minutes, 0) / 60)
+                 ),
+                 2
+             )
+             WHERE expected_hours IS NULL OR expected_hours = 0"
+        );
     }
 }

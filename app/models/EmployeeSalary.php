@@ -28,6 +28,8 @@ class EmployeeSalary extends Model
             'hourly_rate' => 'DECIMAL(12,4) NULL',
             'daily_rate' => 'DECIMAL(12,4) NULL',
             'shift_rate' => 'DECIMAL(12,4) NULL',
+            'currency_code' => "VARCHAR(3) NOT NULL DEFAULT 'ZMW'",
+            'exchange_rate_to_company' => 'DECIMAL(18,8) NOT NULL DEFAULT 1.00000000',
             'override_reason' => 'TEXT NULL',
         ];
 
@@ -54,7 +56,9 @@ class EmployeeSalary extends Model
                        COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
                        COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
                        COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
-                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate,
+                       COALESCE(NULLIF(es.currency_code, ''), 'ZMW') AS currency_code,
+                       COALESCE(NULLIF(es.exchange_rate_to_company, 0), 1) AS exchange_rate_to_company
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
@@ -88,7 +92,9 @@ class EmployeeSalary extends Model
                        COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
                        COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
                        COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
-                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate,
+                       COALESCE(NULLIF(es.currency_code, ''), 'ZMW') AS currency_code,
+                       COALESCE(NULLIF(es.exchange_rate_to_company, 0), 1) AS exchange_rate_to_company
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
@@ -125,7 +131,9 @@ class EmployeeSalary extends Model
                        COALESCE(es.basic_pay_source, ss.basic_pay_source, 'Fixed Salary') AS basic_pay_source,
                        COALESCE(es.hourly_rate, ss.hourly_rate) AS hourly_rate,
                        COALESCE(es.daily_rate, ss.daily_rate) AS daily_rate,
-                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate
+                       COALESCE(es.shift_rate, ss.shift_rate) AS shift_rate,
+                       COALESCE(NULLIF(es.currency_code, ''), 'ZMW') AS currency_code,
+                       COALESCE(NULLIF(es.exchange_rate_to_company, 0), 1) AS exchange_rate_to_company
                 FROM employee_salary es
                 JOIN employees e ON e.id = es.employee_id
                 JOIN salary_structures ss ON ss.id = es.salary_structure_id
@@ -163,12 +171,14 @@ class EmployeeSalary extends Model
             $deactivate->execute(['employee_id' => $employeeId]);
 
             $source = $this->validBasicPaySource((string) ($agreedPay['basic_pay_source'] ?? 'Fixed Salary'));
+            $currency = $this->validCurrencyCode((string) ($agreedPay['currency_code'] ?? app_currency_code()));
+            $exchangeRate = max(0.00000001, (float) ($agreedPay['exchange_rate_to_company'] ?? 1));
 
             $insert = $this->db->prepare(
                 'INSERT INTO employee_salary
-                    (employee_id, salary_structure_id, effective_date, actual_basic_pay, actual_housing_allowance, actual_transport_allowance, actual_other_allowances, basic_pay_source, hourly_rate, daily_rate, shift_rate, override_reason, is_active)
+                    (employee_id, salary_structure_id, effective_date, actual_basic_pay, actual_housing_allowance, actual_transport_allowance, actual_other_allowances, basic_pay_source, hourly_rate, daily_rate, shift_rate, currency_code, exchange_rate_to_company, override_reason, is_active)
                  VALUES
-                    (:employee_id, :salary_structure_id, :effective_date, :actual_basic_pay, :actual_housing_allowance, :actual_transport_allowance, :actual_other_allowances, :basic_pay_source, :hourly_rate, :daily_rate, :shift_rate, :override_reason, 1)'
+                    (:employee_id, :salary_structure_id, :effective_date, :actual_basic_pay, :actual_housing_allowance, :actual_transport_allowance, :actual_other_allowances, :basic_pay_source, :hourly_rate, :daily_rate, :shift_rate, :currency_code, :exchange_rate_to_company, :override_reason, 1)'
             );
             $insert->execute([
                 'employee_id' => $employeeId,
@@ -182,6 +192,8 @@ class EmployeeSalary extends Model
                 'hourly_rate' => $agreedPay['hourly_rate'] ?? null,
                 'daily_rate' => $agreedPay['daily_rate'] ?? null,
                 'shift_rate' => $agreedPay['shift_rate'] ?? null,
+                'currency_code' => $currency,
+                'exchange_rate_to_company' => $exchangeRate,
                 'override_reason' => $agreedPay['override_reason'] ?? null,
             ]);
 
@@ -199,6 +211,13 @@ class EmployeeSalary extends Model
     {
         $allowed = ['Fixed Salary', 'Attendance Hours', 'Days Worked', 'Shifts Worked'];
         return in_array($source, $allowed, true) ? $source : 'Fixed Salary';
+    }
+
+    private function validCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        $options = function_exists('corevia_currency_options') ? corevia_currency_options() : [];
+        return isset($options[$currency]) ? $currency : app_currency_code();
     }
 
     private function columnExists(string $table, string $column): bool

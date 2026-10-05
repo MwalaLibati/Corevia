@@ -58,6 +58,7 @@ class PayslipPdf
         $gross = (float) ($payload['grossEarnings'] ?? ($item['gross_pay'] ?? 0));
         $totalDeductions = (float) ($payload['totalDeductions'] ?? ($item['total_deductions'] ?? 0));
         $net = (float) ($payload['netPay'] ?? ($item['net_pay'] ?? 0));
+        $currency = (string) ($item['currency_code'] ?? app_currency_code());
 
         $this->rect(40, 775, 515, 42, '0.06 0.11 0.20');
         $this->text(56, 797, $companyName, 15, true, '1 1 1');
@@ -91,12 +92,12 @@ class PayslipPdf
             $y -= 20;
         }
 
-        $this->table(40, 630, 245, 'Earnings', $earnings, $gross, 'Gross Earnings');
-        $this->table(310, 630, 245, 'Deductions', $deductions, $totalDeductions, 'Total Deductions');
+        $this->table(40, 630, 245, 'Earnings', $earnings, $gross, 'Gross Earnings', $currency);
+        $this->table(310, 630, 245, 'Deductions', $deductions, $totalDeductions, 'Total Deductions', $currency);
 
         $this->rect(40, 245, 515, 50, '0.00 0.47 0.30');
         $this->text(58, 275, 'NET PAY', 11, true, '1 1 1');
-        $this->text(385, 267, format_currency($net), 20, true, '1 1 1');
+        $this->text(385, 267, format_currency($net, $currency), 20, true, '1 1 1');
 
         $this->line(40, 105, 555, 105, '0.82 0.86 0.91');
         $this->text(40, 88, 'This is a computer-generated payslip and does not require a physical signature.', 8, false, '0.38 0.45 0.55');
@@ -104,7 +105,7 @@ class PayslipPdf
         $this->line(430, 103, 555, 103, '0.20 0.24 0.31');
     }
 
-    private function table(float $x, float $y, float $width, string $title, array $rows, float $total, string $totalLabel): void
+    private function table(float $x, float $y, float $width, string $title, array $rows, float $total, string $totalLabel, string $currency): void
     {
         $this->rect($x, $y, $width, 24, '0.94 0.97 1.00');
         $this->text($x + 10, $y + 8, $title, 10, true, '0.08 0.16 0.29');
@@ -120,12 +121,12 @@ class PayslipPdf
             $amount = (float) ($row['amount'] ?? 0);
             $this->line($x, $lineY - 5, $x + $width, $lineY - 5, '0.90 0.92 0.95');
             $this->text($x + 10, $lineY, $this->fit($label, 31), 9, false, '0.30 0.35 0.42');
-            $this->text($x + $width - 92, $lineY, format_currency($amount), 9);
+            $this->text($x + $width - 92, $lineY, format_currency($amount, $currency), 9);
             $lineY -= 20;
         }
         $this->line($x, $lineY - 3, $x + $width, $lineY - 3, '0.20 0.24 0.31');
         $this->text($x + 10, $lineY - 18, $totalLabel, 10, true);
-        $this->text($x + $width - 100, $lineY - 18, format_currency($total), 10, true);
+        $this->text($x + $width - 100, $lineY - 18, format_currency($total, $currency), 10, true);
     }
 
     private function text(float $x, float $y, string $text, int $size = 10, bool $bold = false, string $color = '0 0 0'): void

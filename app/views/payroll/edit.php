@@ -460,16 +460,26 @@
                         <tr><td colspan="8" class="text-center text-gray">No payroll items generated yet.</td></tr>
                     <?php else: ?>
                         <?php foreach ($runItems as $item): ?>
+                            <?php $itemCurrency = (string) ($item['currency_code'] ?? app_currency_code()); ?>
                             <tr>
                                 <td>
                                     <div class="fw-semibold"><?= e((string) ($item['employee_name'] ?? '')) ?></div>
                                     <div class="text-gray small"><?= e((string) ($item['employee_number'] ?? '')) ?></div>
                                 </td>
-                                <td><?= e(format_currency((float) ($item['gross_pay'] ?? 0))) ?></td>
-                                <td><?= e(format_currency((float) ($item['total_deductions'] ?? 0))) ?></td>
-                                <td><?= e(format_currency((float) ($item['net_pay'] ?? 0))) ?></td>
-                                <td class="text-success"><?= e(format_currency((float) ($item['paid_amount'] ?? 0))) ?></td>
-                                <td class="<?= (float)($item['balance_due'] ?? 0) > 0 ? 'text-danger' : 'text-success' ?>"><?= e(format_currency((float) ($item['balance_due'] ?? 0))) ?></td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['gross_pay'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['gross_pay_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['total_deductions'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['total_deductions_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
+                                <td>
+                                    <?= e(format_currency((float) ($item['net_pay'] ?? 0), $itemCurrency)) ?>
+                                    <?php if ($itemCurrency !== app_currency_code()): ?><div class="text-gray small"><?= e(format_currency((float) ($item['net_pay_company'] ?? 0))) ?> reporting</div><?php endif; ?>
+                                </td>
+                                <td class="text-success"><?= e(format_currency((float) ($item['paid_amount'] ?? 0), $itemCurrency)) ?></td>
+                                <td class="<?= (float)($item['balance_due'] ?? 0) > 0 ? 'text-danger' : 'text-success' ?>"><?= e(format_currency((float) ($item['balance_due'] ?? 0), $itemCurrency)) ?></td>
                                 <td><?= e((string) ($item['generated_at'] ?? '-')) ?></td>
                                 <td class="text-end">
                                     <?php

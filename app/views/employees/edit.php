@@ -302,8 +302,13 @@ $oldInput = !empty($old) ? $old : $employee;
                 <span class="fw-semibold"><?= e((string) ($activeSalaryAssignment['structure_name'] ?? '')) ?></span>
                 <small class="text-gray d-block">Effective: <?= e((string) ($activeSalaryAssignment['effective_date'] ?? '')) ?></small>
                 <small class="text-gray d-block">
-                    Standard basic: <?= e(format_currency((float) ($activeSalaryAssignment['structure_basic_pay'] ?? 0))) ?>
-                    · Agreed basic: <?= e(format_currency((float) ($activeSalaryAssignment['basic_pay'] ?? 0))) ?>
+                    <?php $activeSalaryCurrency = (string) ($activeSalaryAssignment['currency_code'] ?? app_currency_code()); ?>
+                    Standard basic: <?= e(format_currency((float) ($activeSalaryAssignment['structure_basic_pay'] ?? 0), $activeSalaryCurrency)) ?>
+                    · Agreed basic: <?= e(format_currency((float) ($activeSalaryAssignment['basic_pay'] ?? 0), $activeSalaryCurrency)) ?>
+                    · Currency: <?= e($activeSalaryCurrency) ?>
+                    <?php if ($activeSalaryCurrency !== app_currency_code()): ?>
+                        · Rate to <?= e(app_currency_code()) ?>: <?= e(number_format((float) ($activeSalaryAssignment['exchange_rate_to_company'] ?? 1), 6)) ?>
+                    <?php endif; ?>
                 </small>
             <?php else: ?>
                 <span class="text-gray">No active salary structure assigned.</span>
@@ -334,6 +339,30 @@ $oldInput = !empty($old) ? $old : $employee;
                 <label class="form-label">Agreed Basic Pay</label>
                 <input type="number" step="0.01" min="0" name="actual_basic_pay" class="form-control js-pay-field" data-pay-source-field="Fixed Salary" value="<?= e((string) ($salaryInput['actual_basic_pay'] ?? '')) ?>" placeholder="Leave blank to use structure basic pay">
                 <small class="text-gray">For monthly staff, this is the agreed monthly basic pay.</small>
+            </div>
+
+            <?php
+                $companyCurrency = app_currency_code();
+                $selectedSalaryCurrency = (string) ($salaryInput['currency_code'] ?? ($activeSalaryAssignment['currency_code'] ?? $companyCurrency));
+                $selectedExchangeRate = (string) ($salaryInput['exchange_rate_to_company'] ?? ($activeSalaryAssignment['exchange_rate_to_company'] ?? '1'));
+                $currencyOptions = function_exists('corevia_currency_options') ? corevia_currency_options() : [$companyCurrency => ['name' => $companyCurrency]];
+            ?>
+            <div class="col-md-4">
+                <label class="form-label">Pay Currency *</label>
+                <select name="currency_code" id="salaryCurrencyCode" class="form-select" required>
+                    <?php foreach ($currencyOptions as $code => $currency): ?>
+                        <option value="<?= e((string) $code) ?>" <?= $selectedSalaryCurrency === (string) $code ? 'selected' : '' ?>>
+                            <?= e((string) $code) ?> - <?= e((string) ($currency['name'] ?? $code)) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <small class="text-gray">Use <?= e($companyCurrency) ?> unless this employee is paid in another currency.</small>
+            </div>
+
+            <div class="col-md-4" id="salaryExchangeRateWrap">
+                <label class="form-label">Exchange Rate to <?= e($companyCurrency) ?></label>
+                <input type="number" step="0.000001" min="0" name="exchange_rate_to_company" id="salaryExchangeRate" class="form-control" value="<?= e($selectedExchangeRate) ?>" placeholder="Example: 25.000000">
+                <small class="text-gray">1 selected pay currency equals this amount in <?= e($companyCurrency) ?> for reporting totals.</small>
             </div>
 
             <div class="col-12">
@@ -411,6 +440,10 @@ $oldInput = !empty($old) ? $old : $employee;
                 const cards = document.querySelectorAll('.js-pay-source-card');
                 const wraps = document.querySelectorAll('.js-pay-rate-wrap');
                 const fixedFields = document.querySelectorAll('.js-pay-field[data-pay-source-field="Fixed Salary"]');
+                const currencySelect = document.getElementById('salaryCurrencyCode');
+                const exchangeWrap = document.getElementById('salaryExchangeRateWrap');
+                const exchangeRate = document.getElementById('salaryExchangeRate');
+                const companyCurrency = <?= json_encode(app_currency_code()) ?>;
 
                 function applyPaySource(source) {
                     if (input) { input.value = source; }
@@ -439,6 +472,19 @@ $oldInput = !empty($old) ? $old : $employee;
                     });
                 });
                 applyPaySource(input ? input.value : 'Fixed Salary');
+
+                function applyCurrency() {
+                    if (!currencySelect || !exchangeWrap || !exchangeRate) { return; }
+                    const foreignCurrency = currencySelect.value !== companyCurrency;
+                    exchangeWrap.style.display = foreignCurrency ? '' : 'none';
+                    exchangeRate.required = foreignCurrency;
+                    if (!foreignCurrency) { exchangeRate.value = '1'; }
+                }
+
+                if (currencySelect) {
+                    currencySelect.addEventListener('change', applyCurrency);
+                    applyCurrency();
+                }
             })();
         </script>
 
@@ -467,14 +513,21 @@ $oldInput = !empty($old) ? $old : $employee;
                             $standardBasic = (float) ($assignment['structure_basic_pay'] ?? 0);
                             $agreedBasic = (float) ($assignment['basic_pay'] ?? $standardBasic);
                             $variance = $agreedBasic - $standardBasic;
+                            $assignmentCurrency = (string) ($assignment['currency_code'] ?? app_currency_code());
                             ?>
-                            <td><?= e(format_currency($standardBasic)) ?></td>
+                            <td><?= e(format_currency($standardBasic, $assignmentCurrency)) ?></td>
                             <td>
-                                <?= e(format_currency($agreedBasic)) ?>
+                                <?= e(format_currency($agreedBasic, $assignmentCurrency)) ?>
                                 <div class="text-gray small"><?= e((string) ($assignment['basic_pay_source'] ?? 'Fixed Salary')) ?></div>
+                                <div class="text-gray small">
+                                    <?= e($assignmentCurrency) ?>
+                                    <?php if ($assignmentCurrency !== app_currency_code()): ?>
+                                        @ <?= e(number_format((float) ($assignment['exchange_rate_to_company'] ?? 1), 6)) ?> to <?= e(app_currency_code()) ?>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                             <td class="<?= $variance === 0.0 ? 'text-gray' : ($variance > 0 ? 'text-success' : 'text-danger') ?>">
-                                <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . format_currency($variance)) ?>
+                                <?= $variance === 0.0 ? '-' : e(($variance > 0 ? '+' : '') . format_currency($variance, $assignmentCurrency)) ?>
                             </td>
                             <td><?= e((string) ($assignment['effective_date'] ?? '')) ?></td>
                             <td><?= (int) ($assignment['is_active'] ?? 0) === 1 ? 'Active' : 'Inactive' ?></td>

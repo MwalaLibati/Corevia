@@ -24,6 +24,8 @@ class SalaryChangeRequest extends Model
             'hourly_rate' => 'DECIMAL(12,4) NULL',
             'daily_rate' => 'DECIMAL(12,4) NULL',
             'shift_rate' => 'DECIMAL(12,4) NULL',
+            'currency_code' => "VARCHAR(3) NOT NULL DEFAULT 'ZMW'",
+            'exchange_rate_to_company' => 'DECIMAL(18,8) NOT NULL DEFAULT 1.00000000',
             'override_reason' => 'TEXT NULL',
         ];
 

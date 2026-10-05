@@ -11,6 +11,7 @@
     $embedded = (bool) ($embedded ?? false);
     $adminPdfUrl = base_url('payroll/payslipPdf/' . (string) ($item['payroll_run_id'] ?? 0) . '/' . (string) ($item['employee_id'] ?? 0));
     $pdfUrl = (string) ($pdfUrl ?? $adminPdfUrl);
+    $payslipCurrency = (string) ($item['currency_code'] ?? app_currency_code());
 ?>
 
 <!DOCTYPE html>
@@ -412,12 +413,12 @@
                     <?php foreach ($earningsLines as $line): ?>
                         <tr>
                             <td class="label"><?= e((string) ($line['label'] ?? '')) ?></td>
-                            <td><?= e(format_currency((float) ($line['amount'] ?? 0))) ?></td>
+                            <td><?= e(format_currency((float) ($line['amount'] ?? 0), $payslipCurrency)) ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <tr class="subtotal">
                         <td>Gross Earnings</td>
-                        <td><?= e(format_currency((float) $grossEarnings)) ?></td>
+                        <td><?= e(format_currency((float) $grossEarnings, $payslipCurrency)) ?></td>
                     </tr>
                 </table>
             </div>
@@ -428,19 +429,19 @@
                     <?php if (empty($deductionLines)): ?>
                         <tr>
                             <td class="label">No active deductions</td>
-                            <td><?= e(format_currency(0)) ?></td>
+                            <td><?= e(format_currency(0, $payslipCurrency)) ?></td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($deductionLines as $line): ?>
                             <tr>
                                 <td class="label"><?= e((string) ($line['label'] ?? '')) ?></td>
-                                <td><?= e(format_currency((float) ($line['amount'] ?? 0))) ?></td>
+                                <td><?= e(format_currency((float) ($line['amount'] ?? 0), $payslipCurrency)) ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>
                     <tr class="subtotal">
                         <td>Total Deductions</td>
-                        <td><?= e(format_currency((float) $totalDeductions)) ?></td>
+                        <td><?= e(format_currency((float) $totalDeductions, $payslipCurrency)) ?></td>
                     </tr>
                 </table>
             </div>
@@ -449,7 +450,7 @@
         <div class="net-pay">
             <div>
                 <div class="label">Net Pay</div>
-                <div class="amount"><?= e(format_currency((float) $netPay)) ?></div>
+                <div class="amount"><?= e(format_currency((float) $netPay, $payslipCurrency)) ?></div>
             </div>
             <div class="payment-info">
                 <div class="bank"><?= e((string) ($item['bank_name'] ?: 'Bank Transfer')) ?></div>

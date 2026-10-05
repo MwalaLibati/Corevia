@@ -19,6 +19,18 @@ class PayrollRun extends Model
 
     private function ensureHistoricalPayrollSchema(): void
     {
+        foreach ([
+            'currency_code' => "VARCHAR(3) NOT NULL DEFAULT 'ZMW'",
+            'exchange_rate_to_company' => 'DECIMAL(18,8) NOT NULL DEFAULT 1.00000000',
+            'gross_pay_company' => 'DECIMAL(14,2) NOT NULL DEFAULT 0.00',
+            'total_deductions_company' => 'DECIMAL(14,2) NOT NULL DEFAULT 0.00',
+            'net_pay_company' => 'DECIMAL(14,2) NOT NULL DEFAULT 0.00',
+        ] as $column => $definition) {
+            if ($this->tableExists('payroll_items') && !$this->columnExists('payroll_items', $column)) {
+                $this->db->exec("ALTER TABLE payroll_items ADD COLUMN {$column} {$definition}");
+            }
+        }
+
         $stmt = $this->db->prepare(
             'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
@@ -368,8 +380,10 @@ class PayrollRun extends Model
             $resetBonuses->execute($resetParams);
 
             $itemInsert = $this->db->prepare(
-                'INSERT INTO payroll_items (payroll_run_id, employee_id, gross_pay, total_deductions, net_pay, generated_at)
-                 VALUES (:payroll_run_id, :employee_id, :gross_pay, :total_deductions, :net_pay, NOW())'
+                'INSERT INTO payroll_items
+                    (payroll_run_id, employee_id, gross_pay, total_deductions, net_pay, currency_code, exchange_rate_to_company, gross_pay_company, total_deductions_company, net_pay_company, generated_at)
+                 VALUES
+                    (:payroll_run_id, :employee_id, :gross_pay, :total_deductions, :net_pay, :currency_code, :exchange_rate_to_company, :gross_pay_company, :total_deductions_company, :net_pay_company, NOW())'
             );
             $deductionInsert = $this->db->prepare(
                 'INSERT INTO payroll_item_deductions
@@ -392,6 +406,11 @@ class PayrollRun extends Model
                     'gross_pay' => (float) $row['gross_pay'],
                     'total_deductions' => (float) $row['total_deductions'],
                     'net_pay' => (float) $row['net_pay'],
+                    'currency_code' => (string) ($row['currency_code'] ?? app_currency_code()),
+                    'exchange_rate_to_company' => (float) ($row['exchange_rate_to_company'] ?? 1),
+                    'gross_pay_company' => (float) ($row['gross_pay_company'] ?? $row['gross_pay']),
+                    'total_deductions_company' => (float) ($row['total_deductions_company'] ?? $row['total_deductions']),
+                    'net_pay_company' => (float) ($row['net_pay_company'] ?? $row['net_pay']),
                 ]);
                 $itemId = (int) $this->db->lastInsertId();
 
@@ -496,6 +515,7 @@ class PayrollRun extends Model
         $attendanceEngine = new AttendancePayrollRule();
         $attendancePayroll = $attendanceEngine->previewInputsForRun($run);
         $attendanceByEmployee = $attendancePayroll['by_employee'] ?? [];
+        $companyCurrency = app_currency_code();
 
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
@@ -547,6 +567,12 @@ class PayrollRun extends Model
 
             if (!$salary) {
                 continue;
+            }
+
+            $salaryCurrency = $this->validCurrencyCode((string) ($salary['currency_code'] ?? $companyCurrency));
+            $exchangeRateToCompany = max(0.00000001, (float) ($salary['exchange_rate_to_company'] ?? 1));
+            if ($salaryCurrency === $companyCurrency) {
+                $exchangeRateToCompany = 1.0;
             }
 
             $proration = $this->employmentProration($employee, $periodStart, $periodEnd, $prorationMode);
@@ -712,7 +738,7 @@ class PayrollRun extends Model
             }
 
             foreach (TaxCalculator::employerContributionsForBases($napsaBase, $nhimaBase) as $employer) {
-                $totals['employer_contributions'] += (float) $employer['amount'];
+                $totals['employer_contributions'] += round((float) $employer['amount'] * $exchangeRateToCompany, 2);
                 $deductionLines[] = [
                     'code' => (string) $employer['code'],
                     'name' => (string) $employer['label'],
@@ -726,6 +752,9 @@ class PayrollRun extends Model
 
             $deductions = round($employeeSpecificTotal + $attendanceDeductionTotal + $statutoryTotal + $advanceDeduction, 2);
             $netPay = max(0, round($grossPay - $deductions, 2));
+            $grossPayCompany = round($grossPay * $exchangeRateToCompany, 2);
+            $deductionsCompany = round($deductions * $exchangeRateToCompany, 2);
+            $netPayCompany = round($netPay * $exchangeRateToCompany, 2);
 
             $items[] = [
                 'employee_id' => $employeeId,
@@ -734,6 +763,12 @@ class PayrollRun extends Model
                 'gross_pay' => round($grossPay, 2),
                 'total_deductions' => $deductions,
                 'net_pay' => $netPay,
+                'currency_code' => $salaryCurrency,
+                'company_currency_code' => $companyCurrency,
+                'exchange_rate_to_company' => $exchangeRateToCompany,
+                'gross_pay_company' => $grossPayCompany,
+                'total_deductions_company' => $deductionsCompany,
+                'net_pay_company' => $netPayCompany,
                 'deduction_lines' => $deductionLines,
                 'earning_lines' => $earningLines,
                 'bonus_ids' => $bonusIds,
@@ -751,9 +786,16 @@ class PayrollRun extends Model
                 'pay_warnings' => $payWarnings,
             ];
 
-            $totals['gross'] += $grossPay;
-            $totals['deductions'] += $deductions;
-            $totals['net'] += $netPay;
+            $totals['gross'] += $grossPayCompany;
+            $totals['deductions'] += $deductionsCompany;
+            $totals['net'] += $netPayCompany;
+            if (!isset($totals['currency_summary'][$salaryCurrency])) {
+                $totals['currency_summary'][$salaryCurrency] = ['employees' => 0, 'gross' => 0.0, 'deductions' => 0.0, 'net' => 0.0];
+            }
+            $totals['currency_summary'][$salaryCurrency]['employees']++;
+            $totals['currency_summary'][$salaryCurrency]['gross'] += $grossPay;
+            $totals['currency_summary'][$salaryCurrency]['deductions'] += $deductions;
+            $totals['currency_summary'][$salaryCurrency]['net'] += $netPay;
             $totals['employees']++;
         }
 
@@ -761,6 +803,11 @@ class PayrollRun extends Model
         $totals['deductions'] = round($totals['deductions'], 2);
         $totals['net'] = round($totals['net'], 2);
         $totals['employer_contributions'] = round($totals['employer_contributions'], 2);
+        foreach (($totals['currency_summary'] ?? []) as $currency => $summary) {
+            $totals['currency_summary'][$currency]['gross'] = round((float) $summary['gross'], 2);
+            $totals['currency_summary'][$currency]['deductions'] = round((float) $summary['deductions'], 2);
+            $totals['currency_summary'][$currency]['net'] = round((float) $summary['net'], 2);
+        }
         $totals['items'] = $items;
         $totals['attendance'] = $attendancePayroll;
 
@@ -816,9 +863,9 @@ class PayrollRun extends Model
     private function refreshRunTotals(int $runId): void
     {
         $stmt = $this->db->prepare(
-            'SELECT COALESCE(SUM(gross_pay), 0) AS gross,
-                    COALESCE(SUM(total_deductions), 0) AS deductions,
-                    COALESCE(SUM(net_pay), 0) AS net
+            'SELECT COALESCE(SUM(CASE WHEN gross_pay_company > 0 THEN gross_pay_company ELSE gross_pay END), 0) AS gross,
+                    COALESCE(SUM(CASE WHEN total_deductions_company > 0 THEN total_deductions_company ELSE total_deductions END), 0) AS deductions,
+                    COALESCE(SUM(CASE WHEN net_pay_company > 0 THEN net_pay_company ELSE net_pay END), 0) AS net
              FROM payroll_items
              WHERE payroll_run_id = :run_id'
         );
@@ -876,6 +923,13 @@ class PayrollRun extends Model
             'snapshot_json' => json_encode($snapshot, JSON_UNESCAPED_SLASHES),
             'created_by' => $userId,
         ]);
+    }
+
+    private function validCurrencyCode(string $currency): string
+    {
+        $currency = strtoupper(trim($currency));
+        $options = function_exists('corevia_currency_options') ? corevia_currency_options() : [];
+        return isset($options[$currency]) ? $currency : app_currency_code();
     }
 
     public function calculationHistory(int $runId): array
@@ -1153,6 +1207,18 @@ class PayrollRun extends Model
         }
 
         return $cache[$table];
+    }
+
+    private function columnExists(string $table, string $column): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table AND COLUMN_NAME = :column'
+        );
+        $stmt->execute(['table' => $table, 'column' => $column]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     private function nextCorrectionPeriod(string $period): string

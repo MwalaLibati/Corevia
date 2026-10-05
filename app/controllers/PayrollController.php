@@ -471,7 +471,7 @@ class PayrollController extends Controller
         $and = $cid > 0 ? ' AND pr.company_id = :run_cid AND e.company_id = :employee_cid' : '';
         $stmt = db()->prepare(
             "SELECT e.full_name, e.employee_number, e.bank_name, e.bank_account_number,
-                    pi.net_pay, d.name AS department_name
+                    pi.net_pay, pi.currency_code, pi.net_pay_company, d.name AS department_name
              FROM payroll_items pi
              JOIN payroll_runs pr ON pr.id = pi.payroll_run_id
              JOIN employees e ON e.id = pi.employee_id
@@ -493,7 +493,7 @@ class PayrollController extends Controller
         header('Expires: 0');
 
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Employee No.', 'Full Name', 'Department', 'Bank Name', 'Account Number', 'Net Pay (' . app_currency_code() . ')', 'Pay Period']);
+        fputcsv($out, ['Employee No.', 'Full Name', 'Department', 'Bank Name', 'Account Number', 'Currency', 'Net Pay', 'Reporting Net (' . app_currency_code() . ')', 'Pay Period']);
 
         foreach ($items as $item) {
             fputcsv($out, [
@@ -502,7 +502,9 @@ class PayrollController extends Controller
                 $item['department_name']     ?? '',
                 $item['bank_name']           ?? '',
                 $item['bank_account_number'] ?? '',
+                $item['currency_code']       ?? app_currency_code(),
                 number_format((float)($item['net_pay'] ?? 0), 2, '.', ''),
+                number_format((float)($item['net_pay_company'] ?? $item['net_pay'] ?? 0), 2, '.', ''),
                 $run['pay_period'],
             ]);
         }
@@ -950,6 +952,7 @@ class PayrollController extends Controller
 
     private function payslipEmailTokens(array $item, array $company): array
     {
+        $currency = (string) ($item['currency_code'] ?? app_currency_code());
         return [
             'company_name' => (string) ($company['name'] ?? app_product_name()),
             'company_email' => (string) ($company['email'] ?? ''),
@@ -959,9 +962,9 @@ class PayrollController extends Controller
             'employee_number' => (string) ($item['employee_number'] ?? ''),
             'employee_email' => (string) ($item['employee_email'] ?? ''),
             'pay_period' => (string) ($item['pay_period'] ?? ''),
-            'gross_pay' => format_currency((float) ($item['gross_pay'] ?? 0)),
-            'total_deductions' => format_currency((float) ($item['total_deductions'] ?? 0)),
-            'net_pay' => format_currency((float) ($item['net_pay'] ?? 0)),
+            'gross_pay' => format_currency((float) ($item['gross_pay'] ?? 0), $currency),
+            'total_deductions' => format_currency((float) ($item['total_deductions'] ?? 0), $currency),
+            'net_pay' => format_currency((float) ($item['net_pay'] ?? 0), $currency),
             'portal_url' => public_url('portal/login'),
             'payslip_url' => public_url('portal/payslipView/' . (string) ($item['id'] ?? '')),
             'today' => date('d M Y'),
@@ -974,9 +977,10 @@ class PayrollController extends Controller
         $employeeNo = e((string) ($item['employee_number'] ?? ''));
         $period = e((string) ($item['pay_period'] ?? ''));
         $runDate = e((string) ($item['run_date'] ?? ''));
-        $gross = e(format_currency((float) ($item['gross_pay'] ?? 0)));
-        $deductions = e(format_currency((float) ($item['total_deductions'] ?? 0)));
-        $net = e(format_currency((float) ($item['net_pay'] ?? 0)));
+        $currency = (string) ($item['currency_code'] ?? app_currency_code());
+        $gross = e(format_currency((float) ($item['gross_pay'] ?? 0), $currency));
+        $deductions = e(format_currency((float) ($item['total_deductions'] ?? 0), $currency));
+        $net = e(format_currency((float) ($item['net_pay'] ?? 0), $currency));
         $company = e($companyName);
 
         return <<<HTML
@@ -1020,9 +1024,10 @@ class PayrollController extends Controller
         $employeeNo = e((string) ($item['employee_number'] ?? ''));
         $period = e((string) ($item['pay_period'] ?? ''));
         $runDate = e((string) ($item['run_date'] ?? ''));
-        $gross = e(format_currency((float) ($item['gross_pay'] ?? 0)));
-        $deductions = e(format_currency((float) ($item['total_deductions'] ?? 0)));
-        $net = e(format_currency((float) ($item['net_pay'] ?? 0)));
+        $currency = (string) ($item['currency_code'] ?? app_currency_code());
+        $gross = e(format_currency((float) ($item['gross_pay'] ?? 0), $currency));
+        $deductions = e(format_currency((float) ($item['total_deductions'] ?? 0), $currency));
+        $net = e(format_currency((float) ($item['net_pay'] ?? 0), $currency));
         $company = e($companyName);
 
         return <<<HTML
