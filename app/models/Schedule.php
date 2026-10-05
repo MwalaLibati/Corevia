@@ -299,8 +299,10 @@ class Schedule extends Model
         $where = 'se.company_id = :cid';
         $params = ['cid' => Tenant::id()];
         if (preg_match('/^\d{4}-\d{2}$/', $month)) {
-            $where .= " AND DATE_FORMAT(se.exception_date, '%Y-%m') = :month";
-            $params['month'] = $month;
+            $monthStart = $month . '-01';
+            $where .= ' AND se.exception_date >= :month_start AND se.exception_date < :month_end';
+            $params['month_start'] = $monthStart;
+            $params['month_end'] = date('Y-m-d', strtotime($monthStart . ' +1 month'));
         }
         $stmt = $this->db->prepare(
             "SELECT se.*, e.employee_number, e.full_name, s.name AS shift_name, s.start_time, s.end_time
@@ -635,7 +637,12 @@ class Schedule extends Model
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
             $month = date('Y-m');
         }
-        $params = ['cid' => Tenant::id(), 'month' => $month];
+        $monthStart = $month . '-01';
+        $params = [
+            'cid' => Tenant::id(),
+            'month_start' => $monthStart,
+            'month_end' => date('Y-m-d', strtotime($monthStart . ' +1 month')),
+        ];
         $employeeFilter = '';
         if ($employeeId > 0) {
             $employeeFilter = ' AND ar.employee_id = :employee_id';
@@ -646,7 +653,8 @@ class Schedule extends Model
              FROM attendance_records ar
              JOIN employees e ON e.id = ar.employee_id
              WHERE e.company_id = :cid
-               AND DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month
+               AND ar.attendance_date >= :month_start
+               AND ar.attendance_date < :month_end
                {$employeeFilter}
              ORDER BY ar.attendance_date DESC, e.full_name ASC"
         );

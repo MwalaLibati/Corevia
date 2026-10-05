@@ -24,8 +24,10 @@ class AttendanceRecord extends Model
             $params['employee_id'] = (int) $filters['employee_id'];
         }
         if (!empty($filters['month']) && preg_match('/^\d{4}-\d{2}$/', (string) $filters['month'])) {
-            $where[] = "DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month";
-            $params['month'] = (string) $filters['month'];
+            $monthStart = (string) $filters['month'] . '-01';
+            $where[] = 'ar.attendance_date >= :month_start AND ar.attendance_date < :month_end';
+            $params['month_start'] = $monthStart;
+            $params['month_end'] = date('Y-m-d', strtotime($monthStart . ' +1 month'));
         }
         $and = $where ? ' WHERE ' . implode(' AND ', $where) : '';
         $sql = 'SELECT ar.*, e.full_name AS employee_name, e.employee_number
@@ -53,8 +55,10 @@ class AttendanceRecord extends Model
             $params['employee_id'] = (int) $filters['employee_id'];
         }
         if (!empty($filters['month']) && preg_match('/^\d{4}-\d{2}$/', (string) $filters['month'])) {
-            $and[] = "DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month";
-            $params['month'] = (string) $filters['month'];
+            $monthStart = (string) $filters['month'] . '-01';
+            $and[] = 'ar.attendance_date >= :month_start AND ar.attendance_date < :month_end';
+            $params['month_start'] = $monthStart;
+            $params['month_end'] = date('Y-m-d', strtotime($monthStart . ' +1 month'));
         }
         $sql = 'SELECT ar.*, e.full_name AS employee_name, e.employee_number
                 FROM attendance_records ar
@@ -106,6 +110,7 @@ class AttendanceRecord extends Model
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
             $month = date('Y-m');
         }
+        $monthStart = $month . '-01';
 
         $stmt = $this->db->prepare(
             "SELECT ar.*
@@ -113,13 +118,15 @@ class AttendanceRecord extends Model
              JOIN employees e ON e.id = ar.employee_id
              WHERE ar.employee_id = :employee_id
                AND e.company_id = :cid
-               AND DATE_FORMAT(ar.attendance_date, '%Y-%m') = :month
+               AND ar.attendance_date >= :month_start
+               AND ar.attendance_date < :month_end
              ORDER BY ar.attendance_date DESC, ar.id DESC"
         );
         $stmt->execute([
             'employee_id' => $employeeId,
             'cid' => Tenant::id(),
-            'month' => $month,
+            'month_start' => $monthStart,
+            'month_end' => date('Y-m-d', strtotime($monthStart . ' +1 month')),
         ]);
 
         return $stmt->fetchAll();
