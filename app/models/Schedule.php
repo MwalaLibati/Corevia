@@ -316,11 +316,12 @@ class Schedule extends Model
 
     public function employees(): array
     {
+        $archivedFilter = $this->columnExists('employees', 'archived_at') ? ' AND archived_at IS NULL' : '';
         $stmt = $this->db->prepare(
-            'SELECT id, employee_number, full_name
+            "SELECT id, employee_number, full_name
              FROM employees
-             WHERE company_id = :cid AND archived_at IS NULL
-             ORDER BY full_name ASC'
+             WHERE company_id = :cid{$archivedFilter}
+             ORDER BY full_name ASC"
         );
         $stmt->execute(['cid' => Tenant::id()]);
         return $stmt->fetchAll();
@@ -773,11 +774,27 @@ class Schedule extends Model
 
     private function ensureColumn(string $table, string $column, string $definition): void
     {
-        if ($this->columnExists($table, $column)) {
+        if (!$this->tableExists($table) || $this->columnExists($table, $column)) {
             return;
         }
 
-        $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+        try {
+            $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+        } catch (Throwable $exception) {
+            error_log("Schedule schema upgrade skipped for {$table}.{$column}: " . $exception->getMessage());
+        }
+    }
+
+    private function tableExists(string $table): bool
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*)
+             FROM INFORMATION_SCHEMA.TABLES
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table'
+        );
+        $stmt->execute(['table' => $table]);
+
+        return (int) $stmt->fetchColumn() > 0;
     }
 
     private function columnExists(string $table, string $column): bool
@@ -794,20 +811,35 @@ class Schedule extends Model
 
     private function backfillShiftExpectedHours(): void
     {
-        $this->db->exec(
-            "UPDATE shifts
-             SET expected_hours = ROUND(
-                 GREATEST(
-                     0,
-                     (CASE
-                         WHEN TIME_TO_SEC(end_time) <= TIME_TO_SEC(start_time)
-                         THEN TIME_TO_SEC(end_time) + 86400 - TIME_TO_SEC(start_time)
-                         ELSE TIME_TO_SEC(end_time) - TIME_TO_SEC(start_time)
-                      END) / 3600 - (COALESCE(break_minutes, 0) / 60)
-                 ),
-                 2
-             )
-             WHERE expected_hours IS NULL OR expected_hours = 0"
-        );
+        foreach (['shifts' => ['start_time', 'end_time', 'break_minutes', 'expected_hours']] as $table => $columns) {
+            if (!$this->tableExists($table)) {
+                return;
+            }
+            foreach ($columns as $column) {
+                if (!$this->columnExists($table, $column)) {
+                    return;
+                }
+            }
+        }
+
+        try {
+            $this->db->exec(
+                "UPDATE shifts
+                 SET expected_hours = ROUND(
+                     GREATEST(
+                         0,
+                         (CASE
+                             WHEN TIME_TO_SEC(end_time) <= TIME_TO_SEC(start_time)
+                             THEN TIME_TO_SEC(end_time) + 86400 - TIME_TO_SEC(start_time)
+                             ELSE TIME_TO_SEC(end_time) - TIME_TO_SEC(start_time)
+                          END) / 3600 - (COALESCE(break_minutes, 0) / 60)
+                     ),
+                     2
+                 )
+                 WHERE expected_hours IS NULL OR expected_hours = 0"
+            );
+        } catch (Throwable $exception) {
+            error_log('Schedule expected-hours backfill skipped: ' . $exception->getMessage());
+        }
     }
 }
