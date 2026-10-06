@@ -342,8 +342,7 @@ class OnboardingController extends Controller
 
         $data['hired_at'] = $data['hired_at'] ?? date('Y-m-d');
         $data['probation_end_date'] = null;
-        $data['employee_number'] = $employeeModel->generateNextEmployeeNumber();
-        return $employeeModel->insert($data);
+        return $employeeModel->createWithGeneratedNumber($data)['id'];
     }
 
     private function saveUploadedDocuments(int $requestId, int $companyId): void

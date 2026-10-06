@@ -14,6 +14,7 @@ class Employee extends Model
     public function __construct()
     {
         parent::__construct();
+        (new CompanyEmployeeIdentity($this->db))->ensureSchema();
         (new ClientEntity())->ensureSchema();
         (new Branch())->ensureSchema();
         $this->ensurePortalAccessSchema();
@@ -40,23 +41,14 @@ class Employee extends Model
     public function generateNextEmployeeNumber(): string
     {
         $cid = Tenant::id();
-        $sql = "SELECT employee_number
-                FROM employees
-                WHERE employee_number REGEXP '^EMP[0-9]{6}$'
-                " . ($cid > 0 ? "AND company_id = $cid" : '') . "
-                ORDER BY employee_number DESC
-                LIMIT 1";
+        return (new CompanyEmployeeIdentity($this->db))->previewNextEmployeeNumber($cid);
+    }
 
-        $lastEmployeeNumber = (string) $this->db->query($sql)->fetchColumn();
-
-        if ($lastEmployeeNumber === '') {
-            return 'EMP000001';
-        }
-
-        $lastSequence = (int) substr($lastEmployeeNumber, 3);
-        $nextSequence = $lastSequence + 1;
-
-        return 'EMP' . str_pad((string) $nextSequence, 6, '0', STR_PAD_LEFT);
+    /** @return array{id:int,employee_number:string} */
+    public function createWithGeneratedNumber(array $data): array
+    {
+        unset($data['employee_number'], $data['legacy_employee_number']);
+        return (new CompanyEmployeeIdentity($this->db))->createEmployee($data, Tenant::id());
     }
 
     public function search(string $keyword): array
@@ -146,11 +138,8 @@ class Employee extends Model
 
     public function employeeNumberExists(string $employeeNumber, ?int $excludeId = null): bool
     {
-        $cid = Tenant::id();
-        $sql = 'SELECT id FROM employees WHERE employee_number = :employee_number'
-            . ($cid > 0 ? ' AND company_id = :cid' : '');
+        $sql = 'SELECT id FROM employees WHERE employee_number = :employee_number';
         $params = ['employee_number' => $employeeNumber];
-        if ($cid > 0) { $params['cid'] = $cid; }
 
         if ($excludeId !== null) {
             $sql .= ' AND id != :exclude_id';

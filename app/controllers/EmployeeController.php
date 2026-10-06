@@ -33,6 +33,13 @@ class EmployeeController extends Controller
         require_role(['Super Admin', 'HR Officer']);
 
         $employeeModel = new Employee();
+        $flashError = Session::flash('error');
+        try {
+            $nextEmployeeNumber = $employeeModel->generateNextEmployeeNumber();
+        } catch (Throwable $e) {
+            $nextEmployeeNumber = '';
+            $flashError = $flashError ?: $e->getMessage();
+        }
 
         $this->render('employees/create', [
             'title' => 'Create Employee',
@@ -41,9 +48,9 @@ class EmployeeController extends Controller
             'branches' => $employeeModel->branches(),
             'designations' => $employeeModel->designations(),
             'employmentTypes' => (new EmploymentType())->active(),
-            'flashError' => Session::flash('error'),
+            'flashError' => $flashError,
             'old' => $_SESSION['_old_employee_input'] ?? [],
-            'nextEmployeeNumber' => $employeeModel->generateNextEmployeeNumber(),
+            'nextEmployeeNumber' => $nextEmployeeNumber,
         ]);
 
         unset($_SESSION['_old_employee_input']);
@@ -302,7 +309,7 @@ class EmployeeController extends Controller
         $employeeModel = new Employee();
 
         $data = $this->collectEmployeeInput();
-        $data['employee_number'] = $employeeModel->generateNextEmployeeNumber();
+        unset($data['employee_number']);
         $_SESSION['_old_employee_input'] = $data;
 
         $error = $this->validateEmployeeInput($data);
@@ -317,14 +324,17 @@ class EmployeeController extends Controller
         }
 
         try {
-            $employeeId = $employeeModel->insert($data);
+            $createdEmployee = $employeeModel->createWithGeneratedNumber($data);
+            $employeeId = $createdEmployee['id'];
+            $data['employee_number'] = $createdEmployee['employee_number'];
             WorkflowEvent::record('employee_onboarding', 'Employee', (int) $employeeId, null, 'Created', 'employee_create', 'Employee profile created by HR.');
             AuditLog::record('created', 'Created employee ' . $data['full_name'], 'Employee', (int) $employeeId);
             unset($_SESSION['_old_employee_input']);
             Session::flash('success', 'Employee created successfully.');
             redirect('employee/index');
-        } catch (PDOException) {
-            Session::flash('error', 'Failed to create employee. Please try again.');
+        } catch (Throwable $e) {
+            $message = $e instanceof RuntimeException ? $e->getMessage() : 'Failed to create employee. Please try again.';
+            Session::flash('error', $message);
             redirect('employee/create');
         }
     }
@@ -1080,16 +1090,17 @@ class EmployeeController extends Controller
                 'hired_at' => $this->normalizeDate((string) ($data['hired_at'] ?? '')),
                 'probation_end_date' => $this->normalizeDate((string) ($data['probation_end_date'] ?? '')),
             ];
-            if ($payload['employee_number'] === '') {
-                $payload['employee_number'] = $employeeModel->generateNextEmployeeNumber();
-            }
             if ($payload['email'] !== null && !filter_var($payload['email'], FILTER_VALIDATE_EMAIL)) {
                 $errors[] = "Line {$line}: email format is invalid.";
                 continue;
             }
 
             try {
-                $existing = $this->findEmployeeByNumber($payload['employee_number']);
+                $existing = $payload['employee_number'] !== '' ? $this->findEmployeeByNumber($payload['employee_number']) : null;
+                if ($payload['employee_number'] !== '' && !$existing) {
+                    $errors[] = "Line {$line}: employee_number '{$payload['employee_number']}' was not found. Leave it blank to create a new employee with an automatic number.";
+                    continue;
+                }
                 if ($payload['email'] !== null && $employeeModel->emailExists($payload['email'], $existing ? (int) $existing['id'] : null)) {
                     $errors[] = "Line {$line}: email already belongs to another employee.";
                     continue;
@@ -1099,8 +1110,10 @@ class EmployeeController extends Controller
                     AuditLog::recordChanges('employee_import_update', 'Updated employee from CSV ' . $payload['employee_number'], 'Employee', (int) $existing['id'], $existing, $payload);
                     $updated++;
                 } else {
-                    $id = $employeeModel->insert($payload);
-                    AuditLog::record('employee_import_create', 'Created employee from CSV ' . $payload['employee_number'], 'Employee', $id, 'admin', ['line' => $line]);
+                    unset($payload['employee_number']);
+                    $createdEmployee = $employeeModel->createWithGeneratedNumber($payload);
+                    $id = $createdEmployee['id'];
+                    AuditLog::record('employee_import_create', 'Created employee from CSV ' . $createdEmployee['employee_number'], 'Employee', $id, 'admin', ['line' => $line]);
                     $created++;
                 }
             } catch (Throwable $e) {
@@ -1115,9 +1128,10 @@ class EmployeeController extends Controller
     private function findEmployeeByNumber(string $employeeNumber): ?array
     {
         $cid = Tenant::id();
-        $sql = 'SELECT * FROM employees WHERE employee_number = :employee_number' . ($cid > 0 ? ' AND company_id = :cid' : '') . ' LIMIT 1';
+        $sql = 'SELECT * FROM employees WHERE (employee_number = :employee_number OR legacy_employee_number = :legacy_employee_number)'
+            . ($cid > 0 ? ' AND company_id = :cid' : '') . ' LIMIT 1';
         $stmt = db()->prepare($sql);
-        $params = ['employee_number' => $employeeNumber];
+        $params = ['employee_number' => $employeeNumber, 'legacy_employee_number' => $employeeNumber];
         if ($cid > 0) {
             $params['cid'] = $cid;
         }

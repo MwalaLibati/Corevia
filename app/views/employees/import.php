@@ -23,7 +23,7 @@
             <div class="col-md-8">
                 <label class="form-label">Employee CSV</label>
                 <input type="file" name="employee_csv" class="form-control" accept=".csv,text/csv" required>
-                <div class="form-text">Existing employee numbers are updated. Blank employee numbers are auto-generated.</div>
+                <div class="form-text">Use an existing employee number to update that employee. Leave it blank to create a new employee with an automatic company-prefixed number.</div>
             </div>
             <div class="col-md-4">
                 <button type="submit" class="btn btn-primary">Import Employees</button>

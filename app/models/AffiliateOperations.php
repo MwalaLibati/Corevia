@@ -475,14 +475,19 @@ class AffiliateOperations extends Model
             $slug = $base . '-' . (++$i);
         }
 
+        $identity = new CompanyEmployeeIdentity($this->db);
+        $identity->ensureSchema();
+        $employeeCode = $identity->suggestCode((string) $lead['company_name']);
+
         $this->db->beginTransaction();
         try {
             $this->db->prepare(
-                "INSERT INTO companies (name, slug, phone, email, subscription_plan, account_status, is_active, created_at)
-                 VALUES (:name, :slug, :phone, :email, 'Trial', 'Active', 1, NOW())"
+                "INSERT INTO companies (name, slug, employee_code, phone, email, subscription_plan, account_status, is_active, created_at)
+                 VALUES (:name, :slug, :employee_code, :phone, :email, 'Trial', 'Active', 1, NOW())"
             )->execute([
                 'name' => (string) $lead['company_name'],
                 'slug' => $slug,
+                'employee_code' => $employeeCode,
                 'phone' => trim((string) ($lead['contact_phone'] ?? '')) ?: null,
                 'email' => trim((string) ($lead['contact_email'] ?? '')) ?: null,
             ]);

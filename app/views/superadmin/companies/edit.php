@@ -57,6 +57,14 @@
                     <div class="form-text text-muted">Slug cannot be changed after creation.</div>
                 </div>
                 <div class="col-md-6">
+                    <label class="form-label fw-semibold">Employee Code</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="<?= e((string)($company['employee_code'] ?? '')) ?>" disabled>
+                        <span class="input-group-text">0001</span>
+                    </div>
+                    <div class="form-text text-muted">Used in every employee number and cannot be changed after setup.</div>
+                </div>
+                <div class="col-md-6">
                     <label class="form-label fw-semibold">Subscription Plan</label>
                     <select name="subscription_plan" class="form-select">
                         <?php foreach (($plans ?? []) as $p): ?>

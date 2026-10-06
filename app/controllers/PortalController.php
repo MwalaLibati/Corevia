@@ -33,7 +33,7 @@ class PortalController extends Controller
             redirect('portal/login');
         }
 
-        $employeeNumber = strtoupper(trim((string) $this->input('employee_number', '')));
+        $employeeNumber = strtoupper(preg_replace('/\s+/', '', trim((string) $this->input('employee_number', ''))) ?? '');
         $password       = (string) $this->input('password', '');
         $ipAddress      = $this->clientIp();
         $limiter        = new LoginAttempt();
@@ -50,7 +50,14 @@ class PortalController extends Controller
         }
 
         $stmt = db()->prepare(
-            "SELECT * FROM employees WHERE UPPER(employee_number) = :en AND portal_active = 1 LIMIT 1"
+            "SELECT e.*
+             FROM employees e
+             JOIN companies c ON c.id = e.company_id
+             WHERE e.employee_number = :en
+               AND e.portal_active = 1
+               AND c.is_active = 1
+               AND c.deleted_at IS NULL
+             LIMIT 1"
         );
         $stmt->execute(['en' => $employeeNumber]);
         $employee = $stmt->fetch();

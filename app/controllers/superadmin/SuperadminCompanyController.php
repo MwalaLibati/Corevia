@@ -59,6 +59,8 @@ class SuperadminCompanyController extends Controller
 
         $name  = trim((string) $this->input('name', ''));
         $slug  = strtolower(trim((string) $this->input('slug', '')));
+        $identity = new CompanyEmployeeIdentity();
+        $employeeCode = $identity->normalizeCode((string) $this->input('employee_code', ''));
         $email = trim((string) $this->input('email', ''));
         $phone = trim((string) $this->input('phone', ''));
         $plan  = (string) $this->input('subscription_plan', 'Trial');
@@ -74,6 +76,7 @@ class SuperadminCompanyController extends Controller
         $oldInput = [
             'name' => $name,
             'slug' => $slug,
+            'employee_code' => $employeeCode,
             'email' => $email,
             'phone' => $phone,
             'subscription_plan' => $plan,
@@ -86,9 +89,21 @@ class SuperadminCompanyController extends Controller
             'new_client_entity_name' => $newClientEntityName,
         ];
 
-        if ($name === '' || $slug === '' || $adminName === '' || $adminEmail === '') {
+        if ($name === '' || $slug === '' || $employeeCode === '' || $adminName === '' || $adminEmail === '') {
             $this->flashCreateOldInput($oldInput);
-            Session::flash('error', 'Company name, slug, admin name, and admin email are required.');
+            Session::flash('error', 'Company name, slug, employee code, admin name, and admin email are required.');
+            redirect('superadmin/company/create');
+        }
+
+        if (!$identity->validCode($employeeCode)) {
+            $this->flashCreateOldInput($oldInput);
+            Session::flash('error', 'Employee code must contain 2 to 6 uppercase letters only.');
+            redirect('superadmin/company/create');
+        }
+
+        if ($identity->codeExists($employeeCode)) {
+            $this->flashCreateOldInput($oldInput);
+            Session::flash('error', 'That employee code is already assigned to another company.');
             redirect('superadmin/company/create');
         }
 
@@ -152,10 +167,10 @@ class SuperadminCompanyController extends Controller
             $db->beginTransaction();
 
             $stmt = $db->prepare(
-                "INSERT INTO companies (client_entity_id, name, slug, email, phone, subscription_plan, is_active)
-                 VALUES (:client_entity_id, :name, :slug, :email, :phone, :plan, 1)"
+                "INSERT INTO companies (client_entity_id, name, slug, employee_code, email, phone, subscription_plan, is_active)
+                 VALUES (:client_entity_id, :name, :slug, :employee_code, :email, :phone, :plan, 1)"
             );
-            $stmt->execute(['client_entity_id' => $clientEntityId, 'name' => $name, 'slug' => $slug, 'email' => $email, 'phone' => $phone, 'plan' => $plan]);
+            $stmt->execute(['client_entity_id' => $clientEntityId, 'name' => $name, 'slug' => $slug, 'employee_code' => $employeeCode, 'email' => $email, 'phone' => $phone, 'plan' => $plan]);
             $companyId = (int) $db->lastInsertId();
 
             $initialBillableSeats = 1;
@@ -1281,6 +1296,7 @@ class SuperadminCompanyController extends Controller
 
     private function ensureDeletionSchema(): void
     {
+        (new CompanyEmployeeIdentity())->ensureSchema();
         $this->addCompanyColumnIfMissing('deleted_at', 'DATETIME NULL AFTER account_status');
         $this->addCompanyColumnIfMissing('deleted_by', 'BIGINT UNSIGNED NULL AFTER deleted_at');
         $this->addCompanyColumnIfMissing('deletion_reason', 'TEXT NULL AFTER deleted_by');

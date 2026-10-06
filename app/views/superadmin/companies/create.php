@@ -30,9 +30,8 @@ $selectedEntityId = (int)($old['client_entity_id'] ?? ($selectedClientEntityId ?
             <div class="row g-3">
                 <div class="col-12">
                     <label class="form-label fw-semibold">Company Name <span class="text-danger">*</span></label>
-                    <input type="text" name="name" class="form-control" required placeholder="e.g. Stonesoft Demo Company"
-                           value="<?= e((string)($old['name'] ?? '')) ?>"
-                           oninput="document.getElementById('slug').value=this.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')">
+                    <input type="text" name="name" id="companyName" class="form-control" required placeholder="e.g. Stonesoft Demo Company"
+                           value="<?= e((string)($old['name'] ?? '')) ?>">
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Client Entity / Group</label>
@@ -60,6 +59,15 @@ $selectedEntityId = (int)($old['client_entity_id'] ?? ($selectedClientEntityId ?
                         <span class="input-group-text text-muted" style="font-size:.78rem">.<?= e(app_platform_domain()) ?></span>
                     </div>
                     <div class="form-text">Used as subdomain. Lowercase, no spaces.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Employee Code <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" name="employee_code" id="employeeCode" class="form-control text-uppercase" required maxlength="6"
+                               value="<?= e((string)($old['employee_code'] ?? '')) ?>" pattern="[A-Za-z]{2,6}" placeholder="MDS">
+                        <span class="input-group-text">0001</span>
+                    </div>
+                    <div class="form-text">2 to 6 letters. Employees will be numbered like MDS0001. This code cannot be reused.</div>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">Subscription Plan</label>
@@ -154,6 +162,29 @@ $selectedEntityId = (int)($old['client_entity_id'] ?? ($selectedClientEntityId ?
 
 <script>
 (function(){
+    var companyName = document.getElementById('companyName');
+    var slugInput = document.getElementById('slug');
+    var employeeCode = document.getElementById('employeeCode');
+    var codeTouched = employeeCode.value.trim() !== '';
+    var ignoredWords = ['THE', 'LIMITED', 'LTD', 'PLC', 'INC', 'LLC', 'CORPORATION', 'CORP'];
+
+    function suggestEmployeeCode(name) {
+        var words = name.toUpperCase().split(/[^A-Z]+/).filter(function(word){
+            return word && ignoredWords.indexOf(word) === -1;
+        });
+        if (!words.length) return '';
+        return (words.length > 1 ? words.map(function(word){ return word.charAt(0); }).join('') : words[0].slice(0, 6)).slice(0, 6);
+    }
+
+    companyName.addEventListener('input', function(){
+        slugInput.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+        if (!codeTouched) employeeCode.value = suggestEmployeeCode(this.value);
+    });
+    employeeCode.addEventListener('input', function(){
+        this.value = this.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+        codeTouched = this.value !== '';
+    });
+
     var planSelect = document.getElementById('planSelect');
     var monthlyRate = document.getElementById('monthlyRate');
     var currencyLabel = document.getElementById('currencyLabel');

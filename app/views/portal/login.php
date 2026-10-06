@@ -31,7 +31,7 @@
         <div class="text-center">
             <div class="portal-login-title">Employee Self-Service</div>
             <div class="portal-login-sub" style="margin-bottom:8px"><?= e(app_vendor_name()) ?></div>
-            <div class="portal-login-sub">Sign in with your employee number to view your payslips, profile and contracts.</div>
+            <div class="portal-login-sub">Sign in with your company-issued employee number to view your payslips, profile and contracts.</div>
         </div>
 
         <?php if (!empty($flashError)): ?>
@@ -46,7 +46,7 @@
 
             <div class="mb-3">
                 <div class="portal-login-label">Employee Number</div>
-                <input type="text" name="employee_number" class="form-control" placeholder="e.g. EMP-0001" required autofocus autocomplete="username" style="text-transform:uppercase">
+                <input type="text" name="employee_number" class="form-control" placeholder="e.g. MDS0001" required autofocus autocomplete="username" maxlength="10" pattern="[A-Za-z]{2,6}[0-9]{4}" title="Enter the company code followed by four digits, for example MDS0001" style="text-transform:uppercase">
             </div>
             <div class="mb-4">
                 <div class="portal-login-label">Password</div>
