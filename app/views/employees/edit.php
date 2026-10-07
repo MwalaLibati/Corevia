@@ -17,6 +17,18 @@ $oldInput = !empty($old) ? $old : $employee;
     <div class="alert alert-success"><?= e((string) $flashSuccess) ?></div>
 <?php endif; ?>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="employeeEditTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#employee-details" type="button" role="tab"><i class="bi bi-person-vcard me-1"></i>Personal &amp; Employment</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#employee-compensation" type="button" role="tab"><i class="bi bi-cash-stack me-1"></i>Pay &amp; Deductions</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#employee-contracts" type="button" role="tab"><i class="bi bi-file-earmark-text me-1"></i>Contracts</button></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="employeeEditTabsContent">
+<div class="tab-pane fade show active" id="employee-details" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm">
     <div class="card-body">
         <form method="post" action="<?= e(base_url('employee/update/' . (string) $employee['id'])) ?>" class="row g-3">
@@ -166,7 +178,9 @@ $oldInput = !empty($old) ? $old : $employee;
         </form>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="employee-compensation" role="tabpanel" tabindex="0">
 <?php $salaryInput = !empty($salaryOld) ? $salaryOld : []; ?>
 <?php $deductionInput = !empty($deductionOld) ? $deductionOld : []; ?>
 
@@ -539,7 +553,9 @@ $oldInput = !empty($old) ? $old : $employee;
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="employee-contracts" role="tabpanel" tabindex="0">
 <?php
 $statusColors = ['Active' => 'success', 'Expired' => 'danger', 'Terminated' => 'secondary', 'Renewed' => 'info'];
 ?>
@@ -600,4 +616,6 @@ $statusColors = ['Active' => 'success', 'Expired' => 'danger', 'Terminated' => '
             </div>
         <?php endif; ?>
     </div>
+</div>
+</div>
 </div>

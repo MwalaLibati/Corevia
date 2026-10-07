@@ -27,6 +27,18 @@ foreach (($requiredTypes ?? []) as $type) {
 </div>
 <?php endif; ?>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="portalDocumentTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#documents-personal" type="button" role="tab"><i class="bi bi-person-lines-fill me-1"></i>My Uploads <span class="badge bg-light text-dark ms-1"><?= count($documents ?? []) ?></span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#documents-company" type="button" role="tab"><i class="bi bi-file-earmark-lock me-1"></i>Company Documents</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#documents-letters" type="button" role="tab"><i class="bi bi-envelope-paper me-1"></i>Letters &amp; Certificates <span class="badge bg-light text-dark ms-1"><?= count($generatedLetters ?? []) ?></span></button></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="portalDocumentTabsContent">
+<div class="tab-pane fade show active" id="documents-personal" role="tabpanel" tabindex="0">
 <!-- Upload form (collapsed) -->
 <div class="collapse mb-4" id="uploadDocForm">
     <div class="card border-0 shadow-sm">
@@ -126,9 +138,9 @@ foreach (($requiredTypes ?? []) as $type) {
         <?php endif; ?>
     </div>
 </div>
+</div>
 
-<div class="row g-4 mt-1">
-    <div class="col-lg-6">
+<div class="tab-pane fade" id="documents-company" role="tabpanel" tabindex="0">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <h5 class="mb-3"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Company Documents</h5>
@@ -150,8 +162,9 @@ foreach (($requiredTypes ?? []) as $type) {
                 <?php endif; ?>
             </div>
         </div>
-    </div>
-    <div class="col-lg-6">
+</div>
+
+<div class="tab-pane fade" id="documents-letters" role="tabpanel" tabindex="0">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
                 <h5 class="mb-3"><i class="bi bi-envelope-paper me-2 text-primary"></i>Letters & Certificates</h5>
@@ -172,5 +185,5 @@ foreach (($requiredTypes ?? []) as $type) {
                 <?php endif; ?>
             </div>
         </div>
-    </div>
+</div>
 </div>

@@ -58,6 +58,21 @@ function confirmAffiliateDelete(form) {
 }
 </script>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="affiliateWorkspaceTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-overview" type="button" role="tab"><i class="bi bi-person-badge me-1"></i>Overview &amp; KYC</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-companies" type="button" role="tab"><i class="bi bi-buildings me-1"></i>Companies &amp; Leads</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-payouts" type="button" role="tab"><i class="bi bi-wallet2 me-1"></i>Payouts &amp; Agreements</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-documents" type="button" role="tab"><i class="bi bi-folder2-open me-1"></i>Documents</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-ledger" type="button" role="tab"><i class="bi bi-journal-text me-1"></i>Commission Ledger</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#affiliate-messages" type="button" role="tab"><i class="bi bi-chat-left-text me-1"></i>Communications</button></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="affiliateWorkspaceTabsContent">
+<div class="tab-pane fade show active" id="affiliate-overview" role="tabpanel" tabindex="0">
 <div class="row g-4">
     <div class="col-12">
         <div class="card border-0 shadow-sm">
@@ -87,7 +102,11 @@ function confirmAffiliateDelete(form) {
             </div>
         </div>
     </div>
+</div>
+</div>
 
+<div class="tab-pane fade" id="affiliate-companies" role="tabpanel" tabindex="0">
+<div class="row g-4">
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
@@ -179,7 +198,9 @@ function confirmAffiliateDelete(form) {
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="affiliate-messages" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mt-4">
     <div class="card-body">
         <h6 class="fw-bold mb-3">Affiliate Communication / Internal Note</h6>
@@ -194,7 +215,9 @@ function confirmAffiliateDelete(form) {
         </form>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="affiliate-payouts" role="tabpanel" tabindex="0">
 <div class="row g-4 mt-1">
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm h-100">
@@ -263,7 +286,9 @@ function confirmAffiliateDelete(form) {
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="affiliate-documents" role="tabpanel" tabindex="0">
 <div class="row g-4 mt-1">
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm h-100">
@@ -317,7 +342,9 @@ function confirmAffiliateDelete(form) {
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="affiliate-ledger" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mt-4">
     <div class="card-body">
         <h6 class="fw-bold mb-3">Commission Ledger</h6>
@@ -330,4 +357,6 @@ function confirmAffiliateDelete(form) {
             </tbody>
         </table></div>
     </div>
+</div>
+</div>
 </div>

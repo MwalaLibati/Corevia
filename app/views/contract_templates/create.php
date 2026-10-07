@@ -104,13 +104,13 @@ $versions = $versions ?? [];
                         Choose a section, write normally, and use the auto-filled details on the right.
                     </p>
 
-                    <div class="btn-group mb-3 flex-wrap" role="group" id="documentSectionTabs">
-                        <button type="button" class="btn btn-outline-primary section-tab" data-section="cover_body">Cover Page</button>
-                        <button type="button" class="btn btn-primary section-tab" data-section="body">Contract Content</button>
-                        <button type="button" class="btn btn-outline-primary section-tab" data-section="signature_body">Signatory Section</button>
-                        <button type="button" class="btn btn-outline-primary section-tab" data-section="footer_body">Footer</button>
-                    </div>
-                    <button type="button" class="btn btn-outline-success mb-3 ms-2" id="loadSectionTemplate">
+                    <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto mb-3" id="documentSectionTabs" role="tablist">
+                        <li class="nav-item" role="presentation"><button type="button" class="nav-link text-nowrap section-tab" data-section="cover_body"><i class="bi bi-file-earmark-image me-1"></i>Cover Page</button></li>
+                        <li class="nav-item" role="presentation"><button type="button" class="nav-link active text-nowrap section-tab" data-section="body"><i class="bi bi-file-earmark-text me-1"></i>Contract Content</button></li>
+                        <li class="nav-item" role="presentation"><button type="button" class="nav-link text-nowrap section-tab" data-section="signature_body"><i class="bi bi-pen me-1"></i>Signatory Section</button></li>
+                        <li class="nav-item" role="presentation"><button type="button" class="nav-link text-nowrap section-tab" data-section="footer_body"><i class="bi bi-layout-text-window-reverse me-1"></i>Footer</button></li>
+                    </ul>
+                    <button type="button" class="btn btn-outline-success mb-3" id="loadSectionTemplate">
                         <i class="bi bi-file-earmark-check me-1"></i>Use Professional Template
                     </button>
 
@@ -245,8 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
             activeSection = this.getAttribute('data-section');
             quill.root.innerHTML = sectionContent[activeSection] || '';
             document.querySelectorAll('.section-tab').forEach(function (item) {
-                item.classList.toggle('btn-primary', item === tab);
-                item.classList.toggle('btn-outline-primary', item !== tab);
+                item.classList.toggle('active', item === tab);
             });
         });
     });

@@ -1,7 +1,7 @@
 </div>
 </div>
 </div>
-<script src="<?= e(asset('assets/js/vendor/bootstrap.bundle.min.js')) ?>"></script>
+<script src="<?= e(asset('assets/js/bootstrap.bundle.min.js')) ?>"></script>
 <script src="<?= e(asset('assets/js/table-pagination.js') . '?v=affiliate') ?>"></script>
 <script>
 (function(){

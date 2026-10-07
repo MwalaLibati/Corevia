@@ -378,6 +378,19 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
     </div>
 </div>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="employeeProfileTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#profile-overview" type="button" role="tab"><i class="bi bi-grid me-1"></i>Overview</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#profile-lifecycle" type="button" role="tab"><i class="bi bi-arrow-repeat me-1"></i>Lifecycle &amp; Compliance</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#profile-documents" type="button" role="tab"><i class="bi bi-folder2-open me-1"></i>Letters &amp; Documents</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#profile-payroll" type="button" role="tab"><i class="bi bi-wallet2 me-1"></i>Payroll &amp; Leave</button></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="employeeProfileTabsContent">
+<div class="tab-pane fade show active" id="profile-overview" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mb-4 employee-readiness-card">
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-3">
@@ -556,7 +569,9 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="profile-lifecycle" role="tabpanel" tabindex="0">
 <?php if (!empty($profileChangeRequests)): ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
@@ -754,7 +769,9 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="profile-documents" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mb-4" id="employeeLetters">
     <div class="card-body">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -798,7 +815,9 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="profile-payroll" role="tabpanel" tabindex="0">
 <div class="row g-4 mt-1">
     <div class="col-xl-7">
         <div class="card border-0 shadow-sm">
@@ -873,4 +892,6 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
             </div>
         </div>
     </div>
+</div>
+</div>
 </div>

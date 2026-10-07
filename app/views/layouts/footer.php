@@ -215,5 +215,6 @@
     }
 })();
 </script>
+<script src="<?= e(asset('assets/js/workspace-tabs.js') . '?v=20261007-tabs') ?>"></script>
 </body>
 </html>

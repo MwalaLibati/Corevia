@@ -251,6 +251,17 @@
         </div>
         <?php endif; ?>
 
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto mb-4" id="payrollRunTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-overview" type="button" role="tab"><i class="bi bi-sliders me-1"></i>Run Overview</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-employees" type="button" role="tab"><i class="bi bi-people me-1"></i>Employees &amp; Payslips <span class="badge bg-light text-dark ms-1"><?= count($runItems) ?></span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-attendance" type="button" role="tab"><i class="bi bi-clock-history me-1"></i>Attendance <span class="badge bg-light text-dark ms-1"><?= count($attendancePayrollInputs) ?></span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-adjustments" type="button" role="tab"><i class="bi bi-plus-slash-minus me-1"></i>Adjustments <span class="badge bg-light text-dark ms-1"><?= count($adjustmentHistory ?? []) ?></span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-payments" type="button" role="tab"><i class="bi bi-credit-card me-1"></i>Payments <span class="badge bg-light text-dark ms-1"><?= (int)($paymentSummary['payment_count'] ?? 0) ?></span></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#payroll-history" type="button" role="tab"><i class="bi bi-clock-history me-1"></i>Audit History</button></li>
+        </ul>
+
+        <div class="tab-content" id="payrollRunTabsContent">
+        <div class="tab-pane fade show active" id="payroll-overview" role="tabpanel" tabindex="0">
         <form method="post" action="<?= e(base_url('payroll/update/' . (string) $run['id'])) ?>" class="row g-3">
             <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
             <?php
@@ -347,9 +358,9 @@
                 <a href="<?= e(base_url('payroll/index')) ?>" class="btn btn-outline-secondary ms-2">Cancel</a>
             </div>
         </form>
+        </div>
 
-        <hr class="my-4">
-
+        <div class="tab-pane fade" id="payroll-attendance" role="tabpanel" tabindex="0">
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
@@ -400,7 +411,9 @@
                 </div>
             </div>
         </div>
+        </div>
 
+        <div class="tab-pane fade" id="payroll-employees" role="tabpanel" tabindex="0">
         <div class="row g-3 mb-3">
             <div class="col-sm-6 col-xl-3">
                 <div class="ent-stat-card" style="--ent-stat-accent:#1d4ed8">
@@ -737,9 +750,9 @@
             targetCurrency?.addEventListener('change', refreshConversion);
             exchangeRate?.addEventListener('input', refreshConversion);
         </script>
+        </div>
 
-        <hr class="my-4">
-
+        <div class="tab-pane fade" id="payroll-adjustments" role="tabpanel" tabindex="0">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <div>
                 <h5 class="mb-1">Payroll Adjustments</h5>
@@ -782,9 +795,9 @@
                 </tbody>
             </table>
         </div>
+        </div>
 
-        <hr class="my-4">
-
+        <div class="tab-pane fade" id="payroll-payments" role="tabpanel" tabindex="0">
         <div class="d-flex align-items-center justify-content-between mb-3">
             <div>
                 <h5 class="mb-1">Payment History</h5>
@@ -822,9 +835,9 @@
                 </tbody>
             </table>
         </div>
+        </div>
 
-        <hr class="my-4">
-
+        <div class="tab-pane fade" id="payroll-history" role="tabpanel" tabindex="0">
         <div class="row g-3">
             <div class="col-lg-6">
                 <h5 class="mb-1">Calculation History</h5>
@@ -897,6 +910,8 @@
                     </table>
                 </div>
             </div>
+        </div>
+        </div>
         </div>
     </div>
 </div>

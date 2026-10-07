@@ -13,6 +13,19 @@
     <div class="alert alert-danger"><?= e((string) $flashError) ?></div>
 <?php endif; ?>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto">
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/index')) ?>#settings-company"><i class="bi bi-building me-1"></i>Company</a></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/index')) ?>#settings-statutory"><i class="bi bi-shield-check me-1"></i>Statutory</a></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/index')) ?>#settings-payroll"><i class="bi bi-cash-stack me-1"></i>Payroll</a></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/index')) ?>#settings-documents"><i class="bi bi-file-earmark-text me-1"></i>Documents</a></li>
+            <li class="nav-item"><span class="nav-link active text-nowrap"><i class="bi bi-envelope me-1"></i>Email &amp; Notifications</span></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/index')) ?>#settings-advanced"><i class="bi bi-sliders me-1"></i>Advanced</a></li>
+        </ul>
+    </div>
+</div>
+
 <?php
 $emailTemplates = $emailTemplates ?? [];
 $emailTokens = $emailTokens ?? [];

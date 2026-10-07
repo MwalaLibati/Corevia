@@ -9,6 +9,21 @@
 <?php if (!empty($flashSuccess)): ?><div class="alert alert-success"><?= e((string) $flashSuccess) ?></div><?php endif; ?>
 <?php if (!empty($flashError)): ?><div class="alert alert-danger"><?= e((string) $flashError) ?></div><?php endif; ?>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="settingsTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#settings-company" type="button" role="tab"><i class="bi bi-building me-1"></i>Company</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#settings-statutory" type="button" role="tab"><i class="bi bi-shield-check me-1"></i>Statutory</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#settings-payroll" type="button" role="tab"><i class="bi bi-cash-stack me-1"></i>Payroll</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#settings-documents" type="button" role="tab"><i class="bi bi-file-earmark-text me-1"></i>Documents</button></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('settings/email')) ?>"><i class="bi bi-envelope me-1"></i>Email &amp; Notifications</a></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#settings-advanced" type="button" role="tab"><i class="bi bi-sliders me-1"></i>Advanced</button></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="settingsTabsContent">
+<div class="tab-pane fade show active" id="settings-company" role="tabpanel" tabindex="0">
 <?php $company = $company ?? current_company(); ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
@@ -37,7 +52,9 @@
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="settings-statutory" role="tabpanel" tabindex="0">
 <?php $stat = $statutorySettings ?? []; ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
@@ -87,7 +104,9 @@
         </form>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="settings-documents" role="tabpanel" tabindex="0">
 <?php $doc = $documentSettings ?? []; ?>
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
@@ -125,7 +144,9 @@
         </form>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="settings-payroll" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
         <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3">
@@ -176,7 +197,9 @@
         </form>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="settings-advanced" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
         <form method="get" action="<?= e(base_url('settings/index')) ?>" class="row g-3 align-items-end">
@@ -223,4 +246,6 @@
             </tbody>
         </table>
     </div>
+</div>
+</div>
 </div>

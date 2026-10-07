@@ -2,8 +2,8 @@
 </div><!-- /.sa-main -->
 </div><!-- /.sa-root -->
 
-<script src="<?= e(asset('assets/js/vendor/jquery-3.7.1.min.js')) ?>"></script>
-<script src="<?= e(asset('assets/js/vendor/bootstrap.bundle.min.js')) ?>"></script>
+<script src="<?= e(asset('assets/js/jquery-3.6.0.min.js')) ?>"></script>
+<script src="<?= e(asset('assets/js/bootstrap.bundle.min.js')) ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="<?= e(asset('assets/js/table-pagination.js') . '?v=20260521-analytics') ?>"></script>
 <script>
@@ -177,5 +177,6 @@
     }
 })();
 </script>
+<script src="<?= e(asset('assets/js/workspace-tabs.js') . '?v=20261007-tabs') ?>"></script>
 </body>
 </html>

@@ -3,6 +3,18 @@
     <a href="<?= e(base_url('superadmin/company/index')) ?>" class="btn btn-sm btn-outline-secondary">← Back</a>
 </div>
 
+<div class="card border-0 shadow-sm mb-4" style="max-width:1040px">
+    <div class="card-body pb-0">
+        <ul class="nav nav-tabs ent-tabs flex-nowrap overflow-auto" id="companyWorkspaceTabs" data-workspace-tabs role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active text-nowrap" data-bs-toggle="tab" data-bs-target="#company-details" type="button" role="tab"><i class="bi bi-building me-1"></i>Company Details</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link text-nowrap" data-bs-toggle="tab" data-bs-target="#company-administrators" type="button" role="tab"><i class="bi bi-people me-1"></i>Administrators <span class="badge bg-light text-dark ms-1"><?= count($memberships ?? []) ?></span></button></li>
+            <li class="nav-item"><a class="nav-link text-nowrap" href="<?= e(base_url('superadmin/company/view/' . (string)$company['id'])) ?>#company-subscriptions"><i class="bi bi-receipt me-1"></i>Subscription &amp; Billing</a></li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="companyWorkspaceTabsContent">
+<div class="tab-pane fade show active" id="company-details" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm" style="max-width:640px">
     <div class="card-body p-4">
         <?php if (!empty($flash)): ?>
@@ -113,7 +125,9 @@
         <?php endif; ?>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade" id="company-administrators" role="tabpanel" tabindex="0">
 <div class="card border-0 shadow-sm mt-4" style="max-width:1040px">
     <div class="card-body p-4">
         <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
@@ -242,4 +256,6 @@
             </table>
         </div>
     </div>
+</div>
+</div>
 </div>
