@@ -169,6 +169,15 @@ class PayrollController extends Controller
             error_log('Payroll edit payment panel unavailable for run ' . $runId . ': ' . $exception->getMessage());
         }
 
+        $currencyVersionsByItem = [];
+        try {
+            foreach ((new PayslipCurrencyVersion())->listForRun($runId) as $version) {
+                $currencyVersionsByItem[(int) ($version['payroll_item_id'] ?? 0)][] = $version;
+            }
+        } catch (Throwable $exception) {
+            error_log('Converted payslip history unavailable for run ' . $runId . ': ' . $exception->getMessage());
+        }
+
         $this->render('payroll/edit', [
             'title' => 'Edit Payroll Run',
             'run' => $run,
@@ -188,6 +197,8 @@ class PayrollController extends Controller
             'statusOptions' => $this->statusOptions(),
             'taxYears' => $model->taxYears(),
             'workflow' => (new WorkflowDefinition())->findByType('payroll'),
+            'currencyOptions' => corevia_currency_options(),
+            'payslipCurrencyVersionsByItem' => $currencyVersionsByItem,
         ]);
 
         unset($_SESSION['_old_payroll_input']);
@@ -840,6 +851,134 @@ class PayrollController extends Controller
         PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'payslip'));
     }
 
+    public function convertPayslip(string $runId, string $employeeId): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer']);
+
+        $runIdInt = (int) $runId;
+        $employeeIdInt = (int) $employeeId;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('payroll/edit/' . $runIdInt);
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('payroll/edit/' . $runIdInt);
+        }
+
+        $action = (string) $this->input('conversion_action', 'save');
+        if (!in_array($action, ['save', 'download', 'notify'], true)) {
+            $action = 'save';
+        }
+
+        try {
+            $payload = $this->payslipPayload($runIdInt, $employeeIdInt);
+            if ($action === 'notify' && (int) ($payload['item']['payslips_released'] ?? 0) !== 1) {
+                throw new RuntimeException('Release the payroll payslips to the employee portal before sending a converted version.');
+            }
+
+            $versionModel = new PayslipCurrencyVersion();
+            $version = $versionModel->createFromPayload($payload, [
+                'target_currency' => (string) $this->input('target_currency', ''),
+                'exchange_rate' => (float) $this->input('exchange_rate', 0),
+                'rate_date' => (string) $this->input('rate_date', ''),
+                'rate_source' => (string) $this->input('rate_source', ''),
+                'published_to_portal' => $action === 'notify',
+            ], (int) (current_user()['id'] ?? 0));
+
+            $convertedPayload = $versionModel->applyToPayload($version, $payload);
+            $this->saveConvertedPayslipPdf($version, $convertedPayload);
+
+            AuditLog::record(
+                'payslip_currency_conversion',
+                sprintf(
+                    'Created %s payslip version #%d from %s at 1 %s = %s %s.',
+                    (string) $version['target_currency'],
+                    (int) $version['version_number'],
+                    (string) $version['source_currency'],
+                    (string) $version['target_currency'],
+                    number_format((float) $version['source_per_target_rate'], 8, '.', ''),
+                    (string) $version['source_currency']
+                ),
+                'PayrollItem',
+                (int) $version['payroll_item_id']
+            );
+
+            if ($action === 'download') {
+                redirect('payroll/convertedPayslipPdf/' . (int) $version['id']);
+            }
+
+            if ($action === 'notify') {
+                $result = $this->sendConvertedPayslipEmail($version, $convertedPayload);
+                Session::flash($result['ok'] ? 'success' : 'error', $result['message']);
+            } else {
+                Session::flash('success', 'Converted payslip saved successfully.');
+            }
+        } catch (Throwable $exception) {
+            Session::flash('error', 'Converted payslip could not be created: ' . $exception->getMessage());
+        }
+
+        redirect('payroll/edit/' . $runIdInt);
+    }
+
+    public function convertedPayslip(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
+
+        $payload = $this->convertedPayslipPayload((int) $id);
+        $this->renderAuth('payroll/payslip', $payload + [
+            'title' => 'Converted Payslip',
+            'embedded' => (string) $this->input('embedded', '') === '1',
+            'csrf' => Session::csrfToken(),
+            'pdfUrl' => base_url('payroll/convertedPayslipPdf/' . (int) $id),
+        ]);
+    }
+
+    public function convertedPayslipPdf(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer', 'Viewer']);
+
+        $payload = $this->convertedPayslipPayload((int) $id);
+        PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'converted-payslip'));
+    }
+
+    public function notifyConvertedPayslip(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'Finance Officer', 'HR Officer']);
+
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('payroll/index');
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('payroll/index');
+        }
+
+        $versionModel = new PayslipCurrencyVersion();
+        $version = $versionModel->findDetailed((int) $id);
+        if (!$version) {
+            Session::flash('error', 'Converted payslip not found.');
+            redirect('payroll/index');
+        }
+
+        $runId = (int) ($version['payroll_run_id'] ?? 0);
+        try {
+            if ((int) ($version['payslips_released'] ?? 0) !== 1) {
+                throw new RuntimeException('Release the payroll payslips to the employee portal before sending this version.');
+            }
+            $payload = $this->convertedPayslipPayload((int) $id);
+            $result = $this->sendConvertedPayslipEmail($version, $payload);
+            Session::flash($result['ok'] ? 'success' : 'error', $result['message']);
+        } catch (Throwable $exception) {
+            Session::flash('error', $exception->getMessage());
+        }
+
+        redirect('payroll/edit/' . $runId);
+    }
+
     private function payslipPayload(int $runId, int $employeeId): array
     {
         if ($runId <= 0 || $employeeId <= 0) {
@@ -904,6 +1043,92 @@ class PayrollController extends Controller
             'netPay' => (float) ($item['net_pay'] ?? 0),
             'downloadName' => $downloadName,
         ];
+    }
+
+    private function convertedPayslipPayload(int $versionId): array
+    {
+        $versionModel = new PayslipCurrencyVersion();
+        $version = $versionModel->findDetailed($versionId);
+        if (!$version) {
+            Session::flash('error', 'Converted payslip not found.');
+            redirect('payroll/index');
+        }
+
+        $payload = $this->payslipPayload(
+            (int) ($version['payroll_run_id'] ?? 0),
+            (int) ($version['employee_id'] ?? 0)
+        );
+
+        return $versionModel->applyToPayload($version, $payload);
+    }
+
+    private function saveConvertedPayslipPdf(array $version, array $payload): void
+    {
+        $companyDirectory = BASE_PATH . '/uploads/payslips/conversions/' . Tenant::id();
+        if (!is_dir($companyDirectory) && !mkdir($companyDirectory, 0775, true) && !is_dir($companyDirectory)) {
+            throw new RuntimeException('The converted payslip storage directory could not be created.');
+        }
+
+        $filename = sprintf(
+            'payslip-item-%d-%s-v%d.pdf',
+            (int) ($version['payroll_item_id'] ?? 0),
+            strtolower((string) ($version['target_currency'] ?? 'currency')),
+            (int) ($version['version_number'] ?? 1)
+        );
+        $absolutePath = $companyDirectory . '/' . $filename;
+        $bytes = (new PayslipPdf())->render($payload);
+        if (file_put_contents($absolutePath, $bytes, LOCK_EX) === false) {
+            throw new RuntimeException('The converted payslip PDF could not be saved.');
+        }
+
+        $relativePath = 'uploads/payslips/conversions/' . Tenant::id() . '/' . $filename;
+        (new PayslipCurrencyVersion())->updatePdfPath((int) ($version['id'] ?? 0), $relativePath);
+    }
+
+    private function sendConvertedPayslipEmail(array $version, array $payload): array
+    {
+        $email = trim((string) ($version['employee_email'] ?? ''));
+        $employeeName = (string) ($version['employee_name'] ?? 'Employee');
+        if ($email === '') {
+            return ['ok' => false, 'message' => 'Converted payslip was saved, but the employee has no email address on file.'];
+        }
+
+        $versionModel = new PayslipCurrencyVersion();
+        $versionModel->publish((int) ($version['id'] ?? 0));
+
+        $company = current_company() ?? [];
+        $tokens = $this->payslipEmailTokens((array) ($payload['item'] ?? []), $company);
+        $tokens['payslip_url'] = public_url('portal/convertedPayslipView/' . (int) ($version['id'] ?? 0));
+        $tokens['portal_url'] = public_url('portal/login');
+        $templates = new CompanyEmailTemplate();
+        $subject = $templates->renderSubject('payslip', $tokens)
+            . ' - ' . (string) ($version['target_currency'] ?? '');
+        $html = $templates->renderBody('payslip', $tokens);
+
+        $mailer = (new ContractNotification())->buildMailer();
+        $ok = $mailer->send($email, $employeeName, $subject, $html, []);
+        if (!$ok) {
+            return [
+                'ok' => false,
+                'message' => 'Converted payslip was saved to the portal, but the email notification failed. '
+                    . ($mailer->lastError() !== '' ? $mailer->lastError() : 'Check SMTP settings.'),
+            ];
+        }
+
+        $versionModel->publish((int) ($version['id'] ?? 0), true);
+        AuditLog::record(
+            'converted_payslip_email',
+            sprintf(
+                '%s payslip portal notification emailed to %s for %s.',
+                (string) ($version['target_currency'] ?? ''),
+                $email,
+                (string) ($version['pay_period'] ?? '')
+            ),
+            'PayrollItem',
+            (int) ($version['payroll_item_id'] ?? 0)
+        );
+
+        return ['ok' => true, 'message' => "Converted payslip saved to the portal and notification emailed to {$employeeName} ({$email})."];
     }
 
     private function sendPayslipEmail(int $runId, int $employeeId): array

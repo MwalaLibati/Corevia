@@ -498,6 +498,58 @@
                                             data-title="<?= e((string) ($item['employee_name'] ?? 'Payslip')) ?>">
                                         View Payslip
                                     </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-dark js-convert-payslip"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#convertPayslipModal"
+                                            data-action-url="<?= e(base_url('payroll/convertPayslip/' . (string) $run['id'] . '/' . (string) ($item['employee_id'] ?? 0))) ?>"
+                                            data-employee-name="<?= e((string) ($item['employee_name'] ?? 'Employee')) ?>"
+                                            data-source-currency="<?= e($itemCurrency) ?>"
+                                            data-gross="<?= e(number_format((float) ($item['gross_pay'] ?? 0), 2, '.', '')) ?>"
+                                            data-deductions="<?= e(number_format((float) ($item['total_deductions'] ?? 0), 2, '.', '')) ?>"
+                                            data-net="<?= e(number_format((float) ($item['net_pay'] ?? 0), 2, '.', '')) ?>">
+                                        <i class="bi bi-currency-exchange me-1"></i> Convert
+                                    </button>
+                                    <?php $itemCurrencyVersions = $payslipCurrencyVersionsByItem[(int) ($item['id'] ?? 0)] ?? []; ?>
+                                    <?php if ($itemCurrencyVersions !== []): ?>
+                                        <div class="dropdown d-inline-block">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                Versions (<?= count($itemCurrencyVersions) ?>)
+                                            </button>
+                                            <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:310px">
+                                                <?php foreach ($itemCurrencyVersions as $version): ?>
+                                                    <div class="border-bottom py-2 px-1">
+                                                        <div class="d-flex justify-content-between gap-3">
+                                                            <strong><?= e((string) ($version['target_currency'] ?? '')) ?> v<?= (int) ($version['version_number'] ?? 1) ?></strong>
+                                                            <span class="text-muted small"><?= e(format_date((string) ($version['rate_date'] ?? ''))) ?></span>
+                                                        </div>
+                                                        <div class="text-muted small mb-2">
+                                                            1 <?= e((string) ($version['target_currency'] ?? '')) ?> =
+                                                            <?= e((string) ($version['source_currency'] ?? '')) ?>
+                                                            <?= e(number_format((float) ($version['source_per_target_rate'] ?? 0), 8)) ?>
+                                                            <?php if ((int) ($version['published_to_portal'] ?? 0) === 1): ?> · Portal<?php endif; ?>
+                                                        </div>
+                                                        <div class="d-flex gap-1">
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-outline-primary js-payslip-preview"
+                                                                    data-bs-toggle="modal"
+                                                                    data-bs-target="#payslipPreviewModal"
+                                                                    data-preview-url="<?= e(base_url('payroll/convertedPayslip/' . (string) $version['id'] . '?embedded=1')) ?>"
+                                                                    data-pdf-url="<?= e(base_url('payroll/convertedPayslipPdf/' . (string) $version['id'])) ?>"
+                                                                    data-title="<?= e((string) ($item['employee_name'] ?? 'Payslip') . ' · ' . (string) ($version['target_currency'] ?? '')) ?>">
+                                                                View
+                                                            </button>
+                                                            <a class="btn btn-sm btn-outline-success" href="<?= e(base_url('payroll/convertedPayslipPdf/' . (string) $version['id'])) ?>">PDF</a>
+                                                            <form method="post" action="<?= e(base_url('payroll/notifyConvertedPayslip/' . (string) $version['id'])) ?>">
+                                                                <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                                                                <button type="submit" class="btn btn-sm btn-outline-dark">Notify</button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if (!$isLocked && $currentStatus === 'Draft' && ($isAdminAuthority || in_array($userRole, ['Finance Officer'], true) || in_array($userAccess, ['Finance Officer'], true))): ?>
                                     <button type="button"
                                             class="btn btn-sm btn-outline-danger"
@@ -555,6 +607,70 @@
             </div>
         </div>
 
+        <div class="modal fade" id="convertPayslipModal" tabindex="-1" aria-labelledby="convertPayslipModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <form method="post" action="" class="modal-content border-0" id="convertPayslipForm">
+                    <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title mb-0" id="convertPayslipModalLabel">Create Currency Payslip</h5>
+                            <div class="text-muted small" id="convertEmployeeName"></div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="border rounded bg-light text-dark px-3 py-2 mb-3 small">
+                            This creates a presentation-currency copy. The approved payroll and statutory calculations remain unchanged.
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Presentation Currency</label>
+                                <select class="form-select" name="target_currency" id="convertTargetCurrency" required>
+                                    <?php foreach (($currencyOptions ?? corevia_currency_options()) as $code => $currency): ?>
+                                        <option value="<?= e((string) $code) ?>"><?= e((string) $code . ' - ' . (string) ($currency['name'] ?? $code)) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" id="convertRateLabel">Exchange Rate</label>
+                                <input class="form-control" type="number" name="exchange_rate" id="convertExchangeRate" min="0.00000001" max="100000000" step="0.00000001" inputmode="decimal" required>
+                                <div class="form-text">Enter how much of the payroll currency equals one unit of the selected currency.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rate Date</label>
+                                <input class="form-control" type="date" name="rate_date" value="<?= e(date('Y-m-d')) ?>" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rate Source / Reference</label>
+                                <input class="form-control" type="text" name="rate_source" maxlength="150" placeholder="e.g. Bank of Zambia closing rate">
+                            </div>
+                        </div>
+
+                        <div class="mt-4 border rounded overflow-hidden small">
+                            <div class="row g-0 bg-light fw-semibold px-3 py-2">
+                                <div class="col-4">Amount</div><div class="col-4 text-end">Approved Payroll</div><div class="col-4 text-end">Converted Payslip</div>
+                            </div>
+                            <div class="row g-0 border-top px-3 py-2">
+                                <div class="col-4">Gross Pay</div><div class="col-4 text-end" id="convertGrossSource">-</div><div class="col-4 text-end fw-semibold" id="convertGrossTarget">-</div>
+                            </div>
+                            <div class="row g-0 border-top px-3 py-2">
+                                <div class="col-4">Deductions</div><div class="col-4 text-end" id="convertDeductionsSource">-</div><div class="col-4 text-end fw-semibold" id="convertDeductionsTarget">-</div>
+                            </div>
+                            <div class="row g-0 border-top bg-success-subtle px-3 py-2">
+                                <div class="col-4 fw-bold">Net Pay</div><div class="col-4 text-end" id="convertNetSource">-</div><div class="col-4 text-end fw-bold" id="convertNetTarget">-</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer flex-wrap">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-outline-primary" name="conversion_action" value="save">Save Version</button>
+                        <button type="submit" class="btn btn-success" name="conversion_action" value="download"><i class="bi bi-download me-1"></i>Save & Download</button>
+                        <button type="submit" class="btn btn-dark" name="conversion_action" value="notify"><i class="bi bi-envelope me-1"></i>Save & Notify Employee</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <script>
             document.addEventListener('click', function (event) {
                 const button = event.target.closest('.js-payslip-preview');
@@ -576,6 +692,50 @@
                     if (frame) { frame.src = 'about:blank'; }
                 });
             }
+
+            const convertForm = document.getElementById('convertPayslipForm');
+            const targetCurrency = document.getElementById('convertTargetCurrency');
+            const exchangeRate = document.getElementById('convertExchangeRate');
+            let conversionSource = 'ZMW';
+            let conversionAmounts = {gross: 0, deductions: 0, net: 0};
+
+            const money = (currency, amount) => currency + ' ' + Number(amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const refreshConversion = () => {
+                const target = targetCurrency?.value || '';
+                const rate = Number(exchangeRate?.value || 0);
+                const validRate = Number.isFinite(rate) && rate > 0;
+                const put = (id, value) => { const el = document.getElementById(id); if (el) { el.textContent = value; } };
+                put('convertRateLabel', target ? `Exchange Rate · 1 ${target} = ${conversionSource}` : 'Exchange Rate');
+                put('convertGrossSource', money(conversionSource, conversionAmounts.gross));
+                put('convertDeductionsSource', money(conversionSource, conversionAmounts.deductions));
+                put('convertNetSource', money(conversionSource, conversionAmounts.net));
+                put('convertGrossTarget', validRate ? money(target, conversionAmounts.gross / rate) : '-');
+                put('convertDeductionsTarget', validRate ? money(target, conversionAmounts.deductions / rate) : '-');
+                put('convertNetTarget', validRate ? money(target, conversionAmounts.net / rate) : '-');
+            };
+
+            document.addEventListener('click', function (event) {
+                const button = event.target.closest('.js-convert-payslip');
+                if (!button || !convertForm) { return; }
+                conversionSource = button.dataset.sourceCurrency || 'ZMW';
+                conversionAmounts = {
+                    gross: Number(button.dataset.gross || 0),
+                    deductions: Number(button.dataset.deductions || 0),
+                    net: Number(button.dataset.net || 0)
+                };
+                convertForm.action = button.dataset.actionUrl || '';
+                const name = document.getElementById('convertEmployeeName');
+                if (name) { name.textContent = button.dataset.employeeName || ''; }
+                if (targetCurrency) {
+                    Array.from(targetCurrency.options).forEach(option => { option.disabled = option.value === conversionSource; });
+                    const available = Array.from(targetCurrency.options).find(option => option.value !== conversionSource);
+                    if (available) { targetCurrency.value = available.value; }
+                }
+                if (exchangeRate) { exchangeRate.value = ''; }
+                refreshConversion();
+            });
+            targetCurrency?.addEventListener('change', refreshConversion);
+            exchangeRate?.addEventListener('input', refreshConversion);
         </script>
 
         <hr class="my-4">

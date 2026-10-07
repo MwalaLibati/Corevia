@@ -25,11 +25,12 @@
                 </thead>
                 <tbody>
                 <?php foreach ($payslips as $slip): ?>
+                    <?php $slipCurrency = (string) ($slip['currency_code'] ?? app_currency_code()); ?>
                     <tr>
                         <td><strong><?= e((string)($slip['pay_period'] ?? $slip['run_date'])) ?></strong></td>
-                        <td class="text-end"><?= e(format_currency((float)($slip['gross_pay'] ?? 0))) ?></td>
-                        <td class="text-end text-danger">- <?= e(format_currency((float)($slip['total_deductions'] ?? 0))) ?></td>
-                        <td class="text-end fw-bold text-success"><?= e(format_currency((float)($slip['net_pay'] ?? 0))) ?></td>
+                        <td class="text-end"><?= e(format_currency((float)($slip['gross_pay'] ?? 0), $slipCurrency)) ?></td>
+                        <td class="text-end text-danger">- <?= e(format_currency((float)($slip['total_deductions'] ?? 0), $slipCurrency)) ?></td>
+                        <td class="text-end fw-bold text-success"><?= e(format_currency((float)($slip['net_pay'] ?? 0), $slipCurrency)) ?></td>
                         <td class="text-center">
                             <?php
                             $paid = (float) ($slip['paid_amount'] ?? 0);
@@ -40,7 +41,7 @@
                             <span class="badge bg-<?= e($badge) ?>"><?= e($status) ?></span>
                             <?php if ($paid > 0 || $balance > 0): ?>
                                 <div class="text-muted" style="font-size:.72rem">
-                                    Paid <?= e(format_currency($paid)) ?><?php if ($balance > 0): ?> / Bal <?= e(format_currency($balance)) ?><?php endif; ?>
+                                    Paid <?= e(format_currency($paid, $slipCurrency)) ?><?php if ($balance > 0): ?> / Bal <?= e(format_currency($balance, $slipCurrency)) ?><?php endif; ?>
                                 </div>
                             <?php endif; ?>
                         </td>
@@ -55,6 +56,28 @@
                                     data-title="<?= e((string)($slip['pay_period'] ?? $slip['run_date'] ?? 'Payslip')) ?>">
                                 <i class="bi bi-eye me-1"></i> View
                             </button>
+                            <?php $convertedVersions = $currencyVersionsByItem[(int) ($slip['id'] ?? 0)] ?? []; ?>
+                            <?php if ($convertedVersions !== []): ?>
+                                <div class="dropdown d-inline-block">
+                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        Currency Copies
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:270px">
+                                        <?php foreach ($convertedVersions as $version): ?>
+                                            <button type="button"
+                                                    class="dropdown-item js-payslip-preview"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#payslipPreviewModal"
+                                                    data-preview-url="<?= e(base_url('portal/convertedPayslipPreview/' . (string) $version['id'])) ?>"
+                                                    data-pdf-url="<?= e(base_url('portal/convertedPayslipPdf/' . (string) $version['id'])) ?>"
+                                                    data-title="<?= e((string) ($slip['pay_period'] ?? '') . ' · ' . (string) ($version['target_currency'] ?? '')) ?>">
+                                                <span class="fw-semibold"><?= e((string) ($version['target_currency'] ?? '')) ?> v<?= (int) ($version['version_number'] ?? 1) ?></span>
+                                                <span class="text-muted small d-block">Net <?= e(format_currency((float) ($version['net_converted'] ?? 0), (string) ($version['target_currency'] ?? ''))) ?></span>
+                                            </button>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

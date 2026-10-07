@@ -59,6 +59,7 @@ class PayslipPdf
         $totalDeductions = (float) ($payload['totalDeductions'] ?? ($item['total_deductions'] ?? 0));
         $net = (float) ($payload['netPay'] ?? ($item['net_pay'] ?? 0));
         $currency = (string) ($item['currency_code'] ?? app_currency_code());
+        $conversion = is_array($payload['conversion'] ?? null) ? $payload['conversion'] : null;
 
         $this->rect(40, 775, 515, 42, '0.06 0.11 0.20');
         $this->text(56, 797, $companyName, 15, true, '1 1 1');
@@ -100,7 +101,20 @@ class PayslipPdf
         $this->text(385, 267, format_currency($net, $currency), 20, true, '1 1 1');
 
         $this->line(40, 105, 555, 105, '0.82 0.86 0.91');
-        $this->text(40, 88, 'This is a computer-generated payslip and does not require a physical signature.', 8, false, '0.38 0.45 0.55');
+        if ($conversion) {
+            $note = sprintf(
+                'Converted from %s at 1 %s = %s %s on %s. Approved payroll remains in %s.',
+                (string) ($conversion['source_currency'] ?? ''),
+                (string) ($conversion['target_currency'] ?? ''),
+                number_format((float) ($conversion['source_per_target_rate'] ?? 0), 8, '.', ''),
+                (string) ($conversion['source_currency'] ?? ''),
+                (string) ($conversion['rate_date'] ?? ''),
+                (string) ($conversion['source_currency'] ?? '')
+            );
+            $this->text(40, 88, $this->fit($note, 92), 7, false, '0.20 0.35 0.55');
+        } else {
+            $this->text(40, 88, 'This is a computer-generated payslip and does not require a physical signature.', 8, false, '0.38 0.45 0.55');
+        }
         $this->text(445, 88, 'Authorised Signatory', 8, false, '0.38 0.45 0.55');
         $this->line(430, 103, 555, 103, '0.20 0.24 0.31');
     }

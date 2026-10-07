@@ -328,9 +328,19 @@ class PortalController extends Controller
         $stmt->execute(['id' => $empId]);
         $payslips = $stmt->fetchAll();
 
+        $currencyVersionsByItem = [];
+        try {
+            foreach ((new PayslipCurrencyVersion())->listPublishedForEmployee($empId) as $version) {
+                $currencyVersionsByItem[(int) ($version['payroll_item_id'] ?? 0)][] = $version;
+            }
+        } catch (Throwable $exception) {
+            error_log('Employee converted payslips unavailable: ' . $exception->getMessage());
+        }
+
         $this->renderPortal('portal/payslips', [
             'emp'      => current_employee(),
             'payslips' => $payslips,
+            'currencyVersionsByItem' => $currencyVersionsByItem,
         ]);
     }
 
@@ -364,6 +374,38 @@ class PortalController extends Controller
 
         $payload = $this->portalPayslipPayload((int) $id);
         PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'payslip'));
+    }
+
+    public function convertedPayslipView(string $id = '0'): void
+    {
+        require_employee_auth();
+        $payload = $this->portalConvertedPayslipPayload((int) $id);
+
+        $this->renderPortal('portal/payslip-view', [
+            'emp' => current_employee(),
+            'slip' => $payload['item'],
+            'deductions' => $payload['deductionLines'],
+            'earnings' => $payload['earningsLines'],
+            'conversion' => $payload['conversion'],
+        ]);
+    }
+
+    public function convertedPayslipPreview(string $id = '0'): void
+    {
+        require_employee_auth();
+        $payload = $this->portalConvertedPayslipPayload((int) $id);
+        $this->renderAuth('payroll/payslip', $payload + [
+            'title' => 'Converted Payslip',
+            'embedded' => true,
+            'pdfUrl' => base_url('portal/convertedPayslipPdf/' . (int) $id),
+        ]);
+    }
+
+    public function convertedPayslipPdf(string $id = '0'): void
+    {
+        require_employee_auth();
+        $payload = $this->portalConvertedPayslipPayload((int) $id);
+        PayslipPdf::download($payload, (string) ($payload['downloadName'] ?? 'converted-payslip'));
     }
 
     private function portalPayslipPayload(int $payslipId): array
@@ -413,6 +455,20 @@ class PortalController extends Controller
             'netPay' => (float) ($slip['net_pay'] ?? 0),
             'downloadName' => $downloadName,
         ];
+    }
+
+    private function portalConvertedPayslipPayload(int $versionId): array
+    {
+        $employeeId = (int) (current_employee()['id'] ?? 0);
+        $versionModel = new PayslipCurrencyVersion();
+        $version = $versionModel->findForEmployee($versionId, $employeeId);
+        if (!$version) {
+            Session::flash('error', 'Converted payslip not found or not published.');
+            redirect('portal/payslips');
+        }
+
+        $payload = $this->portalPayslipPayload((int) ($version['payroll_item_id'] ?? 0));
+        return $versionModel->applyToPayload($version, $payload);
     }
 
     public function contract(): void

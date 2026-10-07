@@ -16,6 +16,7 @@ $company    = current_company() ?? [];
 $companyName = (string)($company['name'] ?? app_product_name());
 $companyLogo = company_logo_url($company);
 $currencyCode = (string)($slip['currency_code'] ?? app_currency_code());
+$conversion = is_array($conversion ?? null) ? $conversion : null;
 ?>
 
 <div class="portal-page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -41,6 +42,18 @@ $currencyCode = (string)($slip['currency_code'] ?? app_currency_code());
         <h3>EMPLOYEE PAY SLIP</h3>
         <div style="font-size:.8rem;color:#6b7280">Pay Period: <strong><?= e($period) ?></strong> &bull; Date: <strong><?= e($runDate) ?></strong></div>
     </div>
+
+    <?php if ($conversion): ?>
+        <div class="alert alert-info py-2" style="font-size:.8rem">
+            <strong>Presentation currency:</strong>
+            Converted from <?= e((string) ($conversion['source_currency'] ?? '')) ?> using
+            1 <?= e((string) ($conversion['target_currency'] ?? '')) ?> =
+            <?= e((string) ($conversion['source_currency'] ?? '')) ?>
+            <?= e(number_format((float) ($conversion['source_per_target_rate'] ?? 0), 8, '.', '')) ?>
+            on <?= e(format_date((string) ($conversion['rate_date'] ?? ''))) ?>.
+            The approved payroll remains in <?= e((string) ($conversion['source_currency'] ?? '')) ?>.
+        </div>
+    <?php endif; ?>
 
     <!-- Employee info -->
     <div class="row g-3 mb-4" style="font-size:.85rem">

@@ -12,6 +12,7 @@
     $adminPdfUrl = base_url('payroll/payslipPdf/' . (string) ($item['payroll_run_id'] ?? 0) . '/' . (string) ($item['employee_id'] ?? 0));
     $pdfUrl = (string) ($pdfUrl ?? $adminPdfUrl);
     $payslipCurrency = (string) ($item['currency_code'] ?? app_currency_code());
+    $conversion = is_array($conversion ?? null) ? $conversion : null;
 ?>
 
 <!DOCTYPE html>
@@ -196,6 +197,16 @@
             margin-bottom: 32px;
         }
 
+        .conversion-note {
+            margin: 0 0 24px;
+            padding: 11px 14px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+            color: #1e3a5f;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
         .section-heading {
             font-size: 10px;
             font-weight: 700;
@@ -378,6 +389,18 @@
         </div>
 
         <div class="divider"></div>
+
+        <?php if ($conversion): ?>
+            <div class="conversion-note">
+                <strong>Presentation currency:</strong>
+                Converted from <?= e((string) ($conversion['source_currency'] ?? '')) ?>
+                using 1 <?= e((string) ($conversion['target_currency'] ?? '')) ?> =
+                <?= e((string) ($conversion['source_currency'] ?? '')) ?>
+                <?= e(number_format((float) ($conversion['source_per_target_rate'] ?? 0), 8, '.', '')) ?>
+                on <?= e(format_date((string) ($conversion['rate_date'] ?? ''))) ?>.
+                The approved payroll remains recorded in <?= e((string) ($conversion['source_currency'] ?? '')) ?>.
+            </div>
+        <?php endif; ?>
 
         <div class="info-grid">
             <div class="info-item">

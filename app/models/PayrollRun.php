@@ -141,7 +141,7 @@ class PayrollRun extends Model
         $sql = 'SELECT pi.*, e.full_name AS employee_name, e.employee_number, e.email AS employee_email,
                        e.designation, e.bank_name, e.bank_account_number,
                        d.name AS department_name,
-                       pr.pay_period, pr.run_date, pr.status AS run_status,
+                       pr.pay_period, pr.run_date, pr.status AS run_status, pr.payslips_released,
                        pr.total_gross AS run_total_gross,
                        pr.total_deductions AS run_total_deductions,
                        pr.total_net AS run_total_net,
