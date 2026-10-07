@@ -1128,10 +1128,10 @@ class EmployeeController extends Controller
     private function findEmployeeByNumber(string $employeeNumber): ?array
     {
         $cid = Tenant::id();
-        $sql = 'SELECT * FROM employees WHERE (employee_number = :employee_number OR legacy_employee_number = :legacy_employee_number)'
+        $sql = 'SELECT * FROM employees WHERE employee_number = :employee_number'
             . ($cid > 0 ? ' AND company_id = :cid' : '') . ' LIMIT 1';
         $stmt = db()->prepare($sql);
-        $params = ['employee_number' => $employeeNumber, 'legacy_employee_number' => $employeeNumber];
+        $params = ['employee_number' => $employeeNumber];
         if ($cid > 0) {
             $params['cid'] = $cid;
         }

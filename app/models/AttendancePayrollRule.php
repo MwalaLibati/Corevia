@@ -10,7 +10,12 @@ class AttendancePayrollRule extends Model
     public function __construct()
     {
         parent::__construct();
-        $this->ensureSchema();
+        if (!$this->schemaIsReady()) {
+            if ($this->db->inTransaction()) {
+                throw new RuntimeException('Attendance payroll database setup is pending. Run the attendance migration before payroll.');
+            }
+            $this->ensureSchema();
+        }
     }
 
     public function ensureSchema(): void
@@ -203,6 +208,15 @@ class AttendancePayrollRule extends Model
              WHERE company_id = :cid AND payroll_run_id = :run_id AND status = 'Approved'"
         );
         $stmt->execute(['cid' => Tenant::id(), 'run_id' => $runId]);
+
+        $periodStmt = $this->db->prepare(
+            'SELECT pay_period FROM payroll_runs WHERE id = :run_id AND company_id = :cid LIMIT 1'
+        );
+        $periodStmt->execute(['run_id' => $runId, 'cid' => Tenant::id()]);
+        $period = substr((string) $periodStmt->fetchColumn(), 0, 7);
+        if (preg_match('/^20\d{2}-(0[1-9]|1[0-2])$/', $period)) {
+            (new MonthlyAttendanceSummary())->lockMonth($period);
+        }
     }
 
     private function buildInputsForRun(array $run): array
@@ -230,11 +244,15 @@ class AttendancePayrollRule extends Model
             error_log('Attendance payroll schedule context unavailable: ' . $exception->getMessage());
         }
         $recordsByEmployee = $this->attendanceRecordsByEmployee($periodStart, $periodEnd);
+        $monthlyByEmployee = (new MonthlyAttendanceSummary())->approvedForMonth($period);
         $byEmployee = [];
         $totals = ['earnings' => 0.0, 'deductions' => 0.0];
 
-        foreach ($recordsByEmployee as $employeeId => $records) {
-            $payMethod = (string) ($records[0]['pay_calculation_method'] ?? 'Fixed Monthly Salary');
+        $employeeIds = array_values(array_unique(array_merge(array_keys($recordsByEmployee), array_keys($monthlyByEmployee))));
+        foreach ($employeeIds as $employeeId) {
+            $records = $recordsByEmployee[(int) $employeeId] ?? [];
+            $monthly = $monthlyByEmployee[(int) $employeeId] ?? null;
+            $payMethod = (string) ($monthly['pay_calculation_method'] ?? ($records[0]['pay_calculation_method'] ?? 'Fixed Monthly Salary'));
             if ((string) ($rule['payroll_mode'] ?? '') === 'Mixed' && $payMethod === 'Fixed Monthly Salary') {
                 continue;
             }
@@ -252,7 +270,30 @@ class AttendancePayrollRule extends Model
             $dailyRate = round(((float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays), 4);
             $hourlyRate = round(((float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours), 4);
             $shiftRate = round(((float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate), 4);
-            $summary = $this->summarizeRecords($records, $rule, $scheduleModel);
+            if ($monthly) {
+                $totalMinutes = (int) round(max(0.0, (float) $monthly['total_hours']) * 60);
+                $reportedOvertimeMinutes = (int) round(min((float) $monthly['total_hours'], max(0.0, (float) $monthly['overtime_hours'])) * 60);
+                $overtimeMinutes = !empty($rule['overtime_enabled']) ? $reportedOvertimeMinutes : 0;
+                $summary = [
+                    'records' => 1,
+                    'present_days' => 0,
+                    'leave_days' => 0,
+                    'absent_days' => 0,
+                    'weekend_days' => 0,
+                    'worked_minutes' => $totalMinutes,
+                    'late_minutes' => 0,
+                    'overtime_minutes' => $overtimeMinutes,
+                    'reported_overtime_minutes' => $reportedOvertimeMinutes,
+                    'weekend_overtime_minutes' => 0,
+                    'undertime_minutes' => 0,
+                    'attendance_source' => 'Monthly Total',
+                    'monthly_summary_id' => (int) $monthly['id'],
+                    'daily_records_excluded' => count($records),
+                ];
+            } else {
+                $summary = $this->summarizeRecords($records, $rule, $scheduleModel);
+                $summary['attendance_source'] = 'Daily Records';
+            }
             $inputs = [];
             $deductAttendanceVariance = !in_array($paySource, ['Attendance Hours', 'Days Worked', 'Shifts Worked'], true);
 
@@ -514,5 +555,39 @@ class AttendancePayrollRule extends Model
         if ((int) $stmt->fetchColumn() === 0) {
             $this->db->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
         }
+    }
+
+    private function schemaIsReady(): bool
+    {
+        foreach (['attendance_payroll_rule_sets', 'attendance_payroll_inputs'] as $table) {
+            $stmt = $this->db->prepare(
+                'SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+            );
+            $stmt->execute(['table_name' => $table]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                return false;
+            }
+        }
+
+        $required = [
+            ['employees', 'pay_calculation_method'],
+            ['attendance_payroll_rule_sets', 'undertime_deduction_enabled'],
+            ['attendance_payroll_rule_sets', 'undertime_rounding_minutes'],
+            ['attendance_payroll_rule_sets', 'full_shift_hours'],
+            ['attendance_payroll_rule_sets', 'overtime_after_hours_per_day'],
+            ['attendance_payroll_rule_sets', 'shift_count_method'],
+        ];
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name AND COLUMN_NAME = :column_name'
+        );
+        foreach ($required as [$table, $column]) {
+            $stmt->execute(['table_name' => $table, 'column_name' => $column]);
+            if ((int) $stmt->fetchColumn() === 0) {
+                return false;
+            }
+        }
+        return true;
     }
 }

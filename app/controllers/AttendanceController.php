@@ -89,6 +89,16 @@ class AttendanceController extends Controller
             redirect('attendance/create');
         }
 
+        $authoritativeMonthly = (new MonthlyAttendanceSummary())->forEmployeeMonth(
+            (int) $data['employee_id'],
+            substr((string) $data['attendance_date'], 0, 7),
+            true
+        );
+        if ($authoritativeMonthly) {
+            Session::flash('error', 'Approved monthly hours are the payroll source for this employee and month. Reopen or remove that monthly entry before adding daily attendance.');
+            redirect('attendance/create');
+        }
+
         $model = new AttendanceRecord();
         if ($model->existsForEmployeeDate((int) $data['employee_id'], (string) $data['attendance_date'])) {
             Session::flash('error', 'Attendance already exists for selected employee and date.');
@@ -173,6 +183,17 @@ class AttendanceController extends Controller
             redirect('attendance/edit/' . $recordId);
         }
 
+
+        $authoritativeMonthly = (new MonthlyAttendanceSummary())->forEmployeeMonth(
+            (int) $data['employee_id'],
+            substr((string) $data['attendance_date'], 0, 7),
+            true
+        );
+        if ($authoritativeMonthly) {
+            Session::flash('error', 'Approved monthly hours are the payroll source for this employee and month. Daily attendance cannot be changed.');
+            redirect('attendance/edit/' . $recordId);
+        }
+
         if ($model->existsForEmployeeDate((int) $data['employee_id'], (string) $data['attendance_date'], $recordId)) {
             Session::flash('error', 'Attendance already exists for selected employee and date.');
             redirect('attendance/edit/' . $recordId);
@@ -211,6 +232,21 @@ class AttendanceController extends Controller
 
         $model = new AttendanceRecord();
 
+        $existing = $model->findDetailed($recordId);
+        if (!$existing) {
+            Session::flash('error', 'Attendance record not found.');
+            redirect('attendance/index');
+        }
+        $authoritativeMonthly = (new MonthlyAttendanceSummary())->forEmployeeMonth(
+            (int) $existing['employee_id'],
+            substr((string) $existing['attendance_date'], 0, 7),
+            true
+        );
+        if ($authoritativeMonthly) {
+            Session::flash('error', 'Approved monthly hours are the payroll source for this period. Daily records are retained for audit and cannot be deleted.');
+            redirect('attendance/index?month=' . urlencode(substr((string) $existing['attendance_date'], 0, 7)));
+        }
+
         try {
             $model->delete($recordId);
             Session::flash('success', 'Attendance record deleted successfully.');
@@ -226,8 +262,13 @@ class AttendanceController extends Controller
         require_auth();
         require_role(['Super Admin', 'HR Officer']);
 
+        $model = new AttendanceRecord();
+
         $this->render('attendance/import', [
             'title' => 'Import Attendance',
+            'employees' => $model->employees(),
+            'branches' => $model->branches(),
+            'selectedMonth' => $this->normalizeMonth((string) $this->input('month', date('Y-m'))),
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),
@@ -287,13 +328,196 @@ class AttendanceController extends Controller
         require_auth();
         require_role(['Super Admin', 'HR Officer']);
 
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        $employeeId = max(0, (int) $this->input('employee_id', 0));
+        $branchId = max(0, (int) $this->input('branch_id', 0));
+        $dateBasis = (string) $this->input('date_basis', 'scheduled');
+        if (!in_array($dateBasis, ['scheduled', 'weekdays', 'calendar'], true)) {
+            $dateBasis = 'scheduled';
+        }
+
+        $model = new AttendanceRecord();
+        $employees = $model->employeesForTemplate($employeeId, $branchId);
+        $schedule = null;
+        if ($dateBasis === 'scheduled') {
+            try {
+                $schedule = new Schedule();
+            } catch (Throwable $exception) {
+                error_log('Attendance template schedule lookup unavailable: ' . $exception->getMessage());
+            }
+        }
+
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="attendance-import-template.csv"');
+        header('Content-Disposition: attachment; filename="attendance-import-' . $month . '.csv"');
 
         $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
         fputcsv($out, ['employee_number', 'employee_name_reference', 'attendance_date', 'status', 'check_in', 'check_out', 'remarks']);
+        $monthStart = $month . '-01';
+        $monthEnd = date('Y-m-t', strtotime($monthStart));
+        foreach ($employees as $employee) {
+            $employeeStart = !empty($employee['hired_at']) && (string) $employee['hired_at'] > $monthStart
+                ? (string) $employee['hired_at']
+                : $monthStart;
+            $employeeEnd = !empty($employee['termination_date']) && (string) $employee['termination_date'] < $monthEnd
+                ? (string) $employee['termination_date']
+                : $monthEnd;
+            if ($employeeEnd < $employeeStart) {
+                continue;
+            }
+
+            for ($ts = strtotime($employeeStart); $ts <= strtotime($employeeEnd); $ts = strtotime('+1 day', $ts)) {
+                $date = date('Y-m-d', $ts);
+                if (!$this->includeTemplateDate((int) $employee['id'], $date, $dateBasis, $schedule)) {
+                    continue;
+                }
+                fputcsv($out, [
+                    (string) $employee['employee_number'],
+                    (string) $employee['full_name'],
+                    $date,
+                    '',
+                    '',
+                    '',
+                    '',
+                ]);
+            }
+        }
         fclose($out);
         exit;
+    }
+
+    public function monthly(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        $attendance = new AttendanceRecord();
+        $monthly = new MonthlyAttendanceSummary();
+        $rows = $this->enrichMonthlyRows($monthly->listForMonth($month), $month);
+
+        $this->render('attendance/monthly', [
+            'title' => 'Monthly Attendance Hours',
+            'month' => $month,
+            'employees' => $attendance->employees(),
+            'rows' => $rows,
+            'csrf' => Session::csrfToken(),
+            'flashSuccess' => Session::flash('success'),
+            'flashError' => Session::flash('error'),
+        ]);
+    }
+
+    public function monthlyStore(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('attendance/monthly');
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('attendance/monthly');
+        }
+
+        $month = $this->normalizeMonth((string) $this->input('attendance_month', date('Y-m')));
+        $employeeId = (int) $this->input('employee_id', 0);
+        $totalHours = round((float) $this->input('total_hours', 0), 2);
+        $overtimeHours = round((float) $this->input('overtime_hours', 0), 2);
+        $status = (string) $this->input('save_action', 'Draft') === 'Approved' ? 'Approved' : 'Draft';
+        $notes = trim((string) $this->input('notes', ''));
+
+        $employees = (new AttendanceRecord())->employees();
+        $validEmployeeIds = array_map(static fn(array $employee): int => (int) $employee['id'], $employees);
+        if ($employeeId <= 0 || !in_array($employeeId, $validEmployeeIds, true)) {
+            Session::flash('error', 'Select a valid employee from this company.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        if ($totalHours < 0 || $totalHours > 744) {
+            Session::flash('error', 'Total hours must be between 0 and 744 for the month.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        if ($overtimeHours < 0 || $overtimeHours > $totalHours) {
+            Session::flash('error', 'Overtime hours cannot be negative or greater than total hours.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+
+        try {
+            $model = new MonthlyAttendanceSummary();
+            $before = $model->forEmployeeMonth($employeeId, $month);
+            $id = $model->saveEntry([
+                'employee_id' => $employeeId,
+                'attendance_month' => $month,
+                'total_hours' => $totalHours,
+                'overtime_hours' => $overtimeHours,
+                'notes' => $notes,
+                'status' => $status,
+            ]);
+            $after = $model->find($id) ?: [];
+            AuditLog::recordChanges('monthly_attendance_save', 'Saved monthly attendance hours.', 'MonthlyAttendanceSummary', $id, $before ?: [], $after);
+            Session::flash('success', $status === 'Approved'
+                ? 'Monthly hours saved and approved for payroll.'
+                : 'Monthly hours saved as a draft.');
+        } catch (Throwable $exception) {
+            Session::flash('error', $exception->getMessage());
+        }
+        redirect('attendance/monthly?month=' . urlencode($month));
+    }
+
+    public function monthlyApprove(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid approval request.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        $model = new MonthlyAttendanceSummary();
+        if ($model->approve((int) $id)) {
+            AuditLog::record('monthly_attendance_approve', 'Approved monthly attendance hours.', 'MonthlyAttendanceSummary', (int) $id, 'admin');
+            Session::flash('success', 'Monthly attendance hours approved for payroll.');
+        } else {
+            Session::flash('error', 'The entry could not be approved. It may already be approved or locked.');
+        }
+        redirect('attendance/monthly?month=' . urlencode($month));
+    }
+
+    public function monthlyDelete(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid delete request.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        $model = new MonthlyAttendanceSummary();
+        if ($model->deleteEditable((int) $id)) {
+            AuditLog::record('monthly_attendance_delete', 'Deleted monthly attendance hours.', 'MonthlyAttendanceSummary', (int) $id, 'admin');
+            Session::flash('success', 'Monthly attendance entry deleted.');
+        } else {
+            Session::flash('error', 'Locked monthly attendance cannot be deleted.');
+        }
+        redirect('attendance/monthly?month=' . urlencode($month));
+    }
+
+    public function monthlyReopen(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid reopen request.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        $model = new MonthlyAttendanceSummary();
+        if ($model->reopen((int) $id)) {
+            AuditLog::record('monthly_attendance_reopen', 'Reopened approved monthly attendance hours.', 'MonthlyAttendanceSummary', (int) $id, 'admin');
+            Session::flash('success', 'Monthly hours reopened as a draft. They no longer override daily attendance until approved again.');
+        } else {
+            Session::flash('error', 'The entry could not be reopened. Locked payroll periods remain read-only.');
+        }
+        redirect('attendance/monthly?month=' . urlencode($month));
     }
 
     private function collectInput(): array
@@ -560,6 +784,8 @@ class AttendanceController extends Controller
         }
 
         $model = new AttendanceRecord();
+        $monthlyModel = new MonthlyAttendanceSummary();
+        $monthlyAuthorityCache = [];
         $employeesByNumber = [];
         foreach ($model->employees() as $employee) {
             $number = strtoupper(trim((string) ($employee['employee_number'] ?? '')));
@@ -618,6 +844,20 @@ class AttendanceController extends Controller
                 'remarks' => $this->normalizeNullableString((string) ($data['remarks'] ?? '')),
             ];
 
+            $authorityKey = (int) $payload['employee_id'] . '-' . substr($attendanceDate, 0, 7);
+            if (!array_key_exists($authorityKey, $monthlyAuthorityCache)) {
+                $monthlyAuthorityCache[$authorityKey] = $monthlyModel->forEmployeeMonth(
+                    (int) $payload['employee_id'],
+                    substr($attendanceDate, 0, 7),
+                    true
+                );
+            }
+            if ($monthlyAuthorityCache[$authorityKey]) {
+                $errors[] = "Line {$line}: approved monthly hours are already the payroll source for {$employeeNumber} in " . substr($attendanceDate, 0, 7) . '.';
+                $skipped++;
+                continue;
+            }
+
             try {
                 $existing = $model->findByEmployeeDate((int) $payload['employee_id'], $attendanceDate);
                 if ($existing && !$overwrite) {
@@ -675,6 +915,82 @@ class AttendanceController extends Controller
         }
 
         return true;
+    }
+
+    private function includeTemplateDate(int $employeeId, string $date, string $dateBasis, ?Schedule $schedule): bool
+    {
+        if ($dateBasis === 'calendar') {
+            return true;
+        }
+        if ($dateBasis === 'weekdays') {
+            return (int) date('N', strtotime($date)) <= 5;
+        }
+
+        if ($schedule) {
+            try {
+                $scheduled = $schedule->scheduleForEmployeeDate($employeeId, $date);
+                if ($scheduled !== null) {
+                    return !empty($scheduled['is_working_day']) && !empty($scheduled['shift_id']);
+                }
+            } catch (Throwable $exception) {
+                error_log('Attendance template date schedule lookup failed: ' . $exception->getMessage());
+            }
+        }
+        return (int) date('N', strtotime($date)) <= 5;
+    }
+
+    private function enrichMonthlyRows(array $rows, string $month): array
+    {
+        $salaryModel = new EmployeeSalary();
+        $ruleModel = new AttendancePayrollRule();
+        $monthEnd = date('Y-m-t', strtotime($month . '-01'));
+        $rule = $ruleModel->activeForDate($monthEnd);
+
+        foreach ($rows as &$row) {
+            $salary = $salaryModel->activeWithStructureForDate((int) $row['employee_id'], $monthEnd) ?: [];
+            $row['_estimate'] = $this->monthlyValueEstimate($row, $salary, $rule);
+        }
+        unset($row);
+        return $rows;
+    }
+
+    private function monthlyValueEstimate(array $row, array $salary, array $rule): array
+    {
+        $totalHours = max(0.0, (float) ($row['total_hours'] ?? 0));
+        $overtimeHours = min($totalHours, max(0.0, (float) ($row['overtime_hours'] ?? 0)));
+        $regularHours = max(0.0, $totalHours - $overtimeHours);
+        $source = (string) ($salary['basic_pay_source'] ?? 'Fixed Salary');
+        $standardDays = max(1.0, (float) ($rule['standard_days_per_month'] ?? 26));
+        $standardHours = max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8));
+        $fullShiftHours = max(1.0, (float) ($rule['full_shift_hours'] ?? $standardHours));
+        $basic = (float) ($salary['basic_pay'] ?? 0);
+        $dailyRate = (float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays;
+        $hourlyRate = (float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours;
+        $shiftRate = (float) ($salary['shift_rate'] ?? 0) > 0 ? (float) $salary['shift_rate'] : $dailyRate;
+        $overtimeRate = !empty($rule['overtime_enabled'])
+            ? $hourlyRate * (float) ($rule['normal_overtime_multiplier'] ?? 1.5)
+            : $hourlyRate;
+        $amount = 0.0;
+        $label = 'Recorded for information only';
+
+        if ($source === 'Attendance Hours') {
+            $amount = ($regularHours * $hourlyRate) + ($overtimeHours * $overtimeRate);
+            $label = 'Monthly hours x configured hourly rates';
+        } elseif ($source === 'Shifts Worked' && (string) ($rule['shift_count_method'] ?? '') === 'Worked Hours / Full Shift') {
+            $shifts = $totalHours / $fullShiftHours;
+            $amount = $shifts * $shiftRate;
+            $label = number_format($shifts, 2) . ' equivalent shift(s)';
+        }
+
+        return [
+            'regular_hours' => round($regularHours, 2),
+            'overtime_hours' => round($overtimeHours, 2),
+            'hourly_rate' => round($hourlyRate, 4),
+            'overtime_rate' => round($overtimeRate, 4),
+            'amount' => round($amount, 2),
+            'label' => $label,
+            'source' => $source,
+        ];
     }
 
     private function workedMinutes(array $record): int

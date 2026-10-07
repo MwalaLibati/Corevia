@@ -1,13 +1,16 @@
-<div class="d-flex align-items-center justify-content-between mr-bottom-30">
+<div class="d-flex align-items-center justify-content-between mb-3">
     <div>
         <h2 class="text-dark">Attendance & Leave</h2>
         <p class="text-gray mb-0">Track attendance, leave balances, and approvals.</p>
     </div>
-    <div class="d-flex gap-2">
-        <a href="<?= e(base_url('attendance/import')) ?>" class="btn btn-outline-primary">Import from Excel</a>
-        <a href="<?= e(base_url('attendance/create')) ?>" class="btn btn-primary">Add Attendance</a>
-    </div>
+    <a href="<?= e(base_url('attendance/create')) ?>" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Add Daily Record</a>
 </div>
+
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item"><a class="nav-link active" aria-current="page" href="<?= e(base_url('attendance/index?month=' . urlencode((string) ($filters['month'] ?? date('Y-m'))))) ?>">Daily Attendance</a></li>
+    <li class="nav-item"><a class="nav-link" href="<?= e(base_url('attendance/monthly?month=' . urlencode((string) ($filters['month'] ?? date('Y-m'))))) ?>">Monthly Hours</a></li>
+    <li class="nav-item"><a class="nav-link" href="<?= e(base_url('attendance/import?month=' . urlencode((string) ($filters['month'] ?? date('Y-m'))))) ?>">Import Attendance</a></li>
+</ul>
 
 <?php if (!empty($flashSuccess)): ?>
     <div class="alert alert-success"><?= e((string) $flashSuccess) ?></div>

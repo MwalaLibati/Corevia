@@ -105,6 +105,41 @@ class AttendanceRecord extends Model
         return $stmt->fetchAll();
     }
 
+    public function employeesForTemplate(int $employeeId = 0, int $branchId = 0): array
+    {
+        $where = [
+            'company_id = :cid',
+            'archived_at IS NULL',
+        ];
+        $params = ['cid' => Tenant::id()];
+        if ($employeeId > 0) {
+            $where[] = 'id = :employee_id';
+            $params['employee_id'] = $employeeId;
+        }
+        if ($branchId > 0) {
+            $where[] = 'branch_id = :branch_id';
+            $params['branch_id'] = $branchId;
+        }
+
+        $stmt = $this->db->prepare(
+            'SELECT id, full_name, employee_number, hired_at, termination_date, branch_id
+             FROM employees
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY full_name ASC, employee_number ASC'
+        );
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+
+    public function branches(): array
+    {
+        $stmt = $this->db->prepare(
+            'SELECT id, name FROM branches WHERE company_id = :cid ORDER BY name ASC'
+        );
+        $stmt->execute(['cid' => Tenant::id()]);
+        return $stmt->fetchAll();
+    }
+
     public function forEmployeeMonth(int $employeeId, string $month): array
     {
         if (!preg_match('/^\d{4}-\d{2}$/', $month)) {

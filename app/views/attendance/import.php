@@ -1,13 +1,15 @@
-<div class="d-flex align-items-center justify-content-between mr-bottom-30">
+<div class="d-flex align-items-center justify-content-between mb-3">
     <div>
         <h2 class="text-dark">Import Attendance</h2>
-        <p class="text-gray mb-0">Download the Excel-friendly template, fill attendance records, then upload it back as CSV.</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="<?= e(base_url('attendance/importTemplate')) ?>" class="btn btn-outline-primary">Download Template</a>
-        <a href="<?= e(base_url('attendance/index')) ?>" class="btn btn-outline-secondary">Back</a>
+        <p class="text-gray mb-0">Generate a pre-filled monthly template, complete it in Excel, then upload it as CSV.</p>
     </div>
 </div>
+
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item"><a class="nav-link" href="<?= e(base_url('attendance/index?month=' . urlencode((string) ($selectedMonth ?? date('Y-m'))))) ?>">Daily Attendance</a></li>
+    <li class="nav-item"><a class="nav-link" href="<?= e(base_url('attendance/monthly?month=' . urlencode((string) ($selectedMonth ?? date('Y-m'))))) ?>">Monthly Hours</a></li>
+    <li class="nav-item"><a class="nav-link active" aria-current="page" href="<?= e(base_url('attendance/import?month=' . urlencode((string) ($selectedMonth ?? date('Y-m'))))) ?>">Import Attendance</a></li>
+</ul>
 
 <?php if (!empty($flashSuccess)): ?>
     <div class="alert alert-success"><?= e((string) $flashSuccess) ?></div>
@@ -15,6 +17,52 @@
 <?php if (!empty($flashError)): ?>
     <div class="alert alert-danger"><?= e((string) $flashError) ?></div>
 <?php endif; ?>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+                <h5 class="mb-1">Generate Pre-Filled Template</h5>
+                <p class="small text-muted mb-0">Employee IDs, employee names, and applicable dates are filled automatically.</p>
+            </div>
+        </div>
+        <form method="get" action="<?= e(base_url('attendance/importTemplate')) ?>" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Attendance Month</label>
+                <input type="month" name="month" class="form-control" value="<?= e((string) ($selectedMonth ?? date('Y-m'))) ?>" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Employee Scope</label>
+                <select name="employee_id" class="form-select">
+                    <option value="0">All employees</option>
+                    <?php foreach (($employees ?? []) as $employee): ?>
+                        <option value="<?= (int) $employee['id'] ?>"><?= e((string) $employee['employee_number']) ?> - <?= e((string) $employee['full_name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Branch</label>
+                <select name="branch_id" class="form-select">
+                    <option value="0">All branches</option>
+                    <?php foreach (($branches ?? []) as $branch): ?>
+                        <option value="<?= (int) $branch['id'] ?>"><?= e((string) $branch['name']) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Dates To Include</label>
+                <select name="date_basis" class="form-select">
+                    <option value="scheduled">Scheduled workdays</option>
+                    <option value="weekdays">Monday to Friday</option>
+                    <option value="calendar">All calendar days</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-download me-1"></i>Download</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <div class="row g-4">
     <div class="col-lg-8">
@@ -45,8 +93,7 @@
             <div class="card-body">
                 <h5 class="mb-3">Template Rules</h5>
                 <div class="small text-gray">
-                    <p class="mb-2"><strong>employee_number</strong> must match an employee already created in this company.</p>
-                    <p class="mb-2"><strong>attendance_date</strong> should be a valid date, ideally YYYY-MM-DD.</p>
+                    <p class="mb-2"><strong>employee_number</strong>, <strong>employee_name_reference</strong>, and <strong>attendance_date</strong> are generated for you.</p>
                     <p class="mb-2"><strong>status</strong> must be Present, Late, Absent, or Leave.</p>
                     <p class="mb-0"><strong>check_in</strong> and <strong>check_out</strong> use 24-hour time, for example 08:00 and 17:00.</p>
                 </div>

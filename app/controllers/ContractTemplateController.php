@@ -286,7 +286,7 @@ class ContractTemplateController extends Controller
 
         $dummyEmployee = [
             'full_name'             => 'John Mwansa',
-            'employee_number'       => 'EMP001',
+            'employee_number'       => 'MDS0001',
             'designation'           => 'Operations Officer',
             'department_name'       => 'Operations',
             'department_code'       => 'OPS',

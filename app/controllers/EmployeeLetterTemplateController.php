@@ -102,7 +102,7 @@ class EmployeeLetterTemplateController extends Controller
         $employee = [
             'id' => 0,
             'full_name' => 'Martha Chanda',
-            'employee_number' => 'EMP0003',
+            'employee_number' => 'MDS0003',
             'email' => 'martha.chanda@example.com',
             'phone' => '+260 977 000000',
             'department_name' => 'Academics',

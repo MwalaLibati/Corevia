@@ -369,6 +369,7 @@
                                 <th>Employee</th>
                                 <th>Type</th>
                                 <th>Rule</th>
+                                <th>Source</th>
                                 <th>Qty</th>
                                 <th>Rate</th>
                                 <th>Amount</th>
@@ -377,8 +378,9 @@
                         </thead>
                         <tbody>
                         <?php if (empty($attendancePayrollInputs)): ?>
-                            <tr><td colspan="7" class="text-center text-gray">No attendance payroll inputs were generated for this run.</td></tr>
+                            <tr><td colspan="8" class="text-center text-gray">No attendance payroll inputs were generated for this run.</td></tr>
                         <?php else: foreach ($attendancePayrollInputs as $input): ?>
+                            <?php $attendanceSource = json_decode((string) ($input['source_summary_json'] ?? ''), true); ?>
                             <tr>
                                 <td>
                                     <div class="fw-semibold"><?= e((string)($input['employee_name'] ?? '')) ?></div>
@@ -386,6 +388,7 @@
                                 </td>
                                 <td><span class="badge bg-<?= ($input['input_type'] ?? '') === 'Earning' ? 'success' : 'danger' ?>"><?= e((string)$input['input_type']) ?></span></td>
                                 <td><?= e((string)$input['label']) ?></td>
+                                <td><span class="badge bg-light text-dark border"><?= e((string) ($attendanceSource['attendance_source'] ?? 'Daily Records')) ?></span></td>
                                 <td><?= e(number_format((float)$input['quantity'], 2)) ?></td>
                                 <td><?= e(format_currency((float)$input['rate'])) ?></td>
                                 <td><?= e(format_currency((float)$input['amount'])) ?></td>

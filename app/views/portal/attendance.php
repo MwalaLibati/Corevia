@@ -2,6 +2,7 @@
 $summary = $summary ?? ['records' => 0, 'hours' => 0, 'estimated_value' => 0, 'present' => 0, 'late' => 0, 'absent' => 0, 'leave' => 0];
 $records = $records ?? [];
 $month = (string) ($month ?? date('Y-m'));
+$monthlyEntry = $monthlyEntry ?? null;
 ?>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
@@ -15,19 +16,29 @@ $month = (string) ($month ?? date('Y-m'));
     </form>
 </div>
 
+<?php if ($monthlyEntry): ?>
+<div class="alert alert-info d-flex align-items-start gap-2 mb-4">
+    <i class="bi bi-calendar2-check fs-5"></i>
+    <div>
+        <strong>Monthly total is the payroll source for this period.</strong>
+        <div class="small">Your approved total is <?= e(number_format((float) $monthlyEntry['total_hours'], 2)) ?> hours, including <?= e(number_format((float) $monthlyEntry['overtime_hours'], 2)) ?> approved overtime hours. Daily records below are shown for reference and are not counted again.</div>
+    </div>
+</div>
+<?php endif; ?>
+
 <div class="row g-3 mb-4">
     <div class="col-sm-6 col-xl-3">
         <div class="ent-stat-card h-100">
             <span class="stat-label">Records</span>
             <div class="stat-value"><?= e((string) ($summary['records'] ?? 0)) ?></div>
-            <div class="small text-muted">Attendance entries this month</div>
+            <div class="small text-muted"><?= e((string) ($summary['input_source'] ?? 'Daily Records')) ?> payroll source</div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
         <div class="ent-stat-card h-100">
             <span class="stat-label">Hours Worked</span>
             <div class="stat-value"><?= e(number_format((float) ($summary['hours'] ?? 0), 2)) ?></div>
-            <div class="small text-muted">Based on check-in and check-out</div>
+            <div class="small text-muted"><?= $monthlyEntry ? 'Approved monthly total' : 'Based on check-in and check-out' ?></div>
         </div>
     </div>
     <div class="col-sm-6 col-xl-3">
@@ -51,7 +62,7 @@ $month = (string) ($month ?? date('Y-m'));
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
                 <h6 class="fw-bold mb-1"><i class="bi bi-clock-history me-2 text-primary"></i>Attendance Details</h6>
-                <div class="small text-muted">Values shown here are estimates until payroll is generated and approved.</div>
+                <div class="small text-muted"><?= $monthlyEntry ? 'Daily details are retained for reference; the approved monthly total controls payroll.' : 'Values shown here are estimates until payroll is generated and approved.' ?></div>
             </div>
             <span class="badge bg-light text-dark border"><?= e(date('F Y', strtotime($month . '-01'))) ?></span>
         </div>

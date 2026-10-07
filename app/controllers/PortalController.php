@@ -864,12 +864,18 @@ class PortalController extends Controller
         $month = $this->normalizePortalMonth((string) $this->input('month', date('Y-m')));
         $records = (new AttendanceRecord())->forEmployeeMonth($empId, $month);
         $enriched = $this->enrichPortalAttendanceRecords($records, $empId);
+        $monthlyEntry = (new MonthlyAttendanceSummary())->forEmployeeMonth($empId, $month, true);
+        $summary = $monthlyEntry
+            ? $this->portalMonthlyAttendanceSummary($monthlyEntry, $empId, $month, count($enriched))
+            : $this->portalAttendanceSummary($enriched);
+        $summary['input_source'] = $monthlyEntry ? 'Monthly Total' : 'Daily Records';
 
         $this->renderPortal('portal/attendance', [
             'emp' => $emp,
             'month' => $month,
             'records' => $enriched,
-            'summary' => $this->portalAttendanceSummary($enriched),
+            'monthlyEntry' => $monthlyEntry,
+            'summary' => $summary,
         ]);
     }
 
@@ -1726,6 +1732,43 @@ class PortalController extends Controller
         $summary['estimated_value'] = round($summary['estimated_value'], 2);
         $summary['overtime_hours'] = round($summary['overtime_hours'], 2);
         return $summary;
+    }
+
+    private function portalMonthlyAttendanceSummary(array $entry, int $employeeId, string $month, int $dailyRecordCount): array
+    {
+        $monthEnd = date('Y-m-t', strtotime($month . '-01'));
+        $salary = (new EmployeeSalary())->activeWithStructureForDate($employeeId, $monthEnd) ?: [];
+        $rule = (new AttendancePayrollRule())->activeForDate($monthEnd);
+        $totalHours = max(0.0, (float) ($entry['total_hours'] ?? 0));
+        $overtimeHours = min($totalHours, max(0.0, (float) ($entry['overtime_hours'] ?? 0)));
+        $regularHours = max(0.0, $totalHours - $overtimeHours);
+        $standardDays = max(1.0, (float) ($rule['standard_days_per_month'] ?? 26));
+        $standardHours = max(1.0, (float) ($rule['standard_hours_per_day'] ?? 8));
+        $basic = (float) ($salary['basic_pay'] ?? 0);
+        $dailyRate = (float) ($salary['daily_rate'] ?? 0) > 0 ? (float) $salary['daily_rate'] : $basic / $standardDays;
+        $hourlyRate = (float) ($salary['hourly_rate'] ?? 0) > 0 ? (float) $salary['hourly_rate'] : $dailyRate / $standardHours;
+        $overtimeRate = !empty($rule['overtime_enabled'])
+            ? $hourlyRate * (float) ($rule['normal_overtime_multiplier'] ?? 1.5)
+            : $hourlyRate;
+        $amount = 0.0;
+        if ((string) ($salary['basic_pay_source'] ?? 'Fixed Salary') === 'Attendance Hours') {
+            $amount = ($regularHours * $hourlyRate) + ($overtimeHours * $overtimeRate);
+        }
+
+        return [
+            'records' => 1,
+            'hours' => round($totalHours, 2),
+            'estimated_value' => round($amount, 2),
+            'present' => 0,
+            'late' => 0,
+            'absent' => 0,
+            'leave' => 0,
+            'scheduled_late' => 0,
+            'early_departures' => 0,
+            'overtime_hours' => round($overtimeHours, 2),
+            'regular_hours' => round($regularHours, 2),
+            'daily_records_excluded' => $dailyRecordCount,
+        ];
     }
 
     private function portalWorkedMinutes(array $record): int

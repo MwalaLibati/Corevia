@@ -821,6 +821,7 @@ class ReportController extends Controller
             'exceptions' => ['title' => 'Schedule Exceptions', 'icon' => 'bi-calendar2-plus', 'description' => 'Date-specific changes such as shift changes, rest days, leave, and public holidays.'],
             'requests' => ['title' => 'Change Requests', 'icon' => 'bi-inbox', 'description' => 'Employee schedule change requests and review outcomes.'],
             'impact' => ['title' => 'Payroll Impact', 'icon' => 'bi-cash-coin', 'description' => 'Attendance versus schedule impact for worked hours, short hours, late time, and overtime.'],
+            'monthly' => ['title' => 'Monthly Hours', 'icon' => 'bi-calendar2-check', 'description' => 'Approved monthly totals used instead of daily clock records for payroll.'],
             'overtime' => ['title' => 'Overtime', 'icon' => 'bi-clock-history', 'description' => 'Scheduled-attendance overtime exceptions for payroll review.'],
             'absence' => ['title' => 'Absence & Late Coming', 'icon' => 'bi-exclamation-triangle', 'description' => 'Absences, late arrivals, early departures, and short-hour records.'],
             'readiness' => ['title' => 'Payroll Readiness', 'icon' => 'bi-clipboard-check', 'description' => 'Pre-payroll checks for missing schedules, missing attendance, and pending schedule requests.'],
@@ -892,6 +893,19 @@ class ReportController extends Controller
                 (string) ($row['reviewed_by_name'] ?? ''),
                 (string) ($row['reviewed_at'] ?? ''),
             ], $requests));
+        }
+
+        if ($report === 'monthly') {
+            $entries = (new MonthlyAttendanceSummary())->listForMonth($month);
+            return $this->scheduledPayload($definition, ['Employee #', 'Employee', 'Total Hours', 'Overtime Hours', 'Status', 'Daily Records Excluded', 'Notes'], array_map(static fn(array $row): array => [
+                (string) ($row['employee_number'] ?? ''),
+                (string) ($row['employee_name'] ?? ''),
+                (float) ($row['total_hours'] ?? 0),
+                (float) ($row['overtime_hours'] ?? 0),
+                (string) ($row['status'] ?? ''),
+                in_array((string) ($row['status'] ?? ''), ['Approved', 'Locked'], true) ? (int) ($row['daily_record_count'] ?? 0) : 0,
+                (string) ($row['notes'] ?? ''),
+            ], $entries));
         }
 
         $variance = $schedule->varianceRows($month);
@@ -979,6 +993,7 @@ class ReportController extends Controller
 
     private function attendanceCountsForMonth(string $month): array
     {
+        $monthly = (new MonthlyAttendanceSummary())->approvedForMonth($month);
         $monthStart = $month . '-01';
         $stmt = db()->prepare(
             "SELECT ar.employee_id, COUNT(*) AS record_count
@@ -997,6 +1012,9 @@ class ReportController extends Controller
         $counts = [];
         foreach ($stmt->fetchAll() as $row) {
             $counts[(int) $row['employee_id']] = (int) $row['record_count'];
+        }
+        foreach ($monthly as $employeeId => $_entry) {
+            $counts[(int) $employeeId] = 1;
         }
         return $counts;
     }
