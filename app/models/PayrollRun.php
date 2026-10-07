@@ -8,6 +8,8 @@ declare(strict_types=1);
 
 class PayrollRun extends Model
 {
+    private const NAPSA_EXEMPTION_AGE = 60;
+
     protected string $table = 'payroll_runs';
     protected bool $tenantScoped = true;
 
@@ -520,7 +522,7 @@ class PayrollRun extends Model
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
         $employeeStmt = $this->db->prepare(
-            "SELECT id, full_name, employee_number, hired_at, termination_date
+            "SELECT id, full_name, employee_number, date_of_birth, hired_at, termination_date
              FROM employees
              WHERE (hired_at IS NULL OR hired_at <= :period_end)
                AND (termination_date IS NULL OR termination_date >= :period_start)
@@ -639,6 +641,14 @@ class PayrollRun extends Model
             $taxablePay = round($basicPay + $taxableAllowances + $bonusAmount + $attendanceEarningTotal, 2);
             $napsaBase = round($basicPay + $napsaAllowances + $attendanceEarningTotal, 2);
             $nhimaBase = round($basicPay + $nhimaAllowances + $bonusAmount + $attendanceEarningTotal, 2);
+            $napsaAgeExempt = $this->hasReachedNapsaExemptionAge(
+                (string) ($employee['date_of_birth'] ?? ''),
+                $periodEnd
+            );
+            $effectiveNapsaBase = $napsaAgeExempt ? 0.0 : $napsaBase;
+            if ($napsaAgeExempt) {
+                $payWarnings[] = 'NAPSA was not deducted because the employee is age 60 or older at the end of this payroll period.';
+            }
             $earningLines = [[
                 'code' => 'BASIC',
                 'name' => $attendanceDerivedBasic ? (string) ($attendanceBasicLine['label'] ?? 'Basic Pay - Attendance') : 'Basic Salary',
@@ -710,7 +720,7 @@ class PayrollRun extends Model
             }
 
             $statutoryTotal = 0.0;
-            foreach (TaxCalculator::computeForBases($taxablePay, $napsaBase, $nhimaBase) as $statutory) {
+            foreach (TaxCalculator::computeForBases($taxablePay, $effectiveNapsaBase, $nhimaBase) as $statutory) {
                 $amount = round((float) $statutory['amount'], 2);
                 $statutoryTotal += $amount;
                 $deductionLines[] = [
@@ -718,7 +728,7 @@ class PayrollRun extends Model
                     'name' => (string) $statutory['label'],
                     'category' => 'statutory_employee',
                     'calculation_type' => 'Calculated',
-                    'base' => match ((string) $statutory['code']) { 'NAPSA' => $napsaBase, 'NHIMA' => $nhimaBase, default => $taxablePay },
+                    'base' => match ((string) $statutory['code']) { 'NAPSA' => $effectiveNapsaBase, 'NHIMA' => $nhimaBase, default => $taxablePay },
                     'rate_percent' => null,
                     'amount' => $amount,
                 ];
@@ -737,7 +747,11 @@ class PayrollRun extends Model
                 ];
             }
 
-            foreach (TaxCalculator::employerContributionsForBases($napsaBase, $nhimaBase) as $employer) {
+            foreach (TaxCalculator::employerContributionsForBases($effectiveNapsaBase, $nhimaBase) as $employer) {
+                if ($napsaAgeExempt && (string) ($employer['code'] ?? '') === 'NAPSA') {
+                    continue;
+                }
+
                 $totals['employer_contributions'] += round((float) $employer['amount'] * $exchangeRateToCompany, 2);
                 $deductionLines[] = [
                     'code' => (string) $employer['code'],
@@ -783,6 +797,8 @@ class PayrollRun extends Model
                 'attendance_deductions' => $attendanceDeductionTotal,
                 'basic_pay_source' => $basicPaySource,
                 'basic_pay_explanation' => $basicPayExplanation,
+                'napsa_age_exempt' => $napsaAgeExempt,
+                'napsa_calculation_base' => $effectiveNapsaBase,
                 'pay_warnings' => $payWarnings,
             ];
 
@@ -835,6 +851,22 @@ class PayrollRun extends Model
             'period_days' => $periodDays,
             'factor' => min(1.0, max(0.0, $factor)),
         ];
+    }
+
+    private function hasReachedNapsaExemptionAge(string $dateOfBirth, string $asOfDate): bool
+    {
+        $dateOfBirth = trim($dateOfBirth);
+        if ($dateOfBirth === '') {
+            return false;
+        }
+
+        $birthDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dateOfBirth);
+        $payrollDate = DateTimeImmutable::createFromFormat('!Y-m-d', $asOfDate);
+        if (!$birthDate || !$payrollDate || $birthDate->format('Y-m-d') !== $dateOfBirth) {
+            return false;
+        }
+
+        return $birthDate->modify('+' . self::NAPSA_EXEMPTION_AGE . ' years') <= $payrollDate;
     }
 
     private function calculateAdvanceDeduction(int $employeeId): float
