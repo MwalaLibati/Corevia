@@ -2,6 +2,7 @@
 $month = (string) ($month ?? date('Y-m'));
 $rows = $rows ?? [];
 $employees = $employees ?? [];
+$importResults = $importResults ?? null;
 $money = static fn(float $amount): string => function_exists('format_currency')
     ? format_currency($amount)
     : number_format($amount, 2);
@@ -12,13 +13,19 @@ $money = static fn(float $amount): string => function_exists('format_currency')
         <h2 class="text-dark mb-1">Attendance</h2>
         <p class="text-gray mb-0">Record approved monthly hours for employees who do not use daily clock times.</p>
     </div>
-    <form method="get" action="<?= e(base_url('attendance/monthly')) ?>" class="d-flex gap-2 align-items-end">
-        <div>
-            <label class="form-label mb-1">Month</label>
-            <input type="month" name="month" class="form-control" value="<?= e($month) ?>">
-        </div>
-        <button type="submit" class="btn btn-outline-primary">View</button>
-    </form>
+    <div class="d-flex gap-2 align-items-end flex-wrap">
+        <form method="get" action="<?= e(base_url('attendance/monthly')) ?>" class="d-flex gap-2 align-items-end">
+            <div>
+                <label class="form-label mb-1">Month</label>
+                <input type="month" name="month" class="form-control" value="<?= e($month) ?>">
+            </div>
+            <button type="submit" class="btn btn-outline-primary">View</button>
+        </form>
+        <a href="<?= e(base_url('attendance/monthlyImportTemplate?month=' . urlencode($month))) ?>" class="btn btn-outline-primary">
+            <i class="bi bi-download me-1"></i>Monthly Template
+        </a>
+        <a href="#monthlyImportPanel" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Import Hours</a>
+    </div>
 </div>
 
 <ul class="nav nav-tabs mb-4" role="tablist">
@@ -39,15 +46,15 @@ $money = static fn(float $amount): string => function_exists('format_currency')
                 <form method="post" action="<?= e(base_url('attendance/monthlyStore')) ?>" class="row g-3" id="monthlyHoursForm">
                     <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
                     <input type="hidden" name="attendance_month" value="<?= e($month) ?>">
-                    <input type="hidden" name="employee_id" id="monthlyEmployeeId">
                     <div class="col-12">
                         <label class="form-label">Employee *</label>
-                        <input type="text" id="monthlyEmployeeSearch" class="form-control" list="monthlyEmployeeOptions" placeholder="Search by name or employee ID" autocomplete="off" required>
-                        <datalist id="monthlyEmployeeOptions">
+                        <select name="employee_id" id="monthlyEmployeeSelect" class="form-select" required>
+                            <option value="">Select an employee</option>
                             <?php foreach ($employees as $employee): ?>
-                                <option value="<?= e((string) $employee['employee_number'] . ' - ' . (string) $employee['full_name']) ?>"></option>
+                                <option value="<?= (int) $employee['id'] ?>"><?= e((string) $employee['employee_number'] . ' - ' . (string) $employee['full_name']) ?></option>
                             <?php endforeach; ?>
-                        </datalist>
+                        </select>
+                        <div class="form-text">Open the list and search by employee name or ID.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Total Hours Worked *</label>
@@ -160,40 +167,81 @@ $money = static fn(float $amount): string => function_exists('format_currency')
     </div>
 </div>
 
+<div class="card border-0 shadow-sm mt-4" id="monthlyImportPanel">
+    <div class="card-body">
+        <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+                <h5 class="mb-1">Import Monthly Hours</h5>
+                <p class="small text-muted mb-0">The template contains one row per active employee for <?= e(date('F Y', strtotime($month . '-01'))) ?>.</p>
+            </div>
+            <a href="<?= e(base_url('attendance/monthlyImportTemplate?month=' . urlencode($month))) ?>" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-download me-1"></i>Download Template
+            </a>
+        </div>
+        <form method="post" action="<?= e(base_url('attendance/monthlyImportStore')) ?>" enctype="multipart/form-data" class="row g-3 align-items-end">
+            <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+            <input type="hidden" name="month" value="<?= e($month) ?>">
+            <div class="col-lg-6">
+                <label class="form-label">Completed Monthly Hours CSV</label>
+                <input type="file" name="monthly_hours_csv" class="form-control" accept=".csv,text/csv" required>
+                <div class="form-text">Complete total hours, overtime, status, and notes in Excel, then save as CSV.</div>
+            </div>
+            <div class="col-lg-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="overwrite_existing" value="1" id="overwriteMonthlyHours">
+                    <label class="form-check-label" for="overwriteMonthlyHours">Update existing editable entries</label>
+                </div>
+                <div class="small text-muted">Locked payroll periods are always protected.</div>
+            </div>
+            <div class="col-lg-3">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-upload me-1"></i>Import Monthly Hours</button>
+            </div>
+        </form>
+
+        <?php if (is_array($importResults)): ?>
+            <hr class="my-4">
+            <div class="d-flex gap-2 flex-wrap mb-3">
+                <span class="badge bg-success">Created: <?= (int) ($importResults['created'] ?? 0) ?></span>
+                <span class="badge bg-info text-dark">Updated: <?= (int) ($importResults['updated'] ?? 0) ?></span>
+                <span class="badge bg-warning text-dark">Skipped: <?= (int) ($importResults['skipped'] ?? 0) ?></span>
+            </div>
+            <?php if (!empty($importResults['errors'])): ?>
+                <div class="alert alert-warning mb-0">
+                    <strong>Rows requiring attention</strong>
+                    <ul class="mb-0 mt-2">
+                        <?php foreach ($importResults['errors'] as $error): ?>
+                            <li><?= e((string) $error) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</div>
+
 <script>
-(function () {
-    var input = document.getElementById('monthlyEmployeeSearch');
-    var hidden = document.getElementById('monthlyEmployeeId');
+document.addEventListener('DOMContentLoaded', function () {
+    var select = document.getElementById('monthlyEmployeeSelect');
     var form = document.getElementById('monthlyHoursForm');
-    var employees = <?= json_encode(array_map(static fn(array $employee): array => [
-        'id' => (string) $employee['id'],
-        'label' => (string) $employee['employee_number'] . ' - ' . (string) $employee['full_name'],
-    ], $employees), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
-    function syncEmployee() {
-        var selected = employees.find(function (employee) { return employee.label === input.value.trim(); });
-        hidden.value = selected ? selected.id : '';
+    if (window.jQuery && jQuery.fn.select2) {
+        jQuery(select).select2({
+            width: '100%',
+            placeholder: 'Select an employee',
+            allowClear: true
+        });
     }
-    input.addEventListener('input', syncEmployee);
-    input.addEventListener('change', syncEmployee);
-    form.addEventListener('submit', function (event) {
-        syncEmployee();
-        if (!hidden.value) {
-            event.preventDefault();
-            if (window.Swal) {
-                Swal.fire({icon: 'warning', title: 'Select an employee', text: 'Choose an employee from the search results before saving.'});
-            }
-        }
-    });
     document.querySelectorAll('.js-edit-monthly').forEach(function (button) {
         button.addEventListener('click', function () {
-            hidden.value = button.dataset.employeeId || '';
-            input.value = button.dataset.employeeLabel || '';
+            select.value = button.dataset.employeeId || '';
+            if (window.jQuery && jQuery.fn.select2) {
+                jQuery(select).trigger('change');
+            }
             form.querySelector('[name="total_hours"]').value = button.dataset.totalHours || '0';
             form.querySelector('[name="overtime_hours"]').value = button.dataset.overtimeHours || '0';
             form.querySelector('[name="notes"]').value = button.dataset.notes || '';
-            input.scrollIntoView({behavior: 'smooth', block: 'center'});
+            select.scrollIntoView({behavior: 'smooth', block: 'center'});
             form.querySelector('[name="total_hours"]').focus();
         });
     });
-})();
+});
 </script>

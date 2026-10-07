@@ -386,6 +386,98 @@ class AttendanceController extends Controller
         exit;
     }
 
+    public function monthlyImportTemplate(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        $employeeId = max(0, (int) $this->input('employee_id', 0));
+        $employees = (new AttendanceRecord())->employeesForTemplate($employeeId);
+        $existing = [];
+        foreach ((new MonthlyAttendanceSummary())->listForMonth($month) as $row) {
+            $existing[(int) $row['employee_id']] = $row;
+        }
+
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="monthly-hours-import-' . $month . '.csv"');
+
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, [
+            'employee_number',
+            'employee_name_reference',
+            'attendance_month',
+            'total_hours',
+            'overtime_hours',
+            'status',
+            'notes',
+        ]);
+        $monthStart = $month . '-01';
+        $monthEnd = date('Y-m-t', strtotime($monthStart));
+        foreach ($employees as $employee) {
+            $row = $existing[(int) $employee['id']] ?? [];
+            if ((!empty($employee['hired_at']) && (string) $employee['hired_at'] > $monthEnd)
+                || (!empty($employee['termination_date']) && (string) $employee['termination_date'] < $monthStart)
+                || (string) ($row['status'] ?? '') === 'Locked') {
+                continue;
+            }
+            fputcsv($out, [
+                (string) $employee['employee_number'],
+                (string) $employee['full_name'],
+                $month,
+                $row !== [] ? (string) $row['total_hours'] : '',
+                $row !== [] ? (string) $row['overtime_hours'] : '0',
+                $row !== [] ? (string) $row['status'] : 'Draft',
+                $row !== [] ? (string) ($row['notes'] ?? '') : '',
+            ]);
+        }
+        fclose($out);
+        exit;
+    }
+
+    public function monthlyImportStore(): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $month = $this->normalizeMonth((string) $this->input('month', date('Y-m')));
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+
+        $file = $_FILES['monthly_hours_csv'] ?? null;
+        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            Session::flash('error', 'Please choose a monthly hours CSV file to import.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+        if (!in_array($extension, ['csv', 'txt'], true)) {
+            Session::flash('error', 'Please upload the monthly hours template as CSV.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+        if ((int) ($file['size'] ?? 0) > 5 * 1024 * 1024) {
+            Session::flash('error', 'The uploaded file is too large. Please keep monthly hours imports below 5MB.');
+            redirect('attendance/monthly?month=' . urlencode($month));
+        }
+
+        $overwrite = (string) $this->input('overwrite_existing', '') === '1';
+        $result = $this->importMonthlyHoursFromCsv((string) $file['tmp_name'], $overwrite);
+        $_SESSION['_monthly_attendance_import_results'] = $result;
+        AuditLog::record('monthly_attendance_import', 'Imported monthly attendance hours from CSV.', 'MonthlyAttendanceSummary', null, 'admin', $result);
+        Session::flash(
+            'success',
+            'Monthly hours import finished: ' . (int) $result['created'] . ' created, '
+            . (int) $result['updated'] . ' updated, '
+            . (int) $result['skipped'] . ' skipped.'
+        );
+        redirect('attendance/monthly?month=' . urlencode($month));
+    }
+
     public function monthly(): void
     {
         require_auth();
@@ -399,12 +491,15 @@ class AttendanceController extends Controller
         $this->render('attendance/monthly', [
             'title' => 'Monthly Attendance Hours',
             'month' => $month,
-            'employees' => $attendance->employees(),
+            'employees' => $attendance->employeesForTemplate(),
             'rows' => $rows,
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),
+            'importResults' => $_SESSION['_monthly_attendance_import_results'] ?? null,
         ]);
+
+        unset($_SESSION['_monthly_attendance_import_results']);
     }
 
     public function monthlyStore(): void
@@ -883,6 +978,138 @@ class AttendanceController extends Controller
 
         fclose($handle);
 
+        return ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    private function importMonthlyHoursFromCsv(string $path, bool $overwrite): array
+    {
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Could not open uploaded CSV file.']];
+        }
+
+        $headers = fgetcsv($handle);
+        if (!is_array($headers)) {
+            fclose($handle);
+            return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['CSV file is empty.']];
+        }
+        $headers = array_map(fn($header): string => $this->normalizeImportHeader((string) $header), $headers);
+        foreach (['employee_number', 'attendance_month', 'total_hours'] as $required) {
+            if (!in_array($required, $headers, true)) {
+                fclose($handle);
+                return ['created' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => ['Missing required column: ' . $required . '.']];
+            }
+        }
+
+        $employeesByNumber = [];
+        foreach ((new AttendanceRecord())->employees() as $employee) {
+            $number = strtoupper(trim((string) ($employee['employee_number'] ?? '')));
+            if ($number !== '') {
+                $employeesByNumber[$number] = $employee;
+            }
+        }
+
+        $model = new MonthlyAttendanceSummary();
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+        $errors = [];
+        $line = 1;
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $line++;
+            $data = [];
+            foreach ($headers as $index => $key) {
+                if ($key !== '') {
+                    $data[$key] = trim((string) ($row[$index] ?? ''));
+                }
+            }
+            if ($this->isEmptyImportRow($data)) {
+                continue;
+            }
+
+            $employeeNumber = strtoupper((string) ($data['employee_number'] ?? ''));
+            if ($employeeNumber === '' || !isset($employeesByNumber[$employeeNumber])) {
+                $errors[] = "Line {$line}: employee_number '{$employeeNumber}' was not found in this company.";
+                $skipped++;
+                continue;
+            }
+
+            $rawMonth = substr(trim((string) ($data['attendance_month'] ?? '')), 0, 7);
+            if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $rawMonth)) {
+                $errors[] = "Line {$line}: attendance_month must use YYYY-MM format.";
+                $skipped++;
+                continue;
+            }
+
+            $rawTotal = trim((string) ($data['total_hours'] ?? ''));
+            $rawOvertime = trim((string) ($data['overtime_hours'] ?? '0'));
+            if ($rawTotal === '') {
+                $skipped++;
+                continue;
+            }
+            if (!is_numeric($rawTotal) || !is_numeric($rawOvertime === '' ? '0' : $rawOvertime)) {
+                $errors[] = "Line {$line}: total_hours and overtime_hours must be numbers.";
+                $skipped++;
+                continue;
+            }
+            $totalHours = round((float) $rawTotal, 2);
+            $overtimeHours = round((float) ($rawOvertime === '' ? 0 : $rawOvertime), 2);
+            if ($totalHours < 0 || $totalHours > 744) {
+                $errors[] = "Line {$line}: total_hours must be between 0 and 744.";
+                $skipped++;
+                continue;
+            }
+            if ($overtimeHours < 0 || $overtimeHours > $totalHours) {
+                $errors[] = "Line {$line}: overtime_hours cannot be negative or greater than total_hours.";
+                $skipped++;
+                continue;
+            }
+
+            $rawStatus = trim((string) ($data['status'] ?? ''));
+            $status = $rawStatus === '' ? 'Draft' : ucfirst(strtolower($rawStatus));
+            if (!in_array($status, ['Draft', 'Approved'], true)) {
+                $errors[] = "Line {$line}: status must be Draft or Approved.";
+                $skipped++;
+                continue;
+            }
+
+            $employeeId = (int) $employeesByNumber[$employeeNumber]['id'];
+            $existing = $model->forEmployeeMonth($employeeId, $rawMonth);
+            if ($existing && (string) $existing['status'] === 'Locked') {
+                $errors[] = "Line {$line}: {$employeeNumber} is locked by payroll for {$rawMonth}.";
+                $skipped++;
+                continue;
+            }
+            if ($existing && !$overwrite) {
+                $errors[] = "Line {$line}: monthly hours already exist for {$employeeNumber} in {$rawMonth}. Select update existing entries to replace them.";
+                $skipped++;
+                continue;
+            }
+
+            try {
+                $id = $model->saveEntry([
+                    'employee_id' => $employeeId,
+                    'attendance_month' => $rawMonth,
+                    'total_hours' => $totalHours,
+                    'overtime_hours' => $overtimeHours,
+                    'notes' => trim((string) ($data['notes'] ?? '')),
+                    'status' => $status,
+                ]);
+                if ($existing) {
+                    $updated++;
+                    AuditLog::recordChanges('monthly_attendance_import_update', 'Updated monthly attendance from CSV.', 'MonthlyAttendanceSummary', $id, $existing, $model->find($id) ?: []);
+                } else {
+                    $created++;
+                    AuditLog::record('monthly_attendance_import_create', 'Created monthly attendance from CSV.', 'MonthlyAttendanceSummary', $id, 'admin', ['line' => $line, 'employee_number' => $employeeNumber]);
+                }
+            } catch (Throwable $exception) {
+                $errors[] = "Line {$line}: " . $exception->getMessage();
+                $skipped++;
+            }
+        }
+
+        fclose($handle);
         return ['created' => $created, 'updated' => $updated, 'skipped' => $skipped, 'errors' => $errors];
     }
 
