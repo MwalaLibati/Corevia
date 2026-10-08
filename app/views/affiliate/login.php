@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-    <link rel="stylesheet" href="<?= e(asset('assets/css/auth-login.css') . '?v=20261007-login') ?>">
+    <link rel="stylesheet" href="<?= e(asset('assets/css/auth-login.css') . '?v=20261008-login') ?>">
 </head>
 <body class="auth-page" style="--auth-accent:#0f766e;--auth-accent-dark:#115e59;--auth-secondary:#2563eb">
 <main class="auth-shell">
@@ -69,6 +69,6 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="<?= e(asset('assets/js/auth-login.js') . '?v=20261007-login') ?>"></script>
+<script src="<?= e(asset('assets/js/auth-login.js') . '?v=20261008-login') ?>"></script>
 </body>
 </html>

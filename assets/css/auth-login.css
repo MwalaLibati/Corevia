@@ -342,31 +342,53 @@ body.auth-page {
 }
 
 @media (max-width: 760px) {
-    .auth-shell { display: block; overflow: visible; }
+    body.auth-page { padding: 12px; }
+    .auth-shell {
+        display: block;
+        min-height: calc(100vh - 24px);
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: var(--auth-panel);
+        box-shadow: 0 10px 32px rgba(15, 23, 42, .06);
+    }
     .auth-showcase {
         min-height: auto;
-        padding: 22px 24px 25px;
+        padding: 34px 24px 4px;
         border-right: 0;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 0;
+        background: var(--auth-panel);
     }
-    .auth-brand img { width: 48px; height: 48px; }
-    .auth-showcase-copy { margin: 20px 0 0; text-align: left; }
-    .auth-showcase h1 { margin-bottom: 6px; font-size: 27px; }
-    .auth-showcase-copy p { margin: 0; font-size: 13px; line-height: 1.55; }
-    .auth-eyebrow { margin-bottom: 8px; }
-    .auth-art, .auth-showcase-footer { display: none; }
-    .auth-form-panel { min-height: calc(100vh - 213px); padding: 42px 24px; }
+    .auth-brand { justify-content: center; }
+    .auth-brand img { width: 74px; height: 74px; }
+    .auth-brand span,
+    .auth-showcase-copy,
+    .auth-art,
+    .auth-showcase-footer,
+    .auth-portal-label,
+    .auth-form-intro,
+    .auth-security-note { display: none; }
+    .auth-form-panel {
+        min-height: auto;
+        padding: 18px 24px 34px;
+    }
     .auth-form-panel::before { display: none; }
+    .auth-form-wrap h2 {
+        margin-bottom: 28px;
+        font-size: 25px;
+        text-align: center;
+    }
 }
 
 @media (max-width: 420px) {
-    .auth-showcase { padding: 18px 20px 22px; }
-    .auth-brand { font-size: 14px; }
-    .auth-brand img { width: 43px; height: 43px; }
-    .auth-showcase h1 { font-size: 24px; }
-    .auth-form-panel { padding: 34px 20px 40px; }
+    body.auth-page { padding: 8px; }
+    .auth-shell { min-height: calc(100vh - 16px); }
+    .auth-showcase { padding: 28px 20px 2px; }
+    .auth-brand img { width: 68px; height: 68px; }
+    .auth-form-panel { padding: 16px 16px 30px; }
     .auth-form-wrap h2 { font-size: 25px; }
-    .auth-form-intro { margin-bottom: 25px; }
+    .auth-control,
+    .auth-password .auth-control { height: 56px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
