@@ -15,6 +15,24 @@
     </div>
 </div>
 
+<?php
+$directory = (string) ($directory ?? 'active');
+$directoryCounts = $directoryCounts ?? ['active' => 0, 'former' => 0];
+?>
+
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link <?= $directory === 'active' ? 'active' : '' ?>" href="<?= e(base_url('employee/index?view=active')) ?>">
+            Active Employees <span class="badge bg-light text-dark border ms-1"><?= e((string) ($directoryCounts['active'] ?? 0)) ?></span>
+        </a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link <?= $directory === 'former' ? 'active' : '' ?>" href="<?= e(base_url('employee/index?view=former')) ?>">
+            Former Employees <span class="badge bg-light text-dark border ms-1"><?= e((string) ($directoryCounts['former'] ?? 0)) ?></span>
+        </a>
+    </li>
+</ul>
+
 <?php if (!empty($flashSuccess)): ?>
     <div class="alert alert-success"><?= e((string) $flashSuccess) ?></div>
 <?php endif; ?>
@@ -26,13 +44,14 @@
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body">
         <form method="get" action="<?= e(base_url('employee/index')) ?>" class="row g-3 align-items-end">
+            <input type="hidden" name="view" value="<?= e($directory) ?>">
             <div class="col-md-8">
                 <label class="form-label">Search</label>
                 <input type="text" name="search" class="form-control" value="<?= e((string) ($search ?? '')) ?>" placeholder="Search by name, employee number, or email">
             </div>
             <div class="col-md-4 d-flex gap-2">
                 <button type="submit" class="btn btn-outline-primary">Search</button>
-                <a href="<?= e(base_url('employee/index')) ?>" class="btn btn-outline-secondary">Reset</a>
+                <a href="<?= e(base_url('employee/index?view=' . $directory)) ?>" class="btn btn-outline-secondary">Reset</a>
             </div>
         </form>
     </div>
@@ -59,7 +78,7 @@
                 <tbody>
                     <?php if (empty($employees)): ?>
                         <tr>
-                            <td colspan="10" class="text-center text-gray">No employees found.</td>
+                            <td colspan="10" class="text-center text-gray">No <?= $directory === 'former' ? 'former' : 'active' ?> employees found.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($employees as $employee): ?>
@@ -90,12 +109,8 @@
                                 </td>
                                 <td class="text-end">
                                     <a href="<?= e(base_url('employee/profile/' . (string) $employee['id'])) ?>" class="btn btn-sm btn-outline-dark">Profile</a>
-                                    <?php if ($canManageEmployees): ?>
+                                    <?php if ($canManageEmployees && $directory === 'active'): ?>
                                     <a href="<?= e(base_url('employee/edit/' . (string) $employee['id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
-                                    <form method="post" action="<?= e(base_url('employee/delete/' . (string) $employee['id'])) ?>" class="d-inline">
-                                        <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Archive this employee? They will be hidden from active employee lists and portal access will be disabled.');">Archive</button>
-                                    </form>
                                     <?php endif; ?>
                                 </td>
                             </tr>

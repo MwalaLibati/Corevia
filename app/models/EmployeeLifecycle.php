@@ -129,7 +129,10 @@ class EmployeeLifecycle extends Model
 
     public function record(int $employeeId, array $data): void
     {
-        $employee = (new Employee())->findDetailed($employeeId);
+        // Construct before opening the transaction because Employee initialises
+        // compatibility schemas and MySQL DDL would implicitly commit the work.
+        $employeeModel = new Employee();
+        $employee = $employeeModel->findDetailed($employeeId);
         if (!$employee) {
             throw new RuntimeException('Employee not found.');
         }
@@ -194,7 +197,7 @@ class EmployeeLifecycle extends Model
                 $updates['portal_active'] = 1;
             }
 
-            (new Employee())->update($employeeId, $updates);
+            $employeeModel->update($employeeId, $updates);
             $this->db->commit();
         } catch (Throwable $e) {
             if ($this->db->inTransaction()) {

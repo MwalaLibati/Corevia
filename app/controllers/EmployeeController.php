@@ -15,12 +15,18 @@ class EmployeeController extends Controller
 
         $employeeModel = new Employee();
         $search = trim((string) $this->input('search', ''));
-        $employees = $search === '' ? $employeeModel->listWithDepartment() : $employeeModel->search($search);
+        $directory = (string) $this->input('view', 'active');
+        $directory = $directory === 'former' ? 'former' : 'active';
+        $employees = $search === ''
+            ? $employeeModel->listWithDepartment($directory)
+            : $employeeModel->search($search, $directory);
 
         $this->render('employees/index', [
             'title' => 'Employees',
             'employees' => $employees,
             'search' => $search,
+            'directory' => $directory,
+            'directoryCounts' => $employeeModel->directoryCounts(),
             'csrf' => Session::csrfToken(),
             'flashSuccess' => Session::flash('success'),
             'flashError' => Session::flash('error'),
@@ -87,6 +93,7 @@ class EmployeeController extends Controller
         $letterTemplates = new EmployeeLetterTemplate();
         $documents = (new EmployeeDocument())->forEmployee($employeeId);
         $lifecycleModel = new EmployeeLifecycle();
+        $terminationModel = new EmployeeTerminationRequest();
 
         $this->render('employees/profile', [
             'title' => 'Employee Profile',
@@ -101,6 +108,8 @@ class EmployeeController extends Controller
             'gratuityEstimate' => $this->estimateGratuity($activeContract, $activeSalary, $gratuityPolicy),
             'lifecycleHistory' => $lifecycleModel->forEmployee($employeeId),
             'lifecycleEventTypes' => EmployeeLifecycle::EVENT_TYPES,
+            'pendingTermination' => $terminationModel->pendingForEmployee($employeeId),
+            'terminationFinalPayModes' => EmployeeTerminationRequest::FINAL_PAY_MODES,
             'onboardingChecklist' => $checklists->forEmployee($employeeId, 'Onboarding'),
             'exitChecklist' => $checklists->forEmployee($employeeId, 'Exit'),
             'profileCompletion' => $this->employeeProfileCompletion($employee, $documents, $activeContract, $activeSalary),
@@ -266,6 +275,10 @@ class EmployeeController extends Controller
         }
 
         $employeeId = (int) $id;
+        if ((string) $this->input('event_type', '') === 'Terminated') {
+            Session::flash('error', 'Use the dedicated Terminate Employment action so payroll impact and approval controls are applied.');
+            redirect('employee/profile/' . $employeeId);
+        }
         $data = [
             'event_type' => (string) $this->input('event_type', 'Other'),
             'effective_date' => $this->normalizeDate((string) $this->input('effective_date', '')) ?? date('Y-m-d'),
@@ -286,6 +299,73 @@ class EmployeeController extends Controller
             Session::flash('success', 'Employee lifecycle event recorded.');
         } catch (Throwable $e) {
             Session::flash('error', 'Lifecycle event could not be recorded: ' . $e->getMessage());
+        }
+
+        redirect('employee/profile/' . $employeeId);
+    }
+
+    public function terminationPreview(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $employeeId = (int) $id;
+            $employee = (new Employee())->findDetailed($employeeId);
+            if (!$employee) {
+                throw new RuntimeException('Employee not found.');
+            }
+
+            $impact = (new EmployeeTerminationRequest())->payrollImpact(
+                $employeeId,
+                (string) $this->input('effective_date', ''),
+                (string) $this->input('final_pay_mode', 'Use Payroll Run Rule')
+            );
+            echo json_encode(['ok' => true, 'impact' => $impact], JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $e) {
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => $e->getMessage()], JSON_UNESCAPED_SLASHES);
+        }
+        exit;
+    }
+
+    public function terminationStore(string $id): void
+    {
+        require_auth();
+        require_role(['Super Admin', 'HR Officer']);
+
+        $employeeId = (int) $id;
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            redirect('employee/profile/' . $employeeId);
+        }
+        if (!Session::verifyCsrf((string) $this->input('_csrf', ''))) {
+            Session::flash('error', 'Invalid request token.');
+            redirect('employee/profile/' . $employeeId);
+        }
+
+        try {
+            $model = new EmployeeTerminationRequest();
+            $requestId = $model->createForEmployee($employeeId, [
+                'effective_date' => (string) $this->input('effective_date', ''),
+                'reason' => trim((string) $this->input('reason', '')),
+                'final_pay_mode' => (string) $this->input('final_pay_mode', 'Use Payroll Run Rule'),
+                'requested_by' => (int) (current_user()['id'] ?? 0),
+            ]);
+            (new EmployeeLifecycleChecklist())->ensureDefaults($employeeId, 'Exit');
+            WorkflowEvent::record(
+                'employee_termination',
+                'EmployeeTerminationRequest',
+                $requestId,
+                null,
+                'Pending Approval',
+                'termination_requested',
+                trim((string) $this->input('reason', ''))
+            );
+            AuditLog::record('termination_requested', 'Submitted employee termination request.', 'EmployeeTerminationRequest', $requestId);
+            Session::flash('success', 'Termination request submitted for approval. No employee status or payroll access has changed yet.');
+        } catch (Throwable $e) {
+            Session::flash('error', 'Termination request could not be submitted: ' . $e->getMessage());
         }
 
         redirect('employee/profile/' . $employeeId);

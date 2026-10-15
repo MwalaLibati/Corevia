@@ -7,6 +7,9 @@ $salary = $activeSalary ?? null;
 $advance = $activeAdvance ?? null;
 $lifecycle = $lifecycleHistory ?? [];
 $eventTypes = $lifecycleEventTypes ?? [];
+$eventTypes = array_values(array_filter($eventTypes, static fn(string $type): bool => $type !== 'Terminated'));
+$pendingTermination = $pendingTermination ?? null;
+$terminationFinalPayModes = $terminationFinalPayModes ?? ['Use Payroll Run Rule', 'Full Month', 'Calendar Days'];
 $departmentOptions = $departments ?? [];
 $onboardingChecklist = $onboardingChecklist ?? [];
 $exitChecklist = $exitChecklist ?? [];
@@ -37,7 +40,10 @@ $gratuity = $gratuityEstimate ?? [
 ];
 
 $status = (string) ($emp['lifecycle_status'] ?? $emp['contract_status'] ?? 'Active');
-$statusClass = ['Active' => 'success', 'Probation' => 'info', 'Ended' => 'secondary', 'Suspended' => 'warning', 'Terminated' => 'secondary'][$status] ?? 'secondary';
+if (!empty($emp['termination_date'])) {
+    $status = (string) $emp['termination_date'] > date('Y-m-d') ? 'Exit Scheduled' : 'Terminated';
+}
+$statusClass = ['Active' => 'success', 'Probation' => 'info', 'Ended' => 'secondary', 'Suspended' => 'warning', 'Terminated' => 'secondary', 'Exit Scheduled' => 'warning text-dark'][$status] ?? 'secondary';
 $canEditEmployee = in_array((string) (current_user()['role'] ?? ''), ['Super Admin', 'HR Officer'], true)
     || in_array((string) (current_user()['access_level'] ?? ''), ['Super Admin', 'HR Officer'], true);
 
@@ -225,10 +231,87 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
     .employee-check-action {
         min-width: 64px;
     }
+    .termination-modal-dialog {
+        width: min(760px, calc(100% - 24px));
+        max-width: 760px;
+        height: calc(100% - 24px);
+        min-height: 0;
+        margin: 12px auto;
+    }
+    .termination-modal-content {
+        max-height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+    .termination-modal-form {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        min-height: 0;
+    }
+    .termination-modal-form .modal-header,
+    .termination-modal-form .modal-footer {
+        flex: 0 0 auto;
+    }
+    .termination-modal-form .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
     @media (max-width: 767.98px) {
         .profile-detail-row .card-body,
         .profile-lifecycle-row .card-body {
             padding: 22px;
+        }
+    }
+    @media (max-width: 575.98px) {
+        #terminateEmploymentModal {
+            padding: 0 !important;
+        }
+        .termination-modal-dialog {
+            width: 100%;
+            max-width: none;
+            height: 100%;
+            min-height: 100%;
+            margin: 0;
+        }
+        .termination-modal-content {
+            height: 100vh;
+            height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
+            border: 0;
+            border-radius: 0;
+        }
+        .termination-modal-form {
+            height: 100vh;
+            height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
+        }
+        .termination-modal-form .modal-header,
+        .termination-modal-form .modal-body,
+        .termination-modal-form .modal-footer {
+            padding-left: 16px;
+            padding-right: 16px;
+        }
+        .termination-modal-form .modal-header {
+            align-items: flex-start;
+        }
+        .termination-modal-form .modal-footer {
+            flex-direction: column-reverse;
+            align-items: stretch;
+            gap: 8px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .termination-modal-form .modal-footer .btn {
+            width: 100%;
+            min-height: 44px;
+            margin: 0;
         }
     }
 </style>
@@ -242,6 +325,11 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
         <?php if ($canEditEmployee): ?>
         <a href="<?= e(base_url('employee/edit/' . (string) $emp['id'])) ?>" class="btn btn-primary">Edit Employee</a>
         <a href="#employeeLetters" class="btn btn-outline-primary">Generate Letter</a>
+        <?php if ($status !== 'Terminated' && empty($pendingTermination)): ?>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#terminateEmploymentModal">
+            <i class="bi bi-person-x me-1"></i>Terminate Employment
+        </button>
+        <?php endif; ?>
         <?php endif; ?>
         <a href="<?= e(base_url('employee/index')) ?>" class="btn btn-outline-secondary">Back</a>
     </div>
@@ -252,6 +340,19 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
 <?php endif; ?>
 <?php if (!empty($flashError)): ?>
     <div class="alert alert-danger"><?= e((string) $flashError) ?></div>
+<?php endif; ?>
+
+<?php if (!empty($pendingTermination)): ?>
+    <div class="alert alert-warning d-flex align-items-start justify-content-between gap-3 flex-wrap">
+        <div>
+            <strong><i class="bi bi-hourglass-split me-1"></i>Termination awaiting approval</strong>
+            <div class="small mt-1">
+                Effective <?= e(format_date((string) $pendingTermination['effective_date'])) ?> using
+                <?= e((string) $pendingTermination['final_pay_mode']) ?> final pay. Employee access and payroll eligibility remain unchanged until final approval.
+            </div>
+        </div>
+        <a class="btn btn-sm btn-outline-dark" href="<?= e(base_url('approval-inbox/show/employee_termination/' . (string) $pendingTermination['id'])) ?>">Review Request</a>
+    </div>
 <?php endif; ?>
 
 <div class="employee-profile-hero mb-4">
@@ -895,3 +996,127 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
 </div>
 </div>
 </div>
+
+<?php if ($canEditEmployee && $status !== 'Terminated' && empty($pendingTermination)): ?>
+<div class="modal fade" id="terminateEmploymentModal" tabindex="-1" aria-labelledby="terminateEmploymentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable termination-modal-dialog">
+        <div class="modal-content termination-modal-content">
+            <form method="post" action="<?= e(base_url('employee/terminationStore/' . (string) $emp['id'])) ?>" id="terminationRequestForm" class="termination-modal-form">
+                <input type="hidden" name="_csrf" value="<?= e((string) $csrf) ?>">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title" id="terminateEmploymentModalLabel">Terminate Employment</h5>
+                        <p class="text-muted small mb-0">Submit an auditable request for <?= e((string) ($emp['full_name'] ?? 'this employee')) ?>.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="border border-info-subtle bg-info-subtle text-dark rounded-3 p-3 mb-3">
+                        Final approval will disable portal access, end the active contract, apply the payroll cutoff, and start the exit checklist. Nothing changes when this request is first submitted.
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Effective Last Day</label>
+                            <input type="date" name="effective_date" id="terminationEffectiveDate" class="form-control" value="<?= e(date('Y-m-d')) ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Final-pay Method</label>
+                            <select name="final_pay_mode" id="terminationPayMode" class="form-select" required>
+                                <?php foreach ($terminationFinalPayModes as $mode): ?>
+                                    <option value="<?= e((string) $mode) ?>"><?= e((string) $mode) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text">Choose an override only when this employee's final month differs from the payroll run rule.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Reason</label>
+                            <textarea name="reason" class="form-control" rows="3" required placeholder="Record the reason for termination and any important context"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="border rounded-3 p-3 mt-4 bg-light" id="terminationImpactPanel">
+                        <div class="d-flex align-items-center gap-2 text-muted">
+                            <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                            Calculating payroll impact...
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-send me-1"></i>Submit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var dateInput = document.getElementById('terminationEffectiveDate');
+    var modeInput = document.getElementById('terminationPayMode');
+    var panel = document.getElementById('terminationImpactPanel');
+    var modal = document.getElementById('terminateEmploymentModal');
+    var terminationForm = document.getElementById('terminationRequestForm');
+    if (!dateInput || !modeInput || !panel || !modal || !terminationForm) return;
+
+    var previewBase = <?= json_encode(base_url('employee/terminationPreview/' . (string) $emp['id']), JSON_UNESCAPED_SLASHES) ?>;
+    var money = function (value, currency) {
+        return currency + ' ' + Number(value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    };
+    var refreshImpact = function () {
+        if (!dateInput.value) return;
+        panel.innerHTML = '<div class="d-flex align-items-center gap-2 text-muted"><span class="spinner-border spinner-border-sm"></span>Calculating payroll impact...</div>';
+        var url = previewBase + '?effective_date=' + encodeURIComponent(dateInput.value) + '&final_pay_mode=' + encodeURIComponent(modeInput.value);
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function (response) { return response.json().then(function (body) { return {ok: response.ok, body: body}; }); })
+            .then(function (result) {
+                if (!result.ok || !result.body.ok) throw new Error(result.body.message || 'Preview unavailable.');
+                var impact = result.body.impact;
+                panel.innerHTML =
+                    '<div class="fw-bold mb-3"><i class="bi bi-calculator me-1"></i>Payroll Impact Preview</div>' +
+                    '<div class="row g-3">' +
+                    '<div class="col-sm-6"><div class="text-muted small">Final payroll period</div><strong>' + impact.period + '</strong></div>' +
+                    '<div class="col-sm-6"><div class="text-muted small">Eligible calendar days</div><strong>' + impact.eligible_days + ' of ' + impact.period_days + '</strong></div>' +
+                    '<div class="col-sm-6"><div class="text-muted small">Final-pay rule</div><strong>' + impact.resolved_mode + '</strong></div>' +
+                    '<div class="col-sm-6"><div class="text-muted small">Estimated fixed gross</div><strong>' + money(impact.estimated_gross, impact.currency_code) + '</strong></div>' +
+                    '</div><hr class="my-3"><div class="small text-muted">The employee is included through ' + impact.period_end + ' and excluded from ' + impact.next_period + '. The estimate excludes attendance adjustments, bonuses, statutory deductions, and other variable items.</div>';
+            })
+            .catch(function (error) {
+                panel.innerHTML = '<div class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>' + error.message + '</div>';
+            });
+    };
+
+    dateInput.addEventListener('change', refreshImpact);
+    modeInput.addEventListener('change', refreshImpact);
+    modal.addEventListener('shown.bs.modal', refreshImpact);
+    terminationForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (typeof Swal === 'undefined') {
+            terminationForm.submit();
+            return;
+        }
+
+        Swal.fire({
+            title: 'Submit termination request?',
+            text: 'The request will go for approval. Employee access and payroll eligibility will remain unchanged until final approval.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, submit request',
+            cancelButtonText: 'Cancel',
+            reverseButtons: true,
+            focusCancel: true,
+            customClass: { popup: 'ent-swal-popup' }
+        }).then(function (result) {
+            if (result.isConfirmed) {
+                terminationForm.submit();
+            }
+        });
+    });
+});
+</script>
+<?php endif; ?>

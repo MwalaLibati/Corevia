@@ -16,6 +16,7 @@ class PayrollRun extends Model
     public function __construct()
     {
         parent::__construct();
+        (new EmployeeTerminationRequest())->ensureSchema();
         $this->ensureHistoricalPayrollSchema();
     }
 
@@ -522,7 +523,8 @@ class PayrollRun extends Model
         $cid = Tenant::id();
         $cidFilter = $cid > 0 ? ' AND company_id = :cid' : '';
         $employeeStmt = $this->db->prepare(
-            "SELECT id, full_name, employee_number, date_of_birth, hired_at, termination_date
+            "SELECT id, full_name, employee_number, date_of_birth, hired_at, termination_date,
+                    termination_proration_mode
              FROM employees
              WHERE (hired_at IS NULL OR hired_at <= :period_end)
                AND (termination_date IS NULL OR termination_date >= :period_start)
@@ -577,7 +579,17 @@ class PayrollRun extends Model
                 $exchangeRateToCompany = 1.0;
             }
 
-            $proration = $this->employmentProration($employee, $periodStart, $periodEnd, $prorationMode);
+            $employeeProrationMode = $prorationMode;
+            $terminationDate = (string) ($employee['termination_date'] ?? '');
+            $terminationMode = (string) ($employee['termination_proration_mode'] ?? '');
+            if (
+                $terminationDate >= $periodStart
+                && $terminationDate <= $periodEnd
+                && in_array($terminationMode, ['Full Month', 'Calendar Days'], true)
+            ) {
+                $employeeProrationMode = $terminationMode;
+            }
+            $proration = $this->employmentProration($employee, $periodStart, $periodEnd, $employeeProrationMode);
             $factor = (float) $proration['factor'];
             $basicPaySource = (string) ($salary['basic_pay_source'] ?? 'Fixed Salary');
             $attendanceDerivedBasic = in_array($basicPaySource, ['Attendance Hours', 'Days Worked', 'Shifts Worked'], true);
@@ -791,7 +803,7 @@ class PayrollRun extends Model
                 'eligible_days' => $proration['eligible_days'],
                 'period_days' => $proration['period_days'],
                 'proration_factor' => $factor,
-                'proration_mode' => $prorationMode,
+                'proration_mode' => $employeeProrationMode,
                 'attendance_inputs' => $attendanceInputs,
                 'attendance_earnings' => $attendanceEarningTotal,
                 'attendance_deductions' => $attendanceDeductionTotal,

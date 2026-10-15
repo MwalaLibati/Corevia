@@ -75,4 +75,21 @@ class EmployeeLifecycleChecklist extends Model
             'completed_at' => $done ? date('Y-m-d H:i:s') : null,
         ]);
     }
+
+    public function completeByLabel(int $employeeId, string $type, string $label, int $userId): void
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE employee_checklist_items
+             SET is_completed = 1, completed_by = :completed_by, completed_at = NOW()
+             WHERE company_id = :cid AND employee_id = :employee_id
+               AND checklist_type = :type AND item_label = :label'
+        );
+        $stmt->execute([
+            'completed_by' => $userId > 0 ? $userId : null,
+            'cid' => Tenant::id(),
+            'employee_id' => $employeeId,
+            'type' => $type,
+            'label' => $label,
+        ]);
+    }
 }

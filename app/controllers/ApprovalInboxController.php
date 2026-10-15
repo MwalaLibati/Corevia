@@ -77,6 +77,7 @@ class ApprovalInboxController extends Controller
                 'contract' => $this->actionContract($id, $action),
                 'salary_change' => $this->actionSalaryChange($id, $action),
                 'employee_onboarding' => $this->actionOnboarding($id, $action),
+                'employee_termination' => $this->actionTermination($id, $action),
                 default => throw new RuntimeException('Unsupported approval type.'),
             };
         } catch (Throwable $e) {
@@ -101,6 +102,7 @@ class ApprovalInboxController extends Controller
             'contract' => $this->contractDetail($id, $currentItem),
             'employee_onboarding' => $this->onboardingDetail($id, $currentItem),
             'salary_change' => $this->salaryChangeDetail($id, $currentItem),
+            'employee_termination' => $this->terminationDetail($id, $currentItem),
             default => null,
         };
     }
@@ -266,6 +268,34 @@ class ApprovalInboxController extends Controller
             ['Shift Rate', $request['shift_rate'] !== null ? format_currency((float) $request['shift_rate']) : '-'],
             ['Override Reason', (string) ($request['override_reason'] ?? '-')],
         ], [], 'SalaryChangeRequest', $id, 'salary-change/index', true);
+    }
+
+    private function terminationDetail(int $id, array $item): ?array
+    {
+        $model = new EmployeeTerminationRequest();
+        $request = $model->findDetailed($id);
+        if (!$request) {
+            return null;
+        }
+
+        $impact = $model->payrollImpact(
+            (int) $request['employee_id'],
+            (string) $request['effective_date'],
+            (string) $request['final_pay_mode']
+        );
+
+        return $this->detailPayload($item, [
+            ['Employee', $this->employeeLabel($request)],
+            ['Effective Date', (string) $request['effective_date']],
+            ['Reason', (string) $request['reason']],
+            ['Final-pay Method', (string) $request['final_pay_mode']],
+            ['Termination Month', (string) $impact['period']],
+            ['Payroll Eligibility', (string) $impact['eligible_days'] . ' of ' . (string) $impact['period_days'] . ' calendar days'],
+            ['Estimated Fixed Gross', (string) $impact['currency_code'] . ' ' . number_format((float) $impact['estimated_gross'], 2)],
+            ['Subsequent Payroll', 'Excluded from ' . (string) $impact['next_period']],
+            ['Portal Access', 'Disabled automatically on final approval'],
+            ['Requested By', (string) ($request['requested_by_name'] ?? '-')],
+        ], [], 'EmployeeTerminationRequest', $id, 'employee/profile/' . (int) $request['employee_id'], true);
     }
 
     private function detailPayload(array $item, array $rows, array $tables, string $entityType, int $entityId, string $moduleRoute, bool $canReject): array
@@ -448,6 +478,45 @@ class ApprovalInboxController extends Controller
 
         AuditLog::record('salary_change_workflow', 'Salary change request #' . $id . ' advanced.', 'SalaryChangeRequest', $id);
         Session::flash('success', 'Salary change workflow advanced.');
+    }
+
+    private function actionTermination(int $id, string $action): void
+    {
+        $model = new EmployeeTerminationRequest();
+        $request = $model->findDetailed($id);
+        if (!$request || (string) $request['status'] !== 'Pending Approval') {
+            throw new RuntimeException('Termination request not found or already actioned.');
+        }
+
+        $workflow = new WorkflowDefinition();
+        $step = max(1, (int) ($request['current_step'] ?? 1));
+        $fallbackRole = $step >= 2 ? 'Super Admin' : 'HR Officer';
+        $this->guardWorkflowRole($workflow->requiredRoleFor('employee_termination', $step, $fallbackRole));
+        $userId = (int) (current_user()['id'] ?? 0);
+
+        if ($action === 'reject') {
+            $reason = trim((string) $this->input('reason', ''));
+            $model->rejectRequest($id, $userId, $reason);
+            WorkflowEvent::record('employee_termination', 'EmployeeTerminationRequest', $id, 'Pending Approval', 'Rejected', 'termination_rejected', $reason);
+            AuditLog::record('termination_rejected', 'Rejected employee termination request.', 'EmployeeTerminationRequest', $id);
+            Session::flash('success', 'Termination request rejected. The employee remains active.');
+            return;
+        }
+
+        $result = $model->advanceApproval($id, $userId);
+        WorkflowEvent::record(
+            'employee_termination',
+            'EmployeeTerminationRequest',
+            $id,
+            'Pending Approval',
+            $result,
+            $result === 'Approved' ? 'termination_approved' : 'termination_reviewed',
+            $workflow->actionLabelFor('employee_termination', $step, 'Approve Termination')
+        );
+        AuditLog::record('termination_approval', 'Advanced employee termination request to ' . $result . '.', 'EmployeeTerminationRequest', $id);
+        Session::flash('success', $result === 'Approved'
+            ? 'Termination approved. Portal access, payroll cutoff, contract status, and exit checklist were updated.'
+            : 'Termination review completed and sent to the next approver.');
     }
 
     private function actionOnboarding(int $id, string $action): void

@@ -693,6 +693,11 @@ body.ent-sidebar-open .ent-sidebar-overlay { display: block !important; }
 
 /* ── 22. SweetAlert2 enterprise theme ────────────────────── */
 
+/* Keep confirmations above Bootstrap modals and their backdrops. */
+.swal2-container {
+  z-index: 20000 !important;
+}
+
 /* Toast (top-right flash notifications) */
 .ent-swal-toast.swal2-popup {
   font-family: 'Inter', 'Public Sans', system-ui, sans-serif !important;

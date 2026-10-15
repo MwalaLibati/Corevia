@@ -44,6 +44,20 @@ class Employee extends Model
         return (new CompanyEmployeeIdentity($this->db))->previewNextEmployeeNumber($cid);
     }
 
+    public static function activeHeadcountCondition(string $alias = 'e'): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+            throw new InvalidArgumentException('Invalid employee table alias.');
+        }
+
+        return "{$alias}.archived_at IS NULL
+            AND (
+                ({$alias}.termination_date IS NULL
+                    AND COALESCE({$alias}.contract_status, 'Active') NOT IN ('Ended', 'Terminated'))
+                OR {$alias}.termination_date > CURDATE()
+            )";
+    }
+
     /** @return array{id:int,employee_number:string} */
     public function createWithGeneratedNumber(array $data): array
     {
@@ -51,10 +65,11 @@ class Employee extends Model
         return (new CompanyEmployeeIdentity($this->db))->createEmployee($data, Tenant::id());
     }
 
-    public function search(string $keyword): array
+    public function search(string $keyword, string $directory = 'active'): array
     {
         $cid = Tenant::id();
         $tidFilter = $cid > 0 ? 'AND e.company_id = :cid' : '';
+        $employmentFilter = $this->directoryCondition($directory, 'e');
         $designationJoin = $this->hasDesignationLookup() ? 'LEFT JOIN designations des ON des.id = e.designation_id' : '';
         $designationSelect = $this->hasDesignationLookup() ? 'COALESCE(des.name, e.designation) AS designation,' : '';
         $sql = "SELECT e.*, {$designationSelect} d.name AS department_name, b.name AS branch_name, c.name AS company_name,
@@ -66,7 +81,7 @@ class Employee extends Model
                 LEFT JOIN companies c ON c.id = e.company_id
                 LEFT JOIN employee_salary es ON es.employee_id = e.id AND es.is_active = 1
                 LEFT JOIN salary_structures ss ON ss.id = es.salary_structure_id
-                WHERE e.archived_at IS NULL
+                WHERE {$employmentFilter}
                   AND (e.full_name LIKE :keyword
                    OR e.employee_number LIKE :keyword
                    OR e.email LIKE :keyword)
@@ -81,10 +96,11 @@ class Employee extends Model
         return $stmt->fetchAll();
     }
 
-    public function listWithDepartment(): array
+    public function listWithDepartment(string $directory = 'active'): array
     {
         $cid = Tenant::id();
-        $where = $cid > 0 ? 'WHERE e.company_id = :cid AND e.archived_at IS NULL' : 'WHERE e.archived_at IS NULL';
+        $employmentFilter = $this->directoryCondition($directory, 'e');
+        $where = $cid > 0 ? "WHERE e.company_id = :cid AND {$employmentFilter}" : "WHERE {$employmentFilter}";
         $designationJoin = $this->hasDesignationLookup() ? 'LEFT JOIN designations des ON des.id = e.designation_id' : '';
         $designationSelect = $this->hasDesignationLookup() ? 'COALESCE(des.name, e.designation) AS designation,' : '';
         $sql = "SELECT e.*, {$designationSelect} d.name AS department_name, b.name AS branch_name, c.name AS company_name,
@@ -103,6 +119,42 @@ class Employee extends Model
         $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
 
         return $stmt->fetchAll();
+    }
+
+    public function directoryCounts(): array
+    {
+        $cid = Tenant::id();
+        $and = $cid > 0 ? ' WHERE company_id = :cid' : '';
+        $active = self::activeHeadcountCondition('employees');
+        $former = $this->directoryCondition('former', 'employees');
+        $stmt = $this->db->prepare(
+            "SELECT SUM(CASE WHEN {$active} THEN 1 ELSE 0 END) AS active_count,
+                    SUM(CASE WHEN {$former} THEN 1 ELSE 0 END) AS former_count
+             FROM employees{$and}"
+        );
+        $stmt->execute($cid > 0 ? ['cid' => $cid] : []);
+        $row = $stmt->fetch() ?: [];
+
+        return [
+            'active' => (int) ($row['active_count'] ?? 0),
+            'former' => (int) ($row['former_count'] ?? 0),
+        ];
+    }
+
+    private function directoryCondition(string $directory, string $alias): string
+    {
+        if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias)) {
+            throw new InvalidArgumentException('Invalid employee table alias.');
+        }
+
+        if ($directory === 'former') {
+            return "({$alias}.archived_at IS NOT NULL
+                OR ({$alias}.termination_date IS NOT NULL AND {$alias}.termination_date <= CURDATE())
+                OR ({$alias}.termination_date IS NULL
+                    AND COALESCE({$alias}.contract_status, 'Active') IN ('Ended', 'Terminated')))";
+        }
+
+        return self::activeHeadcountCondition($alias);
     }
 
     public function findDetailed(int $id): ?array
@@ -382,7 +434,12 @@ class Employee extends Model
     {
         $cid = Tenant::id();
         $sql = "UPDATE employees
-                SET archived_at = NOW(), archived_by = :archived_by, portal_active = 0, contract_status = 'Ended'
+                SET archived_at = NOW(),
+                    archived_by = :archived_by,
+                    portal_active = 0,
+                    contract_status = 'Ended',
+                    lifecycle_status = 'Terminated',
+                    termination_date = COALESCE(termination_date, CURDATE())
                 WHERE id = :id AND archived_at IS NULL"
             . ($cid > 0 ? ' AND company_id = :cid' : '');
 

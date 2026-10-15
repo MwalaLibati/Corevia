@@ -25,7 +25,8 @@ class ApprovalInbox extends Model
             $this->payrollItems($companyId),
             $this->contractItems($companyId),
             $this->onboardingItems($companyId),
-            $this->salaryChangeItems($companyId)
+            $this->salaryChangeItems($companyId),
+            $this->terminationItems($companyId)
         );
 
         usort($items, static function (array $a, array $b): int {
@@ -289,6 +290,42 @@ class ApprovalInbox extends Model
                 'approval-inbox/show/salary_change/' . (int) $row['id'],
                 (string) ($row['created_at'] ?? ''),
                 'Effective ' . (string) ($row['effective_date'] ?? '') . ' - ' . (string) ($row['salary_structure_name'] ?? '')
+            );
+        }
+
+        return $items;
+    }
+
+    private function terminationItems(int $companyId): array
+    {
+        try {
+            $rows = (new EmployeeTerminationRequest())->pendingForCompany($companyId);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $step = max(1, (int) ($row['current_step'] ?? 1));
+            $fallbackRole = $step >= 2 ? 'Super Admin' : 'HR Officer';
+            $role = $this->requiredRole('employee_termination', $step, $fallbackRole);
+            if (!$this->userMatchesRole($role)) {
+                continue;
+            }
+
+            $items[] = $this->item(
+                'Termination',
+                'bi-person-x',
+                'employee_termination',
+                (int) $row['id'],
+                'Termination - ' . (string) $row['full_name'],
+                $this->employeeSubject($row),
+                'Step ' . $step . ' - Awaiting ' . $role,
+                $role,
+                $this->workflow->actionLabelFor('employee_termination', $step, $step >= 2 ? 'Approve Termination' : 'Review Termination'),
+                'approval-inbox/show/employee_termination/' . (int) $row['id'],
+                (string) ($row['created_at'] ?? ''),
+                'Effective ' . (string) $row['effective_date'] . ' - ' . (string) $row['final_pay_mode']
             );
         }
 
