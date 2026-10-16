@@ -262,6 +262,29 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
     }
+    .termination-confirm-popup.swal2-popup {
+        width: min(440px, calc(100vw - 32px)) !important;
+    }
+    .termination-confirm-popup .swal2-actions {
+        display: grid !important;
+        grid-template-columns: minmax(120px, 1fr) minmax(170px, 1fr);
+        width: 100%;
+        gap: 10px !important;
+    }
+    .termination-confirm-popup .swal2-cancel,
+    .termination-confirm-popup .swal2-confirm {
+        width: 100%;
+        min-height: 42px;
+        margin: 0 !important;
+    }
+    .termination-confirm-popup .swal2-cancel {
+        grid-column: 1;
+        grid-row: 1;
+    }
+    .termination-confirm-popup .swal2-confirm {
+        grid-column: 2;
+        grid-row: 1;
+    }
     @media (max-width: 767.98px) {
         .profile-detail-row .card-body,
         .profile-lifecycle-row .card-body {
@@ -312,6 +335,21 @@ $profileCompletionScore = (int)($profileCompletion['score'] ?? 0);
             width: 100%;
             min-height: 44px;
             margin: 0;
+        }
+        .termination-confirm-popup.swal2-popup {
+            width: calc(100vw - 24px) !important;
+            padding: 24px 18px 18px !important;
+        }
+        .termination-confirm-popup .swal2-actions {
+            grid-template-columns: 1fr;
+        }
+        .termination-confirm-popup .swal2-confirm {
+            grid-column: 1;
+            grid-row: 1;
+        }
+        .termination-confirm-popup .swal2-cancel {
+            grid-column: 1;
+            grid-row: 2;
         }
     }
 </style>
@@ -1091,9 +1129,7 @@ document.addEventListener('DOMContentLoaded', function () {
     dateInput.addEventListener('change', refreshImpact);
     modeInput.addEventListener('change', refreshImpact);
     modal.addEventListener('shown.bs.modal', refreshImpact);
-    terminationForm.addEventListener('submit', function (event) {
-        event.preventDefault();
-
+    var showTerminationConfirmation = function () {
         if (typeof Swal === 'undefined') {
             terminationForm.submit();
             return;
@@ -1108,14 +1144,30 @@ document.addEventListener('DOMContentLoaded', function () {
             cancelButtonColor: '#64748b',
             confirmButtonText: 'Yes, submit request',
             cancelButtonText: 'Cancel',
-            reverseButtons: true,
             focusCancel: true,
-            customClass: { popup: 'ent-swal-popup' }
+            customClass: { popup: 'ent-swal-popup termination-confirm-popup' }
         }).then(function (result) {
             if (result.isConfirmed) {
                 terminationForm.submit();
+                return;
+            }
+
+            if (window.bootstrap && bootstrap.Modal) {
+                bootstrap.Modal.getOrCreateInstance(modal).show();
             }
         });
+    };
+
+    terminationForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (window.bootstrap && bootstrap.Modal && modal.classList.contains('show')) {
+            modal.addEventListener('hidden.bs.modal', showTerminationConfirmation, {once: true});
+            bootstrap.Modal.getOrCreateInstance(modal).hide();
+            return;
+        }
+
+        showTerminationConfirmation();
     });
 });
 </script>
